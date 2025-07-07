@@ -1,0 +1,539 @@
+"""Zammad MCP Server implementation."""
+
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any, Final, cast
+
+from mcp.server.fastmcp import FastMCP
+
+from .client import ZammadClient
+from .models import (
+    Article,
+    Group,
+    Organization,
+    Ticket,
+    TicketPriority,
+    TicketState,
+    TicketStats,
+    User,
+)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize Zammad client (will be done on startup)
+_UNINITIALIZED: Final = object()
+zammad_client: ZammadClient | object = _UNINITIALIZED
+
+
+# Lifespan context manager
+@asynccontextmanager
+async def lifespan(app: FastMCP) -> AsyncIterator[None]:
+    """Initialize resources on startup."""
+    await initialize()
+    yield
+
+
+# Create MCP server with lifespan
+mcp = FastMCP("Zammad MCP Server", lifespan=lifespan)
+
+
+def get_zammad_client() -> ZammadClient:
+    """Get the Zammad client, ensuring it's initialized."""
+    if zammad_client is _UNINITIALIZED:
+        raise RuntimeError("Zammad client not initialized")
+    return cast(ZammadClient, zammad_client)
+
+
+@mcp.tool()
+def search_tickets(
+    query: str | None = None,
+    state: str | None = None,
+    priority: str | None = None,
+    group: str | None = None,
+    owner: str | None = None,
+    customer: str | None = None,
+    page: int = 1,
+    per_page: int = 25,
+) -> list[Ticket]:
+    """Search for tickets with various filters.
+
+    Args:
+        query: Free text search query
+        state: Filter by state (new, open, closed, etc.)
+        priority: Filter by priority (1 low, 2 normal, 3 high)
+        group: Filter by group name
+        owner: Filter by owner login/email
+        customer: Filter by customer email
+        page: Page number (default: 1)
+        per_page: Results per page (default: 25)
+
+    Returns:
+        List of tickets matching the search criteria
+    """
+    client = get_zammad_client()
+    tickets_data = client.search_tickets(
+        query=query,
+        state=state,
+        priority=priority,
+        group=group,
+        owner=owner,
+        customer=customer,
+        page=page,
+        per_page=per_page,
+    )
+
+    return [Ticket(**ticket) for ticket in tickets_data]
+
+
+@mcp.tool()
+def get_ticket(ticket_id: int, include_articles: bool = True) -> Ticket:
+    """Get detailed information about a specific ticket.
+
+    Args:
+        ticket_id: The ticket ID
+        include_articles: Whether to include ticket articles/comments
+
+    Returns:
+        Ticket details including articles if requested
+    """
+    client = get_zammad_client()
+    ticket_data = client.get_ticket(ticket_id, include_articles)
+    return Ticket(**ticket_data)
+
+
+@mcp.tool()
+def create_ticket(
+    title: str,
+    group: str,
+    customer: str,
+    article_body: str,
+    state: str = "new",
+    priority: str = "2 normal",
+    article_type: str = "note",
+    article_internal: bool = False,
+) -> Ticket:
+    """Create a new ticket in Zammad.
+
+    Args:
+        title: Ticket title/subject
+        group: Group name or ID
+        customer: Customer email or ID
+        article_body: Initial article/comment body
+        state: State name (default: new)
+        priority: Priority name (default: 2 normal)
+        article_type: Article type (default: note)
+        article_internal: Whether article is internal (default: False)
+
+    Returns:
+        The created ticket
+    """
+    client = get_zammad_client()
+    ticket_data = client.create_ticket(
+        title=title,
+        group=group,
+        customer=customer,
+        article_body=article_body,
+        state=state,
+        priority=priority,
+        article_type=article_type,
+        article_internal=article_internal,
+    )
+
+    return Ticket(**ticket_data)
+
+
+@mcp.tool()
+def update_ticket(
+    ticket_id: int,
+    title: str | None = None,
+    state: str | None = None,
+    priority: str | None = None,
+    owner: str | None = None,
+    group: str | None = None,
+) -> Ticket:
+    """Update an existing ticket.
+
+    Args:
+        ticket_id: The ticket ID to update
+        title: New ticket title
+        state: New state name
+        priority: New priority name
+        owner: New owner login/email
+        group: New group name
+
+    Returns:
+        The updated ticket
+    """
+    client = get_zammad_client()
+    ticket_data = client.update_ticket(
+        ticket_id=ticket_id,
+        title=title,
+        state=state,
+        priority=priority,
+        owner=owner,
+        group=group,
+    )
+
+    return Ticket(**ticket_data)
+
+
+@mcp.tool()
+def add_article(
+    ticket_id: int,
+    body: str,
+    article_type: str = "note",
+    internal: bool = False,
+    sender: str = "Agent",
+) -> Article:
+    """Add an article (comment/note) to a ticket.
+
+    Args:
+        ticket_id: The ticket ID to add article to
+        body: Article body content
+        article_type: Article type (note, email, phone)
+        internal: Whether article is internal
+        sender: Sender type (Agent, Customer, System)
+
+    Returns:
+        The created article
+    """
+    client = get_zammad_client()
+    article_data = client.add_article(
+        ticket_id=ticket_id,
+        body=body,
+        article_type=article_type,
+        internal=internal,
+        sender=sender,
+    )
+
+    return Article(**article_data)
+
+
+@mcp.tool()
+def get_user(user_id: int) -> User:
+    """Get user information by ID.
+
+    Args:
+        user_id: The user ID
+
+    Returns:
+        User details
+    """
+    client = get_zammad_client()
+    user_data = client.get_user(user_id)
+    return User(**user_data)
+
+
+@mcp.tool()
+def search_users(query: str, page: int = 1, per_page: int = 25) -> list[User]:
+    """Search for users.
+
+    Args:
+        query: Search query (name, email, etc.)
+        page: Page number
+        per_page: Results per page
+
+    Returns:
+        List of users matching the query
+    """
+    client = get_zammad_client()
+    users_data = client.search_users(query, page, per_page)
+    return [User(**user) for user in users_data]
+
+
+@mcp.tool()
+def get_organization(org_id: int) -> Organization:
+    """Get organization information by ID.
+
+    Args:
+        org_id: The organization ID
+
+    Returns:
+        Organization details
+    """
+    client = get_zammad_client()
+    org_data = client.get_organization(org_id)
+    return Organization(**org_data)
+
+
+@mcp.tool()
+def search_organizations(query: str, page: int = 1, per_page: int = 25) -> list[Organization]:
+    """Search for organizations.
+
+    Args:
+        query: Search query (name, domain, etc.)
+        page: Page number
+        per_page: Results per page
+
+    Returns:
+        List of organizations matching the query
+    """
+    client = get_zammad_client()
+    orgs_data = client.search_organizations(query, page, per_page)
+    return [Organization(**org) for org in orgs_data]
+
+
+@mcp.tool()
+def get_ticket_stats(
+    group: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> TicketStats:
+    """Get ticket statistics.
+
+    Args:
+        group: Filter by group name
+        start_date: Start date (ISO format)
+        end_date: End date (ISO format)
+
+    Returns:
+        Ticket statistics
+    """
+    client = get_zammad_client()
+    # This is a simplified implementation
+    # In a real implementation, you would calculate these stats from the API
+    # TODO: Implement date filtering when the API supports it
+    if start_date or end_date:
+        logger.warning("Date filtering not yet implemented - ignoring date parameters")
+    all_tickets = client.search_tickets(group=group, per_page=100)
+
+    open_count = sum(1 for t in all_tickets if t.get("state", {}).get("name") in ["new", "open"])
+    closed_count = sum(1 for t in all_tickets if t.get("state", {}).get("name") == "closed")
+    pending_count = sum(1 for t in all_tickets if "pending" in t.get("state", {}).get("name", ""))
+    escalated_count = sum(
+        1
+        for t in all_tickets
+        if any((
+            t.get("first_response_escalation_at"),
+            t.get("close_escalation_at"),
+            t.get("update_escalation_at"),
+        ))
+    )
+
+    return TicketStats(
+        total_count=len(all_tickets),
+        open_count=open_count,
+        closed_count=closed_count,
+        pending_count=pending_count,
+        escalated_count=escalated_count,
+        avg_first_response_time=None,  # TODO: Calculate from ticket data
+        avg_resolution_time=None,  # TODO: Calculate from ticket data
+    )
+
+
+@mcp.tool()
+def list_groups() -> list[Group]:
+    """Get all available groups.
+
+    Returns:
+        List of all groups
+    """
+    client = get_zammad_client()
+    groups_data = client.get_groups()
+    return [Group(**group) for group in groups_data]
+
+
+@mcp.tool()
+def list_ticket_states() -> list[TicketState]:
+    """Get all available ticket states.
+
+    Returns:
+        List of all ticket states
+    """
+    client = get_zammad_client()
+    states_data = client.get_ticket_states()
+    return [TicketState(**state) for state in states_data]
+
+
+@mcp.tool()
+def list_ticket_priorities() -> list[TicketPriority]:
+    """Get all available ticket priorities.
+
+    Returns:
+        List of all ticket priorities
+    """
+    client = get_zammad_client()
+    priorities_data = client.get_ticket_priorities()
+    return [TicketPriority(**priority) for priority in priorities_data]
+
+
+@mcp.tool()
+def add_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
+    """Add a tag to a ticket.
+
+    Args:
+        ticket_id: The ticket ID
+        tag: The tag to add
+
+    Returns:
+        Operation result
+    """
+    client = get_zammad_client()
+    return client.add_ticket_tag(ticket_id, tag)
+
+
+@mcp.tool()
+def remove_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
+    """Remove a tag from a ticket.
+
+    Args:
+        ticket_id: The ticket ID
+        tag: The tag to remove
+
+    Returns:
+        Operation result
+    """
+    client = get_zammad_client()
+    return client.remove_ticket_tag(ticket_id, tag)
+
+
+@mcp.tool()
+def get_current_user() -> User:
+    """Get information about the currently authenticated user.
+
+    Returns:
+        Current user details
+    """
+    client = get_zammad_client()
+    user_data = client.get_current_user()
+    return User(**user_data)
+
+
+# Resources for direct data access
+@mcp.resource("zammad://ticket/{ticket_id}")
+def get_ticket_resource(ticket_id: str) -> str:
+    """Get a ticket as a resource."""
+    client = get_zammad_client()
+    try:
+        ticket = client.get_ticket(int(ticket_id), include_articles=True)
+
+        # Format ticket data as readable text
+        lines = [
+            f"Ticket #{ticket['number']} - {ticket['title']}",
+            f"State: {ticket.get('state', {}).get('name', 'Unknown')}",
+            f"Priority: {ticket.get('priority', {}).get('name', 'Unknown')}",
+            f"Customer: {ticket.get('customer', {}).get('email', 'Unknown')}",
+            f"Created: {ticket.get('created_at', 'Unknown')}",
+            "",
+            "Articles:",
+            "",
+        ]
+
+        for article in ticket.get("articles", []):
+            lines.extend(
+                [
+                    f"--- {article.get('created_at', 'Unknown')} by {(article.get('created_by') or {}).get('email', 'Unknown')} ---",
+                    article.get("body", ""),
+                    "",
+                ]
+            )
+
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error retrieving ticket {ticket_id}: {e!s}"
+
+
+@mcp.resource("zammad://user/{user_id}")
+def get_user_resource(user_id: str) -> str:
+    """Get a user as a resource."""
+    client = get_zammad_client()
+    try:
+        user = client.get_user(int(user_id))
+
+        lines = [
+            f"User: {user.get('firstname', '')} {user.get('lastname', '')}",
+            f"Email: {user.get('email', '')}",
+            f"Login: {user.get('login', '')}",
+            f"Organization: {user.get('organization', {}).get('name', 'None')}",
+            f"Active: {user.get('active', False)}",
+            f"VIP: {user.get('vip', False)}",
+            f"Created: {user.get('created_at', 'Unknown')}",
+        ]
+
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error retrieving user {user_id}: {e!s}"
+
+
+@mcp.resource("zammad://organization/{org_id}")
+def get_organization_resource(org_id: str) -> str:
+    """Get an organization as a resource."""
+    client = get_zammad_client()
+    try:
+        org = client.get_organization(int(org_id))
+
+        lines = [
+            f"Organization: {org.get('name', '')}",
+            f"Domain: {org.get('domain', 'None')}",
+            f"Active: {org.get('active', False)}",
+            f"Note: {org.get('note', 'None')}",
+            f"Created: {org.get('created_at', 'Unknown')}",
+        ]
+
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error retrieving organization {org_id}: {e!s}"
+
+
+# Prompts for common tasks
+@mcp.prompt()
+def analyze_ticket(ticket_id: int) -> str:
+    """Generate a prompt to analyze a ticket."""
+    return f"""Please analyze ticket {ticket_id} from Zammad. Use the get_ticket tool to retrieve the ticket details including all articles.
+
+After retrieving the ticket, provide:
+1. A summary of the issue
+2. Current status and priority
+3. Timeline of interactions
+4. Suggested next steps or resolution
+
+Use appropriate tools to gather any additional context about the customer or organization if needed."""
+
+
+@mcp.prompt()
+def draft_response(ticket_id: int, tone: str = "professional") -> str:
+    """Generate a prompt to draft a response to a ticket."""
+    return f"""Please help draft a {tone} response to ticket {ticket_id}. 
+
+First, use get_ticket to understand the issue and conversation history. Then draft an appropriate response that:
+1. Acknowledges the customer's concern
+2. Provides a clear solution or next steps
+3. Maintains a {tone} tone throughout
+4. Is concise and easy to understand
+
+After drafting, you can use add_article to add the response to the ticket if approved."""
+
+
+@mcp.prompt()
+def escalation_summary(group: str | None = None) -> str:
+    """Generate a prompt to summarize escalated tickets."""
+    group_filter = f" for group '{group}'" if group else ""
+    return f"""Please provide a summary of escalated tickets{group_filter}.
+
+Use search_tickets to find tickets with escalation times set. For each escalated ticket:
+1. Ticket number and title
+2. Escalation type (first response, update, or close)
+3. Time until escalation
+4. Current assignee
+5. Recommended action
+
+Organize the results by urgency and provide actionable recommendations."""
+
+
+# Server lifecycle
+async def initialize() -> None:
+    """Initialize the Zammad client on server startup."""
+    global zammad_client
+    try:
+        zammad_client = ZammadClient()
+        logger.info("Zammad client initialized successfully")
+
+        # Test connection
+        current_user = zammad_client.get_current_user()
+        logger.info(f"Connected as: {current_user.get('email', 'Unknown')}")
+    except Exception:
+        logger.exception("Failed to initialize Zammad client")
+        raise
