@@ -1,10 +1,13 @@
 """Zammad MCP Server implementation."""
 
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Final, cast
 
+from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from .client import ZammadClient
@@ -89,18 +92,28 @@ def search_tickets(
 
 
 @mcp.tool()
-def get_ticket(ticket_id: int, include_articles: bool = True) -> Ticket:
+def get_ticket(
+    ticket_id: int, 
+    include_articles: bool = True,
+    article_limit: int = 10,
+    article_offset: int = 0
+) -> Ticket:
     """Get detailed information about a specific ticket.
 
     Args:
         ticket_id: The ticket ID
         include_articles: Whether to include ticket articles/comments
+        article_limit: Maximum number of articles to return (default: 10, use -1 for all)
+        article_offset: Number of articles to skip (for pagination, default: 0)
 
     Returns:
         Ticket details including articles if requested
+        
+    Note: Large tickets with many articles may exceed token limits. Use article_limit
+    to control the response size. Articles are returned in chronological order.
     """
     client = get_zammad_client()
-    ticket_data = client.get_ticket(ticket_id, include_articles)
+    ticket_data = client.get_ticket(ticket_id, include_articles, article_limit, article_offset)
     return Ticket(**ticket_data)
 
 
@@ -300,9 +313,18 @@ def get_ticket_stats(
         logger.warning("Date filtering not yet implemented - ignoring date parameters")
     all_tickets = client.search_tickets(group=group, per_page=100)
 
-    open_count = sum(1 for t in all_tickets if t.get("state", {}).get("name") in ["new", "open"])
-    closed_count = sum(1 for t in all_tickets if t.get("state", {}).get("name") == "closed")
-    pending_count = sum(1 for t in all_tickets if "pending" in t.get("state", {}).get("name", ""))
+    # Handle both expanded (string) and non-expanded (object) state formats
+    def get_state_name(ticket: dict[str, Any]) -> str:
+        state = ticket.get("state")
+        if isinstance(state, str):
+            return state
+        elif isinstance(state, dict):
+            return state.get("name", "")
+        return ""
+    
+    open_count = sum(1 for t in all_tickets if get_state_name(t) in ["new", "open"])
+    closed_count = sum(1 for t in all_tickets if get_state_name(t) == "closed")
+    pending_count = sum(1 for t in all_tickets if "pending" in get_state_name(t))
     escalated_count = sum(
         1
         for t in all_tickets
@@ -408,7 +430,8 @@ def get_ticket_resource(ticket_id: str) -> str:
     """Get a ticket as a resource."""
     client = get_zammad_client()
     try:
-        ticket = client.get_ticket(int(ticket_id), include_articles=True)
+        # Use a reasonable limit for resources to avoid huge responses
+        ticket = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
 
         # Format ticket data as readable text
         lines = [
@@ -527,6 +550,26 @@ Organize the results by urgency and provide actionable recommendations."""
 async def initialize() -> None:
     """Initialize the Zammad client on server startup."""
     global zammad_client
+    
+    # Load environment variables from .env files
+    # First, try to load from current working directory
+    cwd_env = Path.cwd() / ".env"
+    if cwd_env.exists():
+        load_dotenv(cwd_env)
+        logger.info(f"Loaded environment from {cwd_env}")
+    
+    # Then, try to load from .envrc if it exists and convert to .env format
+    envrc_path = Path.cwd() / ".envrc"
+    if envrc_path.exists() and not os.environ.get("ZAMMAD_URL"):
+        # If .envrc exists but env vars aren't set, warn the user
+        logger.warning(
+            "Found .envrc but environment variables not loaded. "
+            "Consider using direnv or creating a .env file"
+        )
+    
+    # Also support loading from parent directories (for when running from subdirs)
+    load_dotenv()
+    
     try:
         zammad_client = ZammadClient()
         logger.info("Zammad client initialized successfully")
