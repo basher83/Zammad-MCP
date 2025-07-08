@@ -233,3 +233,12 @@ tmp/
 # MCP/Zammad specific
 zammad_cache/
 mcp_logs/
+
+# Git message template (not markdown)
+.gitmessage
+
+# Security and quality reports
+bandit-report.json
+pip-audit-report.json
+semgrep-report.json
+safety-report.json
