@@ -197,6 +197,9 @@ async def test_initialization_failure():
 @pytest.mark.asyncio
 async def test_tool_without_client(reset_client):
     """Test that tools fail gracefully when client is not initialized."""
+    # Use the fixture to reset the client
+    _ = reset_client
+
     # Reset the global client
     server.zammad_client = _UNINITIALIZED
 
@@ -340,7 +343,7 @@ async def test_search_with_malformed_response(mock_zammad_client):
     # Should raise validation error due to missing fields
     # Using a more specific exception would be better, but we're catching the general Exception
     # that gets raised when Pydantic validation fails
-    with pytest.raises(Exception):  # Pydantic ValidationError
+    with pytest.raises((ValueError, TypeError)):  # More specific than general Exception
         search_tickets()
 
 
@@ -397,7 +400,7 @@ async def test_get_ticket_tool(mock_zammad_client, sample_ticket_data, sample_ar
     assert len(result.articles) == 1
 
     # Verify the mock was called correctly
-    mock_instance.get_ticket.assert_called_once_with(1, True)
+    mock_instance.get_ticket.assert_called_once_with(1, True, 10, 0)
 
 
 @pytest.mark.asyncio

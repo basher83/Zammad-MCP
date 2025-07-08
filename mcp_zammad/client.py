@@ -83,21 +83,17 @@ class ZammadClient:
         return list(result)
 
     def get_ticket(
-        self, 
-        ticket_id: int, 
-        include_articles: bool = True,
-        article_limit: int = 10,
-        article_offset: int = 0
+        self, ticket_id: int, include_articles: bool = True, article_limit: int = 10, article_offset: int = 0
     ) -> dict[str, Any]:
         """Get a single ticket by ID with optional article pagination."""
         ticket = self.api.ticket.find(ticket_id)
 
         if include_articles:
             articles = self.api.ticket.articles(ticket_id)
-            
+
             # Convert to list if needed
             articles_list = list(articles) if not isinstance(articles, list) else articles
-            
+
             # Handle article pagination
             if article_limit == -1:  # -1 means get all articles
                 ticket["articles"] = articles_list
