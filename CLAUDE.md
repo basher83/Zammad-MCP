@@ -26,9 +26,22 @@ uv run ruff format mcp_zammad tests  # format code
 uv run ruff check mcp_zammad tests  # lint
 uv run mypy mcp_zammad  # type check
 
+# Security checks
+uv run pip-audit  # check for vulnerabilities
+uv run bandit -r mcp_zammad  # security analysis
+uv run semgrep --config=auto mcp_zammad  # static analysis
+uv run safety check  # dependency security check
+
+# Run all quality checks
+./scripts/quality-check.sh  # runs all checks above
+
 # Build package
 uv build
 ```
+
+## Development Guidelines
+
+- ALWAYS use 'rg' in place of 'grep'
 
 ## Architecture Overview
 
@@ -190,6 +203,7 @@ The server automatically loads environment variables from the `.env` file in the
 ## Priority Improvements
 
 1. **Immediate**
+   - Fix test collection error in test_server.py (URI parameter mismatch)
    - Increase test coverage to 80%+
    - Fix unused parameters in functions
    - Implement custom exception classes
@@ -206,3 +220,14 @@ The server automatically loads environment variables from the `.env` file in the
    - Implement bulk operations
    - Add SLA management features
    - Create async version of Zammad client
+
+## Additional Development Tools
+
+The project includes several security and quality tools configured in pyproject.toml:
+- **pip-audit**: Checks for known vulnerabilities in dependencies
+- **bandit**: Security-focused static analysis
+- **semgrep**: Advanced static analysis for security patterns
+- **safety**: Dependency vulnerability scanner
+- **pre-commit**: Git hooks for code quality enforcement
+
+A convenience script `./scripts/quality-check.sh` runs all quality and security checks in sequence.
