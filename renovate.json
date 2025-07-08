@@ -1,6 +1,61 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
-  ]
+    "config:recommended",
+    ":semanticCommits",
+    ":preserveSemverRanges"
+  ],
+  "labels": ["dependencies", "renovate"],
+  "assignees": ["basher83"],
+  "packageRules": [
+    {
+      "description": "Automerge non-major updates for dev dependencies",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group Python test dependencies",
+      "groupName": "Python test dependencies",
+      "matchPackagePatterns": ["^pytest"],
+      "matchDepTypes": ["devDependencies"]
+    },
+    {
+      "description": "Group Python linting tools",
+      "groupName": "Python linters",
+      "matchPackageNames": ["black", "ruff", "mypy"],
+      "matchDepTypes": ["devDependencies"]
+    },
+    {
+      "description": "Require approval for major MCP updates",
+      "matchPackageNames": ["mcp"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Require approval for major Zammad API updates",
+      "matchPackageNames": ["zammad-py"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Pin Python version for Actions",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["actions/setup-python"],
+      "rangeStrategy": "pin"
+    }
+  ],
+  "python": {
+    "ignorePythonConstraint": false
+  },
+  "pip_requirements": {
+    "fileMatch": ["(^|/)requirements(-.*)?\\.(txt|in)$"]
+  },
+  "prConcurrentLimit": 3,
+  "prCreation": "not-pending",
+  "prHourlyLimit": 2,
+  "rebaseWhen": "behind-base-branch",
+  "semanticCommits": "enabled",
+  "commitMessagePrefix": "chore(deps):",
+  "commitMessagePrefixDevelopment": "chore(dev-deps):"
 }
