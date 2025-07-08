@@ -33,6 +33,7 @@ Usage:
 """
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -180,7 +181,9 @@ class SecurityScanner:
                     # Get the highest severity from all vulns
                     vuln_severity = Severity.INFO
                     for v in vuln.get("vulns", []):
-                        sev = severity_map.get(v.get("fix_versions", [{}])[0].get("severity", "UNKNOWN"), Severity.INFO)
+                        fix_versions = v.get("fix_versions", [])
+                        severity_str = fix_versions[0].get("severity", "UNKNOWN") if fix_versions else "UNKNOWN"
+                        sev = severity_map.get(severity_str, Severity.INFO)
                         if sev == Severity.CRITICAL:
                             vuln_severity = sev
                             break
@@ -203,6 +206,12 @@ class SecurityScanner:
                         if v.get("description"):
                             descriptions.append(v["description"])
 
+                    # Extract fix version safely
+                    vulns = vuln.get("vulns", [])
+                    fix_version = None
+                    if vulns and vulns[0].get("fix_versions"):
+                        fix_version = vulns[0]["fix_versions"][0]
+                    
                     issue = SecurityIssue(
                         tool="pip-audit",
                         severity=vuln_severity,
@@ -210,9 +219,9 @@ class SecurityScanner:
                         description=descriptions[0] if descriptions else f"Known vulnerability in {vuln['name']}",
                         package=vuln["name"],
                         installed_version=vuln["version"],
-                        fixed_version=vuln.get("vulns", [{}])[0].get("fix_versions", [None])[0],
+                        fixed_version=fix_version,
                         cve_id=", ".join(cve_ids) if cve_ids else None,
-                        remediation=f"Upgrade to {vuln.get('vulns', [{}])[0].get('fix_versions', ['a newer version'])[0]}",
+                        remediation=f"Upgrade to {fix_version or 'a newer version'}",
                     )
                     self.report.issues.append(issue)
 
@@ -264,11 +273,16 @@ class SecurityScanner:
 
     def run_safety(self) -> None:
         """Run safety check for dependency vulnerabilities."""
+        req_file = None
         try:
             # Create requirements file from current environment
             with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
                 req_result = subprocess.run(
-                    ["uv", "pip", "freeze"], capture_output=True, text=True, cwd=self.project_path, check=False
+                    ["uv", "pip", "freeze"],
+                    capture_output=True,
+                    text=True,
+                    cwd=self.project_path,
+                    check=False,
                 )
                 f.write(req_result.stdout)
                 req_file = f.name
@@ -281,9 +295,6 @@ class SecurityScanner:
                 cwd=self.project_path,
                 check=False,
             )
-
-            # Clean up temp file
-            Path(req_file).unlink()
 
             if result.stdout:
                 data = json.loads(result.stdout)
@@ -310,6 +321,10 @@ class SecurityScanner:
             console.print("[yellow]Safety output was not valid JSON[/yellow]")
         except Exception as e:
             console.print(f"[yellow]Safety error: {e}[/yellow]")
+        finally:
+            # Clean up temp file
+            if req_file and Path(req_file).exists():
+                Path(req_file).unlink()
 
     def run_semgrep(self) -> None:
         """Run semgrep for advanced static analysis."""
@@ -320,7 +335,7 @@ class SecurityScanner:
                 capture_output=True,
                 text=True,
                 cwd=self.project_path,
-                env={**subprocess.os.environ, "SEMGREP_ENABLE_VERSION_CHECK": "0"},
+                env={**os.environ, "SEMGREP_ENABLE_VERSION_CHECK": "0"},
                 check=False,
             )
 
