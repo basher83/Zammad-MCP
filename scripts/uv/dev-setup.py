@@ -156,6 +156,7 @@ class SetupWizard:
                 pass
 
         console.print("[yellow]⚠️  UV is not installed[/yellow]")
+        console.print("[dim]UV is required for Python dependency management in this project.[/dim]")
 
         if self.quick_mode or questionary.confirm("Would you like to install UV now?", default=True).ask():
             return self.install_uv()
@@ -169,11 +170,18 @@ class SetupWizard:
         console.print("\n[bold]Installing UV...[/bold]")
 
         system = platform.system()
+        
+        # Security notice
+        console.print("\n[yellow]⚠️  Security Notice:[/yellow]")
+        console.print("This will download and execute an installation script from the internet.")
+        console.print("UV is the official Python package manager from Astral (creators of Ruff).")
+        console.print("Learn more: https://github.com/astral-sh/uv\n")
 
         try:
             if system in ["Linux", "Darwin"]:
                 # Unix-like systems
-                console.print("Running UV installer...")
+                console.print("[yellow]Running UV installer from https://astral.sh[/yellow]")
+                console.print("[dim]This will download and execute an installation script.[/dim]")
                 cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh"
                 subprocess.run(cmd, shell=True, check=True)
 
@@ -185,7 +193,8 @@ class SetupWizard:
 
             elif system == "Windows":
                 # Windows
-                console.print("Running UV installer for Windows...")
+                console.print("[yellow]Running UV installer from https://astral.sh[/yellow]")
+                console.print("[dim]This will download and execute an installation script.[/dim]")
                 cmd = 'powershell -c "irm https://astral.sh/uv/install.ps1 | iex"'
                 subprocess.run(cmd, shell=True, check=True)
             else:
