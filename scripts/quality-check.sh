@@ -18,6 +18,12 @@ echo "🔍 Type checking with mypy..."
 uv run mypy mcp_zammad/
 
 # Security checks
+echo "🔒 Running security scans..."
+echo ""
+echo "💡 Tip: You can also use the unified security scanner:"
+echo "   ./scripts/uv/security-scan.py"
+echo ""
+
 echo "🔒 Security scanning with bandit..."
 uv run bandit -r mcp_zammad/ -f json -o bandit-report.json || echo "⚠️ Bandit found issues - check bandit-report.json"
 

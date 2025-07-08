@@ -19,6 +19,20 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
    cd zammad-mcp
    ```
 
+#### Quick Start (Recommended)
+
+Use the interactive setup wizard for the easiest setup experience:
+
+```bash
+./scripts/uv/dev-setup.py
+```
+
+This wizard will guide you through all setup steps including UV installation, virtual environment creation, and configuration.
+
+#### Manual Setup
+
+If you prefer manual setup:
+
 3. (Optional) Install recommended development tools:
 
    ```bash
@@ -39,8 +53,14 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
 5. Create a `.env` file with your Zammad credentials:
 
    ```env
-   ZAMMAD_URL=https://your-instance.zammad.com
+   ZAMMAD_URL=https://your-instance.zammad.com/api/v1
    ZAMMAD_HTTP_TOKEN=your-api-token
+   ```
+
+6. (Optional) Validate your environment configuration:
+
+   ```bash
+   ./scripts/uv/validate-env.py
    ```
 
 ## Development Workflow
