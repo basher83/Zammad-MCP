@@ -10,7 +10,7 @@ A Model Context Protocol (MCP) server that provides integration with the Zammad 
 
 - **Ticket Management**
   - `search_tickets` - Search tickets with multiple filters
-  - `get_ticket` - Get detailed ticket information with articles
+  - `get_ticket` - Get detailed ticket information with articles (supports pagination)
   - `create_ticket` - Create new tickets
   - `update_ticket` - Update ticket properties
   - `add_article` - Add comments/notes to tickets
@@ -106,37 +106,42 @@ You can run the MCP server directly from GitHub using `uvx`:
 uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
 
 # Or with environment variables
-ZAMMAD_URL=https://your-instance.zammad.com \
+ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
 ZAMMAD_HTTP_TOKEN=your-api-token \
 uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
 ```
 
 ## Configuration
 
-The server requires Zammad API credentials. Set these environment variables:
+The server requires Zammad API credentials. The recommended approach is to use a `.env` file:
 
-```bash
-# Required: Zammad instance URL
-export ZAMMAD_URL="https://your-instance.zammad.com"
+1. Copy the example configuration:
 
-# Authentication (use one of these methods):
-# Option 1: API Token (recommended)
-export ZAMMAD_HTTP_TOKEN="your-api-token"
+   ```bash
+   cp .env.example .env
+   ```
 
-# Option 2: OAuth2 Token
-export ZAMMAD_OAUTH2_TOKEN="your-oauth2-token"
+2. Edit `.env` with your Zammad credentials:
 
-# Option 3: Username/Password
-export ZAMMAD_USERNAME="your-username"
-export ZAMMAD_PASSWORD="your-password"
-```
+   ```env
+   # Required: Zammad instance URL (include /api/v1)
+   ZAMMAD_URL=https://your-instance.zammad.com/api/v1
+   
+   # Authentication (choose one method):
+   # Option 1: API Token (recommended)
+   ZAMMAD_HTTP_TOKEN=your-api-token
+   
+   # Option 2: OAuth2 Token
+   # ZAMMAD_OAUTH2_TOKEN=your-oauth2-token
+   
+   # Option 3: Username/Password
+   # ZAMMAD_USERNAME=your-username
+   # ZAMMAD_PASSWORD=your-password
+   ```
 
-Create a `.env` file in your project root for easier management:
+3. The server will automatically load the `.env` file on startup.
 
-```env
-ZAMMAD_URL=https://your-instance.zammad.com
-ZAMMAD_HTTP_TOKEN=your-api-token
-```
+**Important**: Never commit your `.env` file to version control. It's already included in `.gitignore`.
 
 ## Usage
 
@@ -151,7 +156,7 @@ Add to your Claude Desktop configuration:
       "command": "uvx",
       "args": ["--from", "git+https://github.com/basher83/zammad-mcp.git", "mcp-zammad"],
       "env": {
-        "ZAMMAD_URL": "https://your-instance.zammad.com",
+        "ZAMMAD_URL": "https://your-instance.zammad.com/api/v1",
         "ZAMMAD_HTTP_TOKEN": "your-api-token"
       }
     }
@@ -168,7 +173,7 @@ Or if you have it installed locally:
       "command": "python",
       "args": ["-m", "mcp_zammad"],
       "env": {
-        "ZAMMAD_URL": "https://your-instance.zammad.com",
+        "ZAMMAD_URL": "https://your-instance.zammad.com/api/v1",
         "ZAMMAD_HTTP_TOKEN": "your-api-token"
       }
     }
@@ -183,7 +188,7 @@ Or if you have it installed locally:
 python -m mcp_zammad
 
 # Or with environment variables
-ZAMMAD_URL=https://instance.zammad.com ZAMMAD_HTTP_TOKEN=token python -m mcp_zammad
+ZAMMAD_URL=https://instance.zammad.com/api/v1 ZAMMAD_HTTP_TOKEN=token python -m mcp_zammad
 ```
 
 ## Examples
@@ -299,6 +304,7 @@ The server respects Zammad's rate limits. If you encounter rate limit errors:
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
+
 - Development setup
 - Code style and quality standards
 - Testing requirements

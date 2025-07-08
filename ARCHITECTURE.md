@@ -98,9 +98,11 @@ Comprehensive Pydantic models ensuring type safety and validation.
 ```plaintext
 BaseModel
 ├── Ticket
-│   ├── state: TicketState
-│   ├── priority: TicketPriority
-│   └── articles: list[Article]
+│   ├── state: StateBrief | str | None
+│   ├── priority: PriorityBrief | str | None
+│   ├── group: GroupBrief | str | None
+│   ├── owner: UserBrief | str | None
+│   └── articles: list[Article] | None
 ├── User
 │   └── organization: Organization | None
 ├── Organization
@@ -117,6 +119,7 @@ BaseModel
 - Automatic type coercion
 - Required field validation
 - Extra field handling (`extra = "forbid"`)
+- Union types for expanded fields (handles both object and string representations)
 - Custom validators for complex fields
 
 ## Data Flow
@@ -184,7 +187,36 @@ async def lifespan(app: FastMCP):
     await initialize()  # Sets up global client
     yield
     # Cleanup if needed
+
+# Note: FastMCP handles its own async event loop
+# Do not wrap mcp.run() in asyncio.run()
 ```
+
+## API Integration Details
+
+### Zammad API Behaviors
+
+1. **Expand Parameter**: When `expand=True` is used:
+   - Returns string representations for related objects (e.g., `"group": "Users"`)
+   - Does not return full nested objects as might be expected
+   - All models use union types to handle both formats:
+
+     ```python
+     # Example: Ticket model
+     group: GroupBrief | str | None = None
+     state: StateBrief | str | None = None
+     ```
+
+   - This pattern is applied consistently across all models (Ticket, Article, User, Organization)
+
+2. **Search API**:
+   - Uses custom query syntax for filtering
+   - Supports field-specific searches (e.g., `state.name:open`)
+   - Returns paginated results with metadata
+
+3. **State Handling**: When processing ticket states:
+   - Must check if state is a string (expanded) or object (non-expanded)
+   - Helper functions may be needed to extract state names consistently
 
 ## Error Handling
 

@@ -66,7 +66,8 @@ This is a Model Context Protocol (MCP) server that provides integration with the
 The server requires Zammad API credentials via environment variables:
 
 ```bash
-ZAMMAD_URL=https://your-instance.zammad.com
+# Required: Zammad instance URL (must include /api/v1)
+ZAMMAD_URL=https://your-instance.zammad.com/api/v1
 
 # Authentication (choose one):
 ZAMMAD_HTTP_TOKEN=your-api-token  # Recommended
@@ -135,7 +136,33 @@ The server can be run in multiple ways:
 
 The uvx method is recommended for Claude Desktop integration as it requires no local installation.
 
+### Claude Desktop Integration
+
+For Claude Desktop, configure `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "zammad": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "mcp_zammad"]
+    }
+  }
+}
+```
+
+The server automatically loads environment variables from the `.env` file in the project directory using `python-dotenv`.
+
 ## Known Issues and Limitations
+
+### API Integration (Resolved)
+
+- **Zammad API Expand Behavior**: When using `expand=True` in API calls, Zammad returns string representations of related objects (e.g., `"group": "Users"`) instead of full objects. This has been resolved by updating all Pydantic models to accept both `str` and object types for expanded fields. The following models were updated:
+  - **Ticket**: group, state, priority, customer, owner, organization, created_by, updated_by
+  - **Article**: created_by, updated_by
+  - **User**: organization, created_by, updated_by
+  - **Organization**: created_by, updated_by, members
 
 ### Performance Issues
 
