@@ -26,6 +26,8 @@ Usage:
     uv run validate-env.py         # Run without making executable
 """
 
+import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -291,8 +293,6 @@ def main(env_file: Path | None, no_test_connection: bool, output_json: bool):
 
     if errors:
         if output_json:
-            import json
-
             print(json.dumps({"valid": False, "errors": errors}))
         else:
             console.print("\n[red]Configuration Errors:[/red]")
@@ -318,14 +318,10 @@ def main(env_file: Path | None, no_test_connection: bool, output_json: bool):
         ) as progress:
             progress.add_task("Connecting to Zammad API...", total=None)
 
-            import asyncio
-
             success, message, user_data = asyncio.run(test_connection(config))
 
         if success:
             if output_json:
-                import json
-
                 print(json.dumps({"valid": True, "connection": True, "user": user_data}))
             else:
                 console.print(f"\n[green]✓[/green] {message}")
@@ -334,8 +330,6 @@ def main(env_file: Path | None, no_test_connection: bool, output_json: bool):
                 console.print("\n[bold green]Environment is ready for Zammad MCP Server![/bold green]")
         else:
             if output_json:
-                import json
-
                 print(json.dumps({"valid": True, "connection": False, "error": message}))
             else:
                 console.print(f"\n[red]✗[/red] {message}")
@@ -346,8 +340,6 @@ def main(env_file: Path | None, no_test_connection: bool, output_json: bool):
                 console.print("  • Is the API endpoint correct? (should end with /api/v1)")
             sys.exit(1)
     elif output_json:
-        import json
-
         print(json.dumps({"valid": True, "connection": "skipped"}))
     else:
         console.print("\n[yellow]Connection test skipped[/yellow]")
