@@ -69,8 +69,8 @@ class Article(BaseModel):
     updated_by_id: int
     created_at: datetime
     updated_at: datetime
-    created_by: UserBrief | None = None
-    updated_by: UserBrief | None = None
+    created_by: UserBrief | str | None = None
+    updated_by: UserBrief | str | None = None
 
 
 class Ticket(BaseModel):
@@ -107,15 +107,15 @@ class Ticket(BaseModel):
     last_owner_update_at: datetime | None = None
     article_count: int | None = None
 
-    # Expanded fields
-    group: GroupBrief | None = None
-    state: StateBrief | None = None
-    priority: PriorityBrief | None = None
-    customer: UserBrief | None = None
-    owner: UserBrief | None = None
-    organization: OrganizationBrief | None = None
-    created_by: UserBrief | None = None
-    updated_by: UserBrief | None = None
+    # Expanded fields - can be either objects or strings when expand=true
+    group: GroupBrief | str | None = None
+    state: StateBrief | str | None = None
+    priority: PriorityBrief | str | None = None
+    customer: UserBrief | str | None = None
+    owner: UserBrief | str | None = None
+    organization: OrganizationBrief | str | None = None
+    created_by: UserBrief | str | None = None
+    updated_by: UserBrief | str | None = None
 
     # Articles if included
     articles: list[Article] | None = None
@@ -202,10 +202,10 @@ class User(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    # Expanded fields
-    organization: OrganizationBrief | None = None
-    created_by: UserBrief | None = None
-    updated_by: UserBrief | None = None
+    # Expanded fields - can be either objects or strings when expand=true
+    organization: OrganizationBrief | str | None = None
+    created_by: UserBrief | str | None = None
+    updated_by: UserBrief | str | None = None
 
 
 class Organization(BaseModel):
@@ -223,10 +223,10 @@ class Organization(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    # Expanded fields
-    created_by: UserBrief | None = None
-    updated_by: UserBrief | None = None
-    members: list[UserBrief] | None = None
+    # Expanded fields - can be either objects or strings when expand=true
+    created_by: UserBrief | str | None = None
+    updated_by: UserBrief | str | None = None
+    members: list[UserBrief | str] | None = None
 
 
 class Group(BaseModel):
