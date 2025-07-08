@@ -5,53 +5,89 @@
     ":semanticCommits",
     ":preserveSemverRanges"
   ],
-  "labels": ["dependencies", "renovate"],
-  "assignees": ["basher83"],
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+  "assignees": [
+    "basher83"
+  ],
   "packageRules": [
     {
       "description": "Automerge non-major updates for dev dependencies",
-      "matchDepTypes": ["devDependencies"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true
     },
     {
       "description": "Group Python test dependencies",
       "groupName": "Python test dependencies",
-      "matchPackagePatterns": ["^pytest"],
-      "matchDepTypes": ["devDependencies"]
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchPackageNames": [
+        "/^pytest/"
+      ]
     },
     {
       "description": "Group Python linting tools",
       "groupName": "Python linters",
-      "matchPackageNames": ["black", "ruff", "mypy"],
-      "matchDepTypes": ["devDependencies"]
+      "matchPackageNames": [
+        "black",
+        "ruff",
+        "mypy"
+      ],
+      "matchDepTypes": [
+        "devDependencies"
+      ]
     },
     {
       "description": "Require approval for major MCP updates",
-      "matchPackageNames": ["mcp"],
-      "matchUpdateTypes": ["major"],
+      "matchPackageNames": [
+        "mcp"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "dependencyDashboardApproval": true
     },
     {
       "description": "Require approval for major Zammad API updates",
-      "matchPackageNames": ["zammad-py"],
-      "matchUpdateTypes": ["major"],
+      "matchPackageNames": [
+        "zammad-py"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "dependencyDashboardApproval": true
     },
     {
       "description": "Pin Python version for Actions",
-      "matchManagers": ["github-actions"],
-      "matchPackageNames": ["actions/setup-python"],
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "actions/setup-python"
+      ],
       "rangeStrategy": "pin"
     },
     {
       "description": "Use different commit prefix for dev dependencies",
-      "matchDepTypes": ["devDependencies"],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
       "commitMessagePrefix": "chore(dev-deps):"
     }
   ],
   "pip_requirements": {
-    "fileMatch": ["(^|/)requirements(-.*)?\\.(txt|in)$"]
+    "managerFilePatterns": [
+      "/(^|/)requirements(-.*)?\\.(txt|in)$/"
+    ]
   },
   "prConcurrentLimit": 3,
   "prCreation": "not-pending",
