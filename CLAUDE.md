@@ -22,7 +22,7 @@ uv run pytest
 uv run pytest --cov=mcp_zammad  # with coverage
 
 # Code quality checks
-uv run black mcp_zammad tests  # format code
+uv run ruff format mcp_zammad tests  # format code
 uv run ruff check mcp_zammad tests  # lint
 uv run mypy mcp_zammad  # type check
 
@@ -96,7 +96,7 @@ ZAMMAD_PASSWORD=your-password
 
 ## Code Quality Standards
 
-- **Formatting**: Black with 120-character line length
+- **Formatting**: Ruff format with 120-character line length
 - **Linting**: Ruff with extensive rule set (see pyproject.toml)
 - **Type Checking**: MyPy with strict settings
 - **Python Version**: 3.10+ required

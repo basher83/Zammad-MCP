@@ -19,7 +19,14 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
    cd zammad-mcp
    ```
 
-3. Run the setup script:
+3. (Optional) Install recommended development tools:
+
+   ```bash
+   # Install eza, ripgrep, and ensure uv is available
+   ./scripts/bootstrap.sh
+   ```
+
+4. Run the Python environment setup script:
 
    ```bash
    # macOS/Linux
@@ -29,7 +36,7 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
    .\scripts\setup.ps1
    ```
 
-4. Create a `.env` file with your Zammad credentials:
+5. Create a `.env` file with your Zammad credentials:
 
    ```env
    ZAMMAD_URL=https://your-instance.zammad.com
@@ -53,20 +60,24 @@ python -m mcp_zammad
 Before submitting a PR, ensure your code passes all quality checks:
 
 ```bash
-# Format code with Black
-uv run black mcp_zammad tests
+# Run comprehensive quality checks (recommended)
+./scripts/quality-check.sh
 
-# Run linter
-uv run ruff check mcp_zammad tests
+# Or run individual checks
+uv run ruff format mcp_zammad tests    # Format code
+uv run ruff check mcp_zammad tests     # Lint code  
+uv run mypy mcp_zammad                 # Type checking
+uv run bandit -r mcp_zammad/           # Security scanning
+uv run semgrep --config=auto mcp_zammad/ # Security & quality
+uv run safety check                    # Dependency vulnerabilities
+uv run pip-audit                       # Additional dependency audit
 
-# Type checking
-uv run mypy mcp_zammad
-
-# Run all tests
-uv run pytest
-
-# Run tests with coverage
+# Run tests
 uv run pytest --cov=mcp_zammad
+
+# Install and run pre-commit hooks
+uv run pre-commit install
+uv run pre-commit run --all-files
 ```
 
 ### Testing Guidelines
@@ -129,7 +140,7 @@ def test_error_handling():
 
 ### Code Formatting
 
-- **Black**: 120-character line length
+- **Ruff format**: 120-character line length
 - **Ruff**: Extensive rule set (see `pyproject.toml`)
 - **MyPy**: Strict type checking enabled
 
