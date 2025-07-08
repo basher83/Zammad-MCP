@@ -1,0 +1,54 @@
+# Zammad MCP Commit Message Template
+# 
+# Format: <emoji> <type>(<scope>): <subject>
+# 
+# RULES:
+# - Subject line: 50 chars recommended, 72 max
+# - Use imperative mood ("add" not "added")
+# - No period at the end of subject
+# - Separate subject from body with blank line
+# - No Claude Code signatures or Co-Authored-By
+
+# ============ TYPES ============
+# 🎯 feat     - New feature or capability
+# 🐛 fix      - Bug fix
+# 📚 docs     - Documentation only
+# 🔧 refactor - Code change that neither fixes nor adds
+# ⚡ perf     - Performance improvement
+# ✅ test     - Adding or updating tests
+# 🔨 build    - Build system or dependencies
+# 👷 ci       - CI/CD configuration
+# 🧹 chore    - Maintenance, no production code change
+# 🎨 style    - Code formatting (black, ruff)
+
+# ============ SCOPES ============
+# server  - MCP server implementation (server.py)
+# client  - Zammad API client (client.py)
+# models  - Pydantic models (models.py)
+# tests   - Test files
+# docs    - Documentation files
+# scripts - Setup/utility scripts
+# deps    - Dependencies (pyproject.toml)
+# docker  - Containerization
+# ci      - GitHub Actions
+
+# ============ EXAMPLES ============
+# GOOD:
+# 🎯 feat(server): add ticket attachment support
+# 🐛 fix(client): handle OAuth2 token refresh
+# 📚 docs: update MCP integration guide
+# 🔧 refactor(models): simplify validation logic
+# ✅ test(server): cover error handling paths
+
+# BAD:
+# Added new feature → Missing emoji and type
+# 🎯 feat: updated server.py → Not imperative
+# 🐛 fix(client): fixed the bug. → Has period
+# 🔧 refactor: massive changes → Too vague
+
+# ============ TEMPLATE ============
+# <emoji> <type>(<scope>): <what changed>
+# 
+# <why this change was made>
+# 
+# <additional context if needed>

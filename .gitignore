@@ -234,8 +234,7 @@ tmp/
 zammad_cache/
 mcp_logs/
 
-# Git message template (not markdown)
-.gitmessage
+
 
 # Security and quality reports
 bandit-report.json
