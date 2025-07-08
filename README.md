@@ -2,7 +2,9 @@
 
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/basher83/Zammad-MCP?utm_source=oss&utm_medium=github&utm_campaign=basher83%2FZammad-MCP&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
-A Model Context Protocol (MCP) server that provides integration with the Zammad ticket system, enabling AI assistants to interact with tickets, users, organizations, and more through a standardized interface.
+A Model Context Protocol (MCP) server for Zammad integration, enabling AI assistants to interact with tickets, users, organizations, and more through a standardized interface.
+
+> **Disclaimer**: This project is not affiliated with or endorsed by Zammad GmbH or the Zammad Foundation. This is an independent integration that uses the Zammad API.
 
 ## Features
 
@@ -312,7 +314,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
 
 ## License
 
-MIT License - see LICENSE file for details
+GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later) - see LICENSE file for details
+
+This project uses the same license as the [Zammad project](https://github.com/zammad/zammad) to ensure compatibility and alignment with the upstream project.
 
 ## Documentation
 
@@ -325,3 +329,7 @@ MIT License - see LICENSE file for details
 - GitHub Issues: [Report bugs or request features]
 - Zammad Documentation: <https://docs.zammad.org/>
 - MCP Documentation: <https://modelcontextprotocol.io/>
+
+## Trademark Notice
+
+"Zammad" is a trademark of Zammad GmbH. This project is an independent integration and is not affiliated with, endorsed by, or sponsored by Zammad GmbH or the Zammad Foundation. The use of the name "Zammad" is solely to indicate compatibility with the Zammad ticket system.

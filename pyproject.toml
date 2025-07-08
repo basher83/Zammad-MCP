@@ -5,10 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "mcp-zammad"
 version = "0.1.0"
-description = "Model Context Protocol server for Zammad ticket system"
+description = "Model Context Protocol server for Zammad ticket system integration (unofficial)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = {text = "AGPL-3.0-or-later"}
 authors = [
     {name = "basher83", email = "crashoverride6545@gmail.com"},
 ]
@@ -16,7 +16,7 @@ keywords = ["mcp", "zammad", "tickets", "support", "api"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -36,9 +36,13 @@ dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
-    "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "pip-audit>=2.6.0",
+    "bandit>=1.7.6",
+    "semgrep>=1.35.0",
+    "safety>=2.3.1",
+    "pre-commit>=3.0.0",
 ]
 
 [project.scripts]
@@ -46,10 +50,6 @@ mcp-zammad = "mcp_zammad.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["mcp_zammad"]
-
-[tool.black]
-line-length = 120
-target-version = ["py310", "py311", "py312"]
 
 [tool.ruff]
 line-length = 120
@@ -71,7 +71,18 @@ dev-dependencies = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
-    "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "pip-audit>=2.6.0",
+    "bandit>=1.7.6",
+    "semgrep>=1.35.0",
+    "safety>=2.3.1",
+    "pre-commit>=3.0.0",
 ]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]  # Skip assert_used test
+
+[tool.bandit.assert_used]
+skips = ["*_test.py", "*/test_*.py"]
