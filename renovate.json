@@ -43,11 +43,13 @@
       "matchManagers": ["github-actions"],
       "matchPackageNames": ["actions/setup-python"],
       "rangeStrategy": "pin"
+    },
+    {
+      "description": "Use different commit prefix for dev dependencies",
+      "matchDepTypes": ["devDependencies"],
+      "commitMessagePrefix": "chore(dev-deps):"
     }
   ],
-  "python": {
-    "ignorePythonConstraint": false
-  },
   "pip_requirements": {
     "fileMatch": ["(^|/)requirements(-.*)?\\.(txt|in)$"]
   },
@@ -56,6 +58,5 @@
   "prHourlyLimit": 2,
   "rebaseWhen": "behind-base-branch",
   "semanticCommits": "enabled",
-  "commitMessagePrefix": "chore(deps):",
-  "commitMessagePrefixDevelopment": "chore(dev-deps):"
+  "commitMessagePrefix": "chore(deps):"
 }
