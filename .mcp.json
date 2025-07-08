@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "zammad": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "-m",
+        "mcp_zammad"
+      ]
+    }
+  }
+}

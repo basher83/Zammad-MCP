@@ -1,18 +1,12 @@
 """Entry point for the Zammad MCP server."""
 
-import asyncio
-
 from .server import mcp
-
-
-async def async_main() -> None:
-    """Run the MCP server asynchronously."""
-    await mcp.run()  # type: ignore[func-returns-value]
 
 
 def main() -> None:
     """Run the MCP server."""
-    asyncio.run(async_main())
+    # FastMCP handles its own async loop
+    mcp.run()  # type: ignore[func-returns-value]
 
 
 if __name__ == "__main__":
