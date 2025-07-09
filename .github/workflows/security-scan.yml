@@ -33,8 +33,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --dev
-          uv pip install bandit[sarif]
+          uv sync --dev --frozen
 
       - name: Run Bandit (full tree scan)
         run: |
