@@ -85,6 +85,44 @@ def is_env_file_access(tool_name: str, tool_input: dict[str, Any]) -> bool:
     return False
 
 
+def should_use_ripgrep(command: str) -> bool:
+    """
+    Check if the command uses grep when ripgrep (rg) would be more efficient.
+    Returns True if grep is used for searching code/files.
+    """
+    # Normalize command
+    normalized = command.strip()
+    
+    # Check if command starts with or contains grep as a command
+    # But allow grep in file paths or as arguments
+    grep_patterns = [
+        r"^grep\s",  # Command starts with grep
+        r";\s*grep\s",  # grep after semicolon
+        r"&&\s*grep\s",  # grep after &&
+        r"\|\s*grep\s",  # grep after pipe
+        r"^\s*grep\s",  # grep with leading whitespace
+    ]
+    
+    for pattern in grep_patterns:
+        if re.search(pattern, normalized):
+            # Check if it's not just grepping from a small stream (like ps output)
+            # These are cases where grep might be acceptable
+            acceptable_grep_uses = [
+                r"ps\s+.*\|\s*grep",  # ps aux | grep process
+                r"history\s*\|\s*grep",  # history | grep command
+                r"echo\s+.*\|\s*grep",  # echo "text" | grep pattern
+                r"--version.*\|\s*grep",  # command --version | grep
+            ]
+            
+            for acceptable in acceptable_grep_uses:
+                if re.search(acceptable, normalized):
+                    return False
+                    
+            return True
+            
+    return False
+
+
 def main() -> None:
     try:
         # Read JSON input from stdin
@@ -99,13 +137,20 @@ def main() -> None:
             print("Use .env.sample for template files instead", file=sys.stderr)
             sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
-        # Check for dangerous rm -rf commands
+        # Check for dangerous rm -rf commands and inefficient grep usage
         if tool_name == "Bash":
             command = tool_input.get("command", "")
 
             # Block rm -rf commands with comprehensive pattern matching
             if is_dangerous_rm_command(command):
                 print("BLOCKED: Dangerous rm command detected and prevented", file=sys.stderr)
+                sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
+                
+            # Check for inefficient grep usage
+            if should_use_ripgrep(command):
+                print("BLOCKED: Use 'rg' (ripgrep) instead of 'grep' for better performance", file=sys.stderr)
+                print("Ripgrep is faster and respects .gitignore by default", file=sys.stderr)
+                print("Example: rg 'pattern' instead of grep -r 'pattern'", file=sys.stderr)
                 sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
         # Ensure log directory exists
