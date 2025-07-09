@@ -204,7 +204,7 @@ The server automatically loads environment variables from the `.env` file in the
 
 1. **Immediate**
    - Fix test collection error in test_server.py (URI parameter mismatch)
-   - Increase test coverage to 90%+
+   - Increase test coverage to 90%+ (as configured in quality-check.sh)
    - Fix unused parameters in functions
    - Implement custom exception classes
    - Add proper URL validation
