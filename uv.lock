@@ -850,7 +850,7 @@ dev = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "bandit" },
+    { name = "bandit", extra = ["sarif"] },
     { name = "mypy" },
     { name = "pip-audit" },
     { name = "pre-commit" },
@@ -884,7 +884,7 @@ provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "bandit", specifier = ">=1.7.6" },
+    { name = "bandit", extras = ["sarif"], specifier = ">=1.7.6" },
     { name = "mypy", specifier = ">=1.0.0" },
     { name = "pip-audit", specifier = ">=2.6.0" },
     { name = "pre-commit", specifier = ">=3.0.0" },
