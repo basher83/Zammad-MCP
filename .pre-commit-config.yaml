@@ -52,3 +52,10 @@ repos:
         language: system
         files: '\.md$'
         pass_filenames: true
+
+      - id: markdown-consistent-numbering
+        name: Enforce '1.' for markdown lists
+        entry: bash -c 'if rg -n "^[2-9]\." "$@"; then echo "❌ Use '\''1.'\'' for all numbered list items to reduce diff churn"; exit 1; fi' --
+        language: system
+        files: '\.md$'
+        pass_filenames: true
