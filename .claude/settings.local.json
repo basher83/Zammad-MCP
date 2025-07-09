@@ -6,7 +6,6 @@
       "Bash(mkdir:*)",
       "Bash(git:*)",
       "Bash(rg:*)",
-      "Bash(mkdir:*)",
       "Bash(chmod:*)",
       "Bash(uv:*)"
     ],
