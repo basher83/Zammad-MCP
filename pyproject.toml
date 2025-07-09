@@ -83,9 +83,7 @@ dev-dependencies = [
 [tool.bandit]
 exclude_dirs = ["tests"]
 skips = ["B101"]  # Skip assert_used test
-
-[tool.bandit.assert_used]
-skips = ["*_test.py", "*/test_*.py"]
+assert_used.skips = ["*_test.py", "*/test_*.py"]
 
 [tool.coverage.run]
 source = ["mcp_zammad"]
