@@ -287,6 +287,7 @@ def main() -> None:
         if is_env_file_access(tool_name, tool_input):
             print("BLOCKED: Access to .env files containing sensitive data is prohibited", file=sys.stderr)
             print("Use .env.sample for template files instead", file=sys.stderr)
+            print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
             sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
         # Check for dangerous rm -rf commands and inefficient tool usage
@@ -296,6 +297,7 @@ def main() -> None:
             # Block rm -rf commands with comprehensive pattern matching
             if is_dangerous_rm_command(command):
                 print("BLOCKED: Dangerous rm command detected and prevented", file=sys.stderr)
+                print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
                 sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
             # Check for inefficient grep usage
@@ -303,6 +305,7 @@ def main() -> None:
                 print("BLOCKED: Use 'rg' (ripgrep) instead of 'grep' for better performance", file=sys.stderr)
                 print("Ripgrep is faster and respects .gitignore by default", file=sys.stderr)
                 print("Example: rg 'pattern' instead of grep -r 'pattern'", file=sys.stderr)
+                print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
                 sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
             # Check for inefficient find usage
@@ -313,6 +316,7 @@ def main() -> None:
                 print("  fd 'pattern' instead of find . -name '*pattern*'", file=sys.stderr)
                 print("  fd -e py instead of find . -name '*.py'", file=sys.stderr)
                 print("  fd -t f instead of find . -type f", file=sys.stderr)
+                print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
                 sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
             # Check for ls usage when eza would be better
@@ -324,6 +328,7 @@ def main() -> None:
                 print("  eza -la instead of ls -la", file=sys.stderr)
                 print("  eza --tree instead of ls -R", file=sys.stderr)
                 print("  eza --git -l for git status integration", file=sys.stderr)
+                print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
                 sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
             # Check for inefficient cat usage
@@ -335,6 +340,7 @@ def main() -> None:
                 print("  awk '{print $1}' file instead of cat file | awk '{print $1}'", file=sys.stderr)
                 print("  sed 's/old/new/' file instead of cat file | sed 's/old/new/'", file=sys.stderr)
                 print("  head -n 10 file instead of cat file | head -n 10", file=sys.stderr)
+                print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
                 sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
         # Ensure log directory exists
