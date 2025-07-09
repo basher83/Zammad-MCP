@@ -7,10 +7,15 @@
       "Bash(git:*)",
       "Bash(rg:*)",
       "Bash(chmod:*)",
-      "Bash(uv:*)"
+      "Bash(uv:*)",
+      "Bash(gh issue create:*)"
     ],
     "deny": []
   },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "zammad"
+  ],
   "hooks": {
     "PreToolUse": [
       {
@@ -23,9 +28,5 @@
         ]
       }
     ]
-  },
-  "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "zammad"
-  ]
+  }
 }
