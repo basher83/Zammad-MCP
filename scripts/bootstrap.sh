@@ -101,6 +101,50 @@ else
     echo "eza is already installed"
 fi
 
+# Install fd-find - a modern replacement for find
+echo "Checking fd..."
+
+# Check if fd is already available (either as fd or fdfind)
+if ! command -v fd &> /dev/null && ! command -v fdfind &> /dev/null; then
+    echo "Installing fd-find..."
+    
+    # Install fd-find package
+    sudo apt-get update
+    sudo apt-get install -y fd-find
+    echo "fd-find installed successfully!"
+    
+    # Create symlink for fd command
+    echo "Setting up fd symlink..."
+    mkdir -p "$HOME/.local/bin"
+    ln -sf "$(which fdfind)" "$HOME/.local/bin/fd"
+    
+    # Check if ~/.local/bin is in PATH
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        echo ""
+        echo "NOTE: $HOME/.local/bin is not in your PATH."
+        echo "Add the following to your shell configuration file (.bashrc, .zshrc, etc.):"
+        echo '  export PATH="$HOME/.local/bin:$PATH"'
+        echo ""
+        echo "For the current session, run:"
+        echo '  export PATH="$HOME/.local/bin:$PATH"'
+    fi
+else
+    # Check if we have fd command specifically
+    if command -v fdfind &> /dev/null && ! command -v fd &> /dev/null; then
+        echo "fd-find is installed but 'fd' command not available"
+        echo "Creating fd symlink..."
+        mkdir -p "$HOME/.local/bin"
+        ln -sf "$(which fdfind)" "$HOME/.local/bin/fd"
+        
+        # Check PATH again
+        if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+            echo "NOTE: Add $HOME/.local/bin to your PATH to use 'fd' command"
+        fi
+    else
+        echo "fd is already installed and available"
+    fi
+fi
+
 # Install uv - Python package installer
 echo "Checking uv..."
 
