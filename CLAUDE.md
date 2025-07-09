@@ -55,12 +55,12 @@ This is a Model Context Protocol (MCP) server that provides integration with the
    - Includes 3 pre-built prompts for common support scenarios
    - Resources follow URI pattern: `zammad://entity/id`
 
-2. **`mcp_zammad/client.py`**: Zammad API client wrapper
+1. **`mcp_zammad/client.py`**: Zammad API client wrapper
    - Wraps the `zammad_py` library
    - Handles multiple authentication methods (API token, OAuth2, username/password)
    - Provides clean methods for all Zammad operations
 
-3. **`mcp_zammad/models.py`**: Pydantic models for data validation
+1. **`mcp_zammad/models.py`**: Pydantic models for data validation
    - Comprehensive models for all Zammad entities (Ticket, User, Organization, etc.)
    - Request/response models for API operations
    - Ensures type safety throughout the application
@@ -124,10 +124,10 @@ ZAMMAD_PASSWORD=your-password
 ## Adding New Features
 
 1. **New Tools**: Add to `server.py` using the `@mcp.tool()` decorator
-2. **New Models**: Define in `models.py` using Pydantic
-3. **API Methods**: Extend `client.py` with new Zammad operations
-4. **Resources**: Add new resource handlers in `server.py`
-5. **Prompts**: Define new prompts using `@mcp.prompt()` decorator
+1. **New Models**: Define in `models.py` using Pydantic
+1. **API Methods**: Extend `client.py` with new Zammad operations
+1. **Resources**: Add new resource handlers in `server.py`
+1. **Prompts**: Define new prompts using `@mcp.prompt()` decorator
 
 ## MCP Integration Points
 
@@ -144,8 +144,8 @@ All MCP features follow the Model Context Protocol specification for seamless in
 The server can be run in multiple ways:
 
 1. **Local Installation**: Clone and install with `uv pip install -e .`
-2. **Direct from GitHub**: Use `uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad`
-3. **PyPI**: `uv pip install mcp-zammad` (when published)
+1. **Direct from GitHub**: Use `uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad`
+1. **PyPI**: `uv pip install mcp-zammad` (when published)
 
 The uvx method is recommended for Claude Desktop integration as it requires no local installation.
 
@@ -209,13 +209,13 @@ The server automatically loads environment variables from the `.env` file in the
    - Implement custom exception classes
    - Add proper URL validation
 
-2. **Short Term**
+1. **Short Term**
    - Add attachment support
    - Implement caching layer (Redis/memory)
    - Add config file support (in addition to env vars)
    - Optimize `get_ticket_stats` to use pagination
 
-3. **Long Term**
+1. **Long Term**
    - Add webhook support for real-time updates
    - Implement bulk operations
    - Add SLA management features

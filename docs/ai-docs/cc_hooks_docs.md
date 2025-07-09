@@ -518,10 +518,10 @@ configuration.
 Here are some key practices for writing more secure hooks:
 
 1. **Validate and sanitize inputs** - Never trust input data blindly
-2. **Always quote shell variables** - Use `"$VAR"` not `$VAR`
-3. **Block path traversal** - Check for `..` in file paths
-4. **Use absolute paths** - Specify full paths for scripts
-5. **Skip sensitive files** - Avoid `.env`, `.git/`, keys, etc.
+1. **Always quote shell variables** - Use `"$VAR"` not `$VAR`
+1. **Block path traversal** - Check for `..` in file paths
+1. **Use absolute paths** - Specify full paths for scripts
+1. **Skip sensitive files** - Avoid `.env`, `.git/`, keys, etc.
 
 ### Configuration Safety
 
@@ -529,9 +529,9 @@ Direct edits to hooks in settings files don't take effect immediately. Claude
 Code:
 
 1. Captures a snapshot of hooks at startup
-2. Uses this snapshot throughout the session
-3. Warns if hooks are modified externally
-4. Requires review in `/hooks` menu for changes to apply
+1. Uses this snapshot throughout the session
+1. Warns if hooks are modified externally
+1. Requires review in `/hooks` menu for changes to apply
 
 This prevents malicious hook modifications from affecting your current session.
 
@@ -551,13 +551,13 @@ This prevents malicious hook modifications from affecting your current session.
 To troubleshoot hooks:
 
 1. Check if `/hooks` menu displays your configuration
-2. Verify that your [settings files](/en/docs/claude-code/settings) are valid
+1. Verify that your [settings files](/en/docs/claude-code/settings) are valid
    JSON
-3. Test commands manually
-4. Check exit codes
-5. Review stdout and stderr format expectations
-6. Ensure proper quote escaping
-7. Use `claude --debug` to debug your hooks. The output of a successful hook
+1. Test commands manually
+1. Check exit codes
+1. Review stdout and stderr format expectations
+1. Ensure proper quote escaping
+1. Use `claude --debug` to debug your hooks. The output of a successful hook
    appears like below.
 
 ```plaintext

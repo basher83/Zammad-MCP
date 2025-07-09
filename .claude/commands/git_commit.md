@@ -10,11 +10,11 @@ Create well-structured git commits for modified files following the project's co
 ## Important Instructions
 
 1. **DO NOT** include the Claude Code signature (🤖 Generated with [Claude Code]) in commit messages
-2. **DO NOT** include "Co-Authored-By: Claude" in commits
-3. **DO NOT** push to remote - the user will review and push after all commits are created
-4. Follow the commit conventions defined in @.gitmessage
-5. Group related changes into logical commits
-6. Use clear, imperative mood in commit messages
+1. **DO NOT** include "Co-Authored-By: Claude" in commits
+1. **DO NOT** push to remote - the user will review and push after all commits are created
+1. Follow the commit conventions defined in @.gitmessage
+1. Group related changes into logical commits
+1. Use clear, imperative mood in commit messages
 
 ## Git Context
 
@@ -33,13 +33,13 @@ Create well-structured git commits for modified files following the project's co
 Based on the changes shown above:
 
 1. Analyze all modified files to understand the changes
-2. Group related changes together logically
-3. Create commits using the emoji-based format from .gitmessage:
+1. Group related changes together logically
+1. Create commits using the emoji-based format from .gitmessage:
    - Format: `<emoji> <type>(<scope>): <description>`
    - Example: `🎯 feat(auth): add multi-factor authentication`
-4. Stage appropriate files for each commit using `git add`
-5. Create commits with descriptive messages (NO Claude Code signature)
-6. After each commit, show the updated git status
+1. Stage appropriate files for each commit using `git add`
+1. Create commits with descriptive messages (NO Claude Code signature)
+1. After each commit, show the updated git status
 
 Remember: Each commit should represent a single logical change or feature.
 
