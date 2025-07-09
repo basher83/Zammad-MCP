@@ -1,4 +1,4 @@
-#!/usr/bin/env uv
+#!/usr/bin/env -S uv run --script
 # /// script
 # dependencies = [
 #   "pip-audit>=2.6.0",

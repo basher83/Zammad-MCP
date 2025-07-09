@@ -408,7 +408,7 @@ scripts/
 
 ### Script Standards
 
-1. **Shebang**: Use `#!/usr/bin/env uv` for executable scripts (portable across platforms)
+1. **Shebang**: Use `#!/usr/bin/env -S uv run --script` for executable scripts (requires GNU coreutils)
 2. **Metadata**: Always include inline script metadata
 3. **Type Hints**: Use type hints for all functions
 4. **Error Handling**: Implement proper error handling with helpful messages

@@ -1,4 +1,4 @@
-#!/usr/bin/env uv
+#!/usr/bin/env -S uv run --script
 # /// script
 # dependencies = [
 #   "click>=8.0.0",

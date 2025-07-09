@@ -1,4 +1,4 @@
-#!/usr/bin/env uv
+#!/usr/bin/env -S uv run --script
 # /// script
 # dependencies = [
 #   "coverage[toml]>=7.0.0",
