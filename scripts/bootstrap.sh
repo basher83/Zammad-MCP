@@ -48,11 +48,22 @@ if ! command -v eza &> /dev/null; then
         tmp_keyring=$(mktemp -d)
         GNUPGHOME="$tmp_keyring" gpg --import "$tmp_key" 2>/dev/null
         key_info=$(GNUPGHOME="$tmp_keyring" gpg --list-keys 2>/dev/null)
+        # Parse fingerprint using --with-colons for machine-readable output
+        # The 'fpr' record contains the fingerprint in field 10
+        # Check that field 10 is not empty to handle format variations
         key_fingerprint=$(GNUPGHOME="$tmp_keyring" gpg --with-colons --fingerprint 2>/dev/null \
-          | awk -F: '$1=="fpr"{print $10; exit}')
+          | awk -F: '$1=="fpr" && $10 != "" {print $10; exit}')
+        
+        if [ -z "$key_fingerprint" ]; then
+            echo "Warning: Could not extract key fingerprint"
+            echo "GPG output format may have changed or locale settings may affect parsing"
+            echo "Proceeding with key display for manual verification"
+        fi
         
         echo "$key_info"
-        echo "Key fingerprint: $key_fingerprint"
+        if [ -n "$key_fingerprint" ]; then
+            echo "Key fingerprint: $key_fingerprint"
+        fi
         
         # For automated/CI environments, allow skipping confirmation
         if [ -n "${EZA_SKIP_GPG_VERIFY:-}" ]; then
