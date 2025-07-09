@@ -85,8 +85,8 @@ uv run pytest --cov=mcp_zammad --cov-report=xml
 **Output Examples:**
 
 1. **Terminal**: Rich tables showing file-by-file coverage, overall summary, and optional uncovered line details
-2. **Markdown**: GitHub-flavored markdown with emoji indicators, suitable for PR comments
-3. **HTML**: Interactive dashboard with pie charts, bar graphs, and detailed tables
+1. **Markdown**: GitHub-flavored markdown with emoji indicators, suitable for PR comments
+1. **HTML**: Interactive dashboard with pie charts, bar graphs, and detailed tables
 
 **Exit Codes:**
 
@@ -127,12 +127,12 @@ uv run scripts/uv/dev-setup.py
 **Setup Flow:**
 
 1. **System Check**: Verifies Python version, Git, and project structure
-2. **UV Installation**: Checks for UV and offers to install if missing
-3. **Virtual Environment**: Creates or recreates .venv
-4. **Configuration**: Interactive prompts for Zammad credentials
-5. **Dependencies**: Installs all project and dev dependencies
-6. **Validation**: Runs basic checks to ensure setup success
-7. **Next Steps**: Shows helpful commands and resources
+1. **UV Installation**: Checks for UV and offers to install if missing
+1. **Virtual Environment**: Creates or recreates .venv
+1. **Configuration**: Interactive prompts for Zammad credentials
+1. **Dependencies**: Installs all project and dev dependencies
+1. **Validation**: Runs basic checks to ensure setup success
+1. **Next Steps**: Shows helpful commands and resources
 
 **Exit Codes:**
 
@@ -272,8 +272,8 @@ UV scripts use inline metadata to declare their dependencies:
 When you run a UV script, UV automatically:
 
 1. Creates an isolated virtual environment
-2. Installs the specified dependencies
-3. Runs the script with the correct Python version
+1. Installs the specified dependencies
+1. Runs the script with the correct Python version
 
 ## Benefits
 
@@ -286,9 +286,9 @@ When you run a UV script, UV automatically:
 ## Creating New Scripts
 
 1. Create a new `.py` file in this directory
-2. Add the shebang: `#!/usr/bin/env -S uv run --script`
-3. Add script metadata with dependencies
-4. Make it executable: `chmod +x script.py`
+1. Add the shebang: `#!/usr/bin/env -S uv run --script`
+1. Add script metadata with dependencies
+1. Make it executable: `chmod +x script.py`
 
 Example template:
 
