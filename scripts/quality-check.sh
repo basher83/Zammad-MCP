@@ -25,7 +25,13 @@ echo "   uv run scripts/uv/security-scan.py"
 echo ""
 
 echo "🔒 Security scanning with bandit..."
-uv run bandit -r mcp_zammad/ -f json -o bandit-report.json || echo "⚠️ Bandit found issues - check bandit-report.json"
+# Only fail on HIGH/CRITICAL issues (-lll flag)
+if uv run bandit -r mcp_zammad/ -lll -f json -o bandit-report.json; then
+    echo "✅ Bandit: No HIGH/CRITICAL security issues found"
+else
+    echo "❌ Bandit: HIGH/CRITICAL security issues found - check bandit-report.json"
+    exit 1
+fi
 
 echo "🔍 Security scanning with semgrep..."
 uv run semgrep --config=auto --error mcp_zammad/ || echo "⚠️ Semgrep found issues"

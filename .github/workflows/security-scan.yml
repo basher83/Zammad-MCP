@@ -39,9 +39,11 @@ jobs:
       - name: Run Bandit (full tree scan)
         run: |
           # Full recursive scan of the entire codebase
-          uv run bandit -r mcp_zammad/ -f json -o bandit-report.json || true
+          # -lll flag: Only report issues of severity HIGH or higher
+          echo "Running Bandit security scan (HIGH/CRITICAL only)..."
+          uv run bandit -r mcp_zammad/ -lll -f json -o bandit-report.json
           
-          # Also generate SARIF for GitHub Security tab
+          # Also generate SARIF for GitHub Security tab (includes all severities for visibility)
           uv run bandit -r mcp_zammad/ -f sarif -o bandit-sarif.json || true
 
       - name: Upload Bandit results to GitHub Security
@@ -53,11 +55,17 @@ jobs:
 
       - name: Run safety check
         run: |
-          uv run safety check --json --output safety-report.json || true
+          echo "Running safety vulnerability check..."
+          # Will exit non-zero if vulnerabilities are found
+          uv run safety check --json --output safety-report.json
+          echo "✅ No known vulnerabilities found"
 
       - name: Run pip-audit
         run: |
-          uv run pip-audit --format json --output pip-audit-report.json || true
+          echo "Running pip-audit dependency scan..."
+          # Will exit non-zero if vulnerabilities are found
+          uv run pip-audit --format json --output pip-audit-report.json
+          echo "✅ No dependency vulnerabilities found"
 
       - name: Upload security reports
         uses: actions/upload-artifact@v4
@@ -70,30 +78,43 @@ jobs:
             safety-report.json
             pip-audit-report.json
 
-      - name: Comment PR with security summary
-        uses: actions/github-script@v7
-        if: github.event_name == 'pull_request' && always()
-        with:
-          script: |
-            const fs = require('fs');
-            let comment = '## 🔒 Security Scan Results\n\n';
-            
-            // Parse and summarize results
-            try {
-              const banditReport = JSON.parse(fs.readFileSync('bandit-report.json', 'utf8'));
-              const issues = banditReport.results.length;
-              comment += `### Bandit (Static Analysis)\n`;
-              comment += issues > 0 ? `⚠️ Found ${issues} potential security issues\n` : `✅ No security issues found\n`;
-              comment += '\n';
-            } catch (e) {
-              comment += '### Bandit\n❌ Failed to parse results\n\n';
-            }
-            
-            // Add more result summaries as needed
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
+      - name: Generate Security Summary
+        if: always()
+        run: |
+          echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check Bandit results
+          if [ -f bandit-report.json ]; then
+            HIGH_COUNT=$(jq '[.results[] | select(.issue_severity == "HIGH")] | length' bandit-report.json)
+            MED_COUNT=$(jq '[.results[] | select(.issue_severity == "MEDIUM")] | length' bandit-report.json)
+            LOW_COUNT=$(jq '[.results[] | select(.issue_severity == "LOW")] | length' bandit-report.json)
+            echo "### Bandit Static Analysis" >> $GITHUB_STEP_SUMMARY
+            if [ "$HIGH_COUNT" -gt 0 ]; then
+              echo "❌ **Failed**: Found $HIGH_COUNT HIGH severity issues" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ **Passed**: No HIGH/CRITICAL issues (Medium: $MED_COUNT, Low: $LOW_COUNT)" >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check safety results
+          echo "### Dependency Vulnerability Scans" >> $GITHUB_STEP_SUMMARY
+          if [ -f safety-report.json ]; then
+            SAFETY_VULNS=$(jq '.vulnerabilities | length' safety-report.json)
+            if [ "$SAFETY_VULNS" -gt 0 ]; then
+              echo "❌ **Safety**: Found $SAFETY_VULNS vulnerabilities" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ **Safety**: No known vulnerabilities" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+          
+          # Check pip-audit results
+          if [ -f pip-audit-report.json ]; then
+            AUDIT_VULNS=$(jq '.vulnerabilities | length' pip-audit-report.json)
+            if [ "$AUDIT_VULNS" -gt 0 ]; then
+              echo "❌ **pip-audit**: Found $AUDIT_VULNS vulnerabilities" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ **pip-audit**: No vulnerabilities" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
