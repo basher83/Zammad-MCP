@@ -52,7 +52,6 @@ services:
       target: development
     volumes:
       - ./mcp_zammad:/app/mcp_zammad
-      - ./.env:/app/.env:ro
     environment:
       ZAMMAD_URL: ${ZAMMAD_URL:-https://your-instance.zammad.com/api/v1}
       ZAMMAD_HTTP_TOKEN: ${ZAMMAD_HTTP_TOKEN}
