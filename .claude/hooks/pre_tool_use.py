@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run --script
+#!/usr/bin/env uv
 # /// script
 # requires-python = ">=3.10"
 # dependencies = []

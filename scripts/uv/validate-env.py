@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run --script
+#!/usr/bin/env uv
 # /// script
 # dependencies = [
 #   "python-dotenv>=1.0.0",
