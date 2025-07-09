@@ -172,6 +172,44 @@ def should_use_fd(command: str) -> bool:
     return False
 
 
+def should_use_eza(command: str) -> bool:
+    """
+    Check if the command uses ls when eza would be more feature-rich.
+    Returns True if ls is used for listing files/directories.
+    """
+    # Normalize command
+    normalized = command.strip()
+    
+    # Check if command uses ls as a command
+    ls_patterns = [
+        r"^ls\b",  # Command starts with ls
+        r";\s*ls\b",  # ls after semicolon
+        r"&&\s*ls\b",  # ls after &&
+        r"\|\s*ls\b",  # ls after pipe (though this is less common)
+        r"^\s*ls\b",  # ls with leading whitespace
+    ]
+    
+    for pattern in ls_patterns:
+        if re.search(pattern, normalized):
+            # Allow some specific ls usages that might be in scripts or specific contexts
+            # For example, ls in command substitution or when output is being processed
+            acceptable_ls_uses = [
+                r"ls.*\|\s*wc",  # ls | wc -l (counting files)
+                r"ls.*\|\s*grep",  # ls | grep pattern (filtering)
+                r"ls.*\>\s*/dev/null",  # ls > /dev/null (checking existence)
+                r"\$\(.*ls.*\)",  # $(ls ...) command substitution
+                r"`.*ls.*`",  # `ls ...` command substitution
+            ]
+            
+            for acceptable in acceptable_ls_uses:
+                if re.search(acceptable, normalized):
+                    return False
+                    
+            return True
+            
+    return False
+
+
 def main() -> None:
     try:
         # Read JSON input from stdin
@@ -210,6 +248,17 @@ def main() -> None:
                 print("  fd 'pattern' instead of find . -name '*pattern*'", file=sys.stderr)
                 print("  fd -e py instead of find . -name '*.py'", file=sys.stderr)
                 print("  fd -t f instead of find . -type f", file=sys.stderr)
+                sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
+                
+            # Check for ls usage when eza would be better
+            if should_use_eza(command):
+                print("BLOCKED: Use 'eza' instead of 'ls' for better output and features", file=sys.stderr)
+                print("eza provides colors, icons, git status, tree view, and more", file=sys.stderr)
+                print("Examples:", file=sys.stderr)
+                print("  eza instead of ls", file=sys.stderr)
+                print("  eza -la instead of ls -la", file=sys.stderr)
+                print("  eza --tree instead of ls -R", file=sys.stderr)
+                print("  eza --git -l for git status integration", file=sys.stderr)
                 sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
         # Ensure log directory exists
