@@ -33,14 +33,15 @@ This wizard will guide you through all setup steps including UV installation, vi
 
 If you prefer manual setup:
 
-3. (Optional) Install recommended development tools:
+
+1. (Optional) Install recommended development tools:
 
    ```bash
    # Install eza, ripgrep, and ensure uv is available
    ./scripts/bootstrap.sh
    ```
 
-4. Run the Python environment setup script:
+2. Run the Python environment setup script:
 
    ```bash
    # macOS/Linux
@@ -50,14 +51,14 @@ If you prefer manual setup:
    .\scripts\setup.ps1
    ```
 
-5. Create a `.env` file with your Zammad credentials:
+3. Create a `.env` file with your Zammad credentials:
 
    ```env
    ZAMMAD_URL=https://your-instance.zammad.com/api/v1
    ZAMMAD_HTTP_TOKEN=your-api-token
    ```
 
-6. (Optional) Validate your environment configuration:
+4. (Optional) Validate your environment configuration:
 
    ```bash
    ./scripts/uv/validate-env.py
