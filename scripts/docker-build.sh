@@ -35,7 +35,11 @@ docker images "${REGISTRY}/${IMAGE_NAME}:${VERSION}" --format "table {{.Reposito
 # Optional: Run security scan with trivy if available
 if command -v trivy &> /dev/null; then
     echo -e "\n${GREEN}Step 4: Running security scan...${NC}"
-    trivy image --severity HIGH,CRITICAL "${REGISTRY}/${IMAGE_NAME}:${VERSION}"
+    # Use local cache to speed up repeated scans (minutes -> seconds)
+    TRIVY_CACHE="${HOME}/.cache/trivy"
+    mkdir -p "${TRIVY_CACHE}"
+    echo "Using cache directory: ${TRIVY_CACHE}"
+    trivy image --cache-dir "${TRIVY_CACHE}" --severity HIGH,CRITICAL "${REGISTRY}/${IMAGE_NAME}:${VERSION}"
 else
     echo -e "\n${YELLOW}Trivy not found. Skipping security scan.${NC}"
     echo "Install with: brew install trivy (macOS) or check https://aquasecurity.github.io/trivy/"
