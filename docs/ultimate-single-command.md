@@ -128,6 +128,22 @@ Together they give you:
 
 This combination works for 95% of codebases and provides everything needed to start contributing within minutes.
 
+### Hook-Friendly Alternatives
+
+If you're using the pre-tool-use hook (or similar efficiency enforcement), here are the modern tool versions:
+
+#### Command 1: "What is this and how do I use it?" (Hook-Friendly)
+```bash
+head -100 README.md 2>/dev/null | rg -o "^#.*|^-.*|.*install.*|.*pip.*|.*npm.*|.*cargo.*|.*Usage:.*|.*Getting Started:.*|.*Quick Start:.*|.*Example:.*" | head -40 || (echo "No README. Let me look around..." && eza -la && fd -e py -e js -e go | head -10)
+```
+
+#### Command 2: "Show me the code that matters" (Hook-Friendly)
+```bash
+fd -t f -e py -e js -e ts -e go -e rs --changed-within 30d -x ls -la {} | sort -k6,7 -r | head -20 && echo -e "\n=== STRUCTURE ===" && tree -L 2 -I '.git|node_modules|.venv|__pycache__' --dirsfirst 2>/dev/null | head -25
+```
+
+**Note**: While the original commands would be blocked by efficiency hooks (for using `grep`, `find`, and `ls`), these alternatives achieve the same results using modern, faster tools (`rg`, `fd`, `eza`). The irony is that for one-time exploration commands, the performance difference is negligible - but consistency in tool usage is valuable!
+
 ## Final Thoughts
 
 The "ultimate" command is subjective and depends on:
