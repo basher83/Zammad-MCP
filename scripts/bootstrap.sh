@@ -50,14 +50,25 @@ if ! command -v eza &> /dev/null; then
         key_info=$(GNUPGHOME="$tmp_keyring" gpg --list-keys 2>/dev/null)
         # Parse fingerprint using --with-colons for machine-readable output
         # The 'fpr' record contains the fingerprint in field 10
-        # Check that field 10 is not empty to handle format variations
+        # Use grep and cut for more predictable parsing
         key_fingerprint=$(GNUPGHOME="$tmp_keyring" gpg --with-colons --fingerprint 2>/dev/null \
-          | awk -F: '$1=="fpr" && $10 != "" {print $10; exit}')
+          | grep "^fpr:" | head -1 | cut -d: -f10)
         
-        if [ -z "$key_fingerprint" ]; then
-            echo "Warning: Could not extract key fingerprint"
-            echo "GPG output format may have changed or locale settings may affect parsing"
-            echo "Proceeding with key display for manual verification"
+        # Validate fingerprint format (should be 40 hex characters for GPG keys)
+        # Modern GPG keys use SHA1 (40 chars) or SHA256 (64 chars) for fingerprints
+        # We check for 40 as that's most common, but could extend to support 64
+        if [[ ! "$key_fingerprint" =~ ^[A-F0-9]{40}$ ]]; then
+            # Try uppercase conversion in case of lowercase hex
+            key_fingerprint_upper=$(echo "$key_fingerprint" | tr '[:lower:]' '[:upper:]')
+            if [[ ! "$key_fingerprint_upper" =~ ^[A-F0-9]{40}$ ]]; then
+                echo "Warning: Invalid or missing key fingerprint"
+                echo "Expected 40 character hex string, got: '$key_fingerprint'"
+                echo "GPG output format may have changed or locale settings may affect parsing"
+                echo "Proceeding with key display for manual verification"
+                key_fingerprint=""
+            else
+                key_fingerprint="$key_fingerprint_upper"
+            fi
         fi
         
         echo "$key_info"
