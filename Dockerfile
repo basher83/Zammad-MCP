@@ -52,9 +52,9 @@ CMD ["uv", "run", "mcp-zammad"]
 # Development stage
 FROM production AS development
 
-USER root
-RUN uv sync --frozen
+# Run sync as appuser to avoid permission issues
 USER appuser
+RUN uv sync --frozen
 
 # Enable hot reload for development
 ENV PYTHONUNBUFFERED=1
