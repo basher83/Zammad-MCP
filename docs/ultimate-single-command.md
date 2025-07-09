@@ -101,6 +101,33 @@ fd -e md -e rst -e txt | grep -i -E "readme|doc|guide|tutorial" | head -20
 fd -e py -e js -e ts | grep -E "test|spec" | head -20
 ```
 
+## The Plot Twist: Two Commands
+
+After further analysis, if you get TWO commands instead of one, the optimal pair is:
+
+### Command 1: "What is this and how do I use it?"
+```bash
+cat README.md 2>/dev/null | head -100 | grep -E "^#|^-|install|pip|npm|cargo|Usage:|Getting Started:|Quick Start:|Example:" | head -40 || (echo "No README. Let me look around..." && ls -la && find . -name "*.py" -o -name "*.js" -o -name "*.go" | head -10)
+```
+
+### Command 2: "Show me the code that matters"
+```bash
+find . -type f \( -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.go" -o -name "*.rs" \) ! -path "./.git/*" ! -path "./node_modules/*" ! -path "./.venv/*" -mtime -30 -exec ls -la {} \; | sort -k6,7 -r | head -20 && echo -e "\n=== STRUCTURE ===" && tree -L 2 -I '.git|node_modules|.venv|__pycache__' --dirsfirst 2>/dev/null | head -25
+```
+
+### Why This Pair?
+
+- **Command 1**: Extracts the essential documentation - what the project is, how to install it, usage examples
+- **Command 2**: Shows recently modified code (last 30 days) + project structure
+
+Together they give you:
+- **Purpose** (from README)
+- **Activity** (from recent changes)
+- **Architecture** (from tree)
+- **Quick start** (from install instructions)
+
+This combination works for 95% of codebases and provides everything needed to start contributing within minutes.
+
 ## Final Thoughts
 
 The "ultimate" command is subjective and depends on:
@@ -110,3 +137,5 @@ The "ultimate" command is subjective and depends on:
 - **Time available**: 5 seconds vs 5 minutes
 
 But when you truly only get ONE shot to understand a codebase, **recent activity** tells the most important story: what actually matters right now.
+
+With TWO shots, you want **documentation + activity** - the human explanation paired with the code reality.
