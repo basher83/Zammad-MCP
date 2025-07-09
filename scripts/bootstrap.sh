@@ -136,6 +136,30 @@ check_local_bin_path() {
     fi
 }
 
+# Function to create fd symlink safely
+create_fd_symlink() {
+    local target=$(which fdfind)
+    local link="$HOME/.local/bin/fd"
+    
+    mkdir -p "$HOME/.local/bin"
+    
+    # Check if fd already exists and handle appropriately
+    if [ -e "$link" ] || [ -L "$link" ]; then
+        # Check if it's already the correct symlink
+        if [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ]; then
+            echo "Symlink already correctly configured"
+        else
+            echo "Removing existing fd file/symlink"
+            rm -f "$link"
+            ln -nsf "$target" "$link"
+            echo "Created symlink: fd -> $target"
+        fi
+    else
+        ln -nsf "$target" "$link"
+        echo "Created symlink: fd -> $target"
+    fi
+}
+
 # Install fd-find - a modern replacement for find
 echo "Checking fd..."
 
@@ -150,8 +174,7 @@ if ! command -v fd &> /dev/null && ! command -v fdfind &> /dev/null; then
     
     # Create symlink for fd command
     echo "Setting up fd symlink..."
-    mkdir -p "$HOME/.local/bin"
-    ln -nsf "$(which fdfind)" "$HOME/.local/bin/fd"
+    create_fd_symlink
     
     # Check if ~/.local/bin is in PATH
     check_local_bin_path
@@ -160,8 +183,7 @@ else
     if command -v fdfind &> /dev/null && ! command -v fd &> /dev/null; then
         echo "fd-find is installed but 'fd' command not available"
         echo "Creating fd symlink..."
-        mkdir -p "$HOME/.local/bin"
-        ln -nsf "$(which fdfind)" "$HOME/.local/bin/fd"
+        create_fd_symlink
         
         # Check PATH again
         check_local_bin_path
