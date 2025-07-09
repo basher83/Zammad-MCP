@@ -7,9 +7,10 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 
-def is_dangerous_rm_command(command):
+def is_dangerous_rm_command(command: str) -> bool:
     """
     Comprehensive detection of dangerous rm commands.
     Matches various forms of rm -rf and similar destructive patterns.
@@ -53,7 +54,7 @@ def is_dangerous_rm_command(command):
     return False
 
 
-def is_env_file_access(tool_name, tool_input):
+def is_env_file_access(tool_name: str, tool_input: dict[str, Any]) -> bool:
     """
     Check if any tool is trying to access .env files containing sensitive data.
     """
@@ -84,7 +85,7 @@ def is_env_file_access(tool_name, tool_input):
     return False
 
 
-def main():
+def main() -> None:
     try:
         # Read JSON input from stdin
         input_data = json.load(sys.stdin)
