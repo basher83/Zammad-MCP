@@ -299,8 +299,9 @@ The project currently uses bash scripts for:
 
 1. **Dependency Management**: Dependencies declared in script, no separate requirements
 2. **Version Locking**: UV lock files ensure reproducibility
-3. **Testing**: Scripts can be unit tested like regular Python code
+3. **Testing**: Scripts can be unit tested like regular Python code with 90%+ coverage target
 4. **Error Handling**: Python's exception handling provides better error messages
+5. **Quality Assurance**: Scripts run through same quality pipeline as main code
 
 ### Operational Benefits
 
@@ -365,6 +366,8 @@ scripts/
 4. **Error Handling**: Implement proper error handling with helpful messages
 5. **Progress Indication**: Use Rich for progress bars and status updates
 6. **Exit Codes**: Return appropriate exit codes for CI/CD integration
+7. **Testing**: Aim for 90%+ coverage per script with unit tests
+8. **CI Integration**: Scripts should pass all quality checks (ruff, mypy, bandit)
 
 ### Documentation Requirements
 
