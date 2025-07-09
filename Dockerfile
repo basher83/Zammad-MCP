@@ -6,16 +6,16 @@ FROM python:3.12-slim@sha256:4600f71648e110b005bf7bca92dbb335e549e6b27f2e83fceee
 
 WORKDIR /app
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
-
+# Install uv – pin the exact image digest for reproducible builds
+# (replace <digest> with the current digest shown on GHCR)
+COPY --from=ghcr.io/astral-sh/uv@sha256:<digest> /uv /uvx /usr/local/bin/
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+  --mount=type=cache,target=/root/.cache/uv \
+  uv sync --frozen --no-dev
 
 # Production stage
 FROM python:3.12-slim@sha256:4600f71648e110b005bf7bca92dbb335e549e6b27f2e83fceee5e11b3e1a4d01 AS production
@@ -63,9 +63,9 @@ USER root
 
 # Install dev dependencies with cache mounts
 RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen && \
-    chown -R appuser:appuser /app
+  --mount=type=cache,target=/root/.cache/uv \
+  uv sync --frozen && \
+  chown -R appuser:appuser /app
 
 # Switch back to appuser
 USER appuser

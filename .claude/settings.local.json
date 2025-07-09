@@ -8,7 +8,8 @@
       "Bash(rg:*)",
       "Bash(chmod:*)",
       "Bash(uv:*)",
-      "Bash(gh issue create:*)"
+      "Bash(gh issue create:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   },
