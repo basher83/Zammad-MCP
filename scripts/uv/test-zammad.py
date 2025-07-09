@@ -44,9 +44,8 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 from rich.tree import Tree
-from zammad_py import ZammadAPI
-
 from utils import normalize_zammad_url
+from zammad_py import ZammadAPI
 
 console = Console()
 
@@ -583,7 +582,6 @@ def main(env_file: Path | None, operation: str | None, limit: int, benchmark: bo
             console.print(f"  {group['id']}: {group['name']}")
     elif operation == "info":
         # Info already displayed
-        pass
         # Info already displayed
         pass
     else:

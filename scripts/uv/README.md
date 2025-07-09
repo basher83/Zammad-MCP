@@ -4,11 +4,12 @@ This directory contains UV single-file scripts that enhance the Zammad MCP devel
 
 ## Available Scripts
 
-### validate-env.py
+### Environment Validation
 
 Validates the Zammad MCP Server environment configuration before startup.
 
 **Features:**
+
 - Checks environment variables are properly set
 - Validates Zammad URL format
 - Tests API connection and authentication
@@ -36,6 +37,7 @@ uv run scripts/uv/validate-env.py
 ```
 
 **Exit Codes:**
+
 - 0: Configuration valid (and connection successful if tested)
 - 1: Configuration errors or connection failed
 
@@ -44,6 +46,7 @@ uv run scripts/uv/validate-env.py
 Generates beautiful, actionable coverage reports beyond basic terminal output.
 
 **Features:**
+
 - Parses coverage.xml data from pytest-cov
 - Multiple output formats:
   - Rich terminal output with tables and trees
@@ -86,6 +89,7 @@ uv run pytest --cov=mcp_zammad --cov-report=xml
 3. **HTML**: Interactive dashboard with pie charts, bar graphs, and detailed tables
 
 **Exit Codes:**
+
 - 0: Coverage meets target
 - 1: Coverage below target or error parsing coverage file
 
@@ -94,6 +98,7 @@ uv run pytest --cov=mcp_zammad --cov-report=xml
 Interactive setup wizard for new contributors to get started quickly.
 
 **Features:**
+
 - System requirements verification (Python 3.10+, Git, OS compatibility)
 - Automatic UV installation if not present
 - Virtual environment creation and management
@@ -120,6 +125,7 @@ uv run scripts/uv/dev-setup.py
 ```
 
 **Setup Flow:**
+
 1. **System Check**: Verifies Python version, Git, and project structure
 2. **UV Installation**: Checks for UV and offers to install if missing
 3. **Virtual Environment**: Creates or recreates .venv
@@ -129,6 +135,7 @@ uv run scripts/uv/dev-setup.py
 7. **Next Steps**: Shows helpful commands and resources
 
 **Exit Codes:**
+
 - 0: Setup completed successfully
 - 1: Setup failed or was cancelled
 
@@ -137,6 +144,7 @@ uv run scripts/uv/dev-setup.py
 Unified security scanner that consolidates multiple security tools into a single actionable report.
 
 **Features:**
+
 - Runs multiple security scanners:
   - **pip-audit**: Vulnerability scanning for Python dependencies
   - **bandit**: Static security analysis for Python code
@@ -174,6 +182,7 @@ Unified security scanner that consolidates multiple security tools into a single
 ```
 
 **Security Issue Details:**
+
 - **Tool**: Which scanner found the issue
 - **Severity**: Critical/High/Medium/Low/Info rating
 - **Location**: File path and line number or package name
@@ -181,6 +190,7 @@ Unified security scanner that consolidates multiple security tools into a single
 - **Remediation**: Specific steps to fix the issue
 
 **Exit Codes:**
+
 - 0: No critical/high severity issues found
 - 1: Critical or high severity issues detected
 
@@ -189,6 +199,7 @@ Unified security scanner that consolidates multiple security tools into a single
 Interactive CLI for testing Zammad API connections and operations without the MCP server.
 
 **Features:**
+
 - **Interactive Mode**: Menu-driven interface for exploring the API
 - **Connection Testing**: Validates credentials and displays connection timing
 - **API Operations**:
@@ -221,6 +232,7 @@ Interactive CLI for testing Zammad API connections and operations without the MC
 ```
 
 **Interactive Mode Options:**
+
 - List tickets (with optional state filtering)
 - Get ticket details (shows articles and metadata)
 - Create test ticket (guided ticket creation)
@@ -230,6 +242,7 @@ Interactive CLI for testing Zammad API connections and operations without the MC
 - Show API configuration
 
 **Benchmark Tests:**
+
 - Get current user
 - List first 10 tickets
 - List all groups
@@ -237,6 +250,7 @@ Interactive CLI for testing Zammad API connections and operations without the MC
 - List priorities
 
 **Exit Codes:**
+
 - 0: Successful connection and operations
 - 1: Connection failed or configuration error
 
@@ -256,6 +270,7 @@ UV scripts use inline metadata to declare their dependencies:
 ```
 
 When you run a UV script, UV automatically:
+
 1. Creates an isolated virtual environment
 2. Installs the specified dependencies
 3. Runs the script with the correct Python version
@@ -302,13 +317,16 @@ if __name__ == "__main__":
     main()
 ```
 
+## Completed Scripts
+
+- `dev-setup.py` - Interactive development setup
+- `test-zammad.py` - Interactive Zammad API testing
+- `coverage-report.py` - Enhanced coverage reporting
+
 ## Planned Scripts
 
 - `release.py` - Automated release management
-- `test-zammad.py` - Interactive Zammad API testing
-- `coverage-report.py` - Enhanced coverage reporting
 - `security-scan.py` - Consolidated security scanning
-- `dev-setup.py` - Interactive development setup
 - `issue-helper.py` - GitHub issue template generator
 - `profile-zammad.py` - Performance profiling tool
 

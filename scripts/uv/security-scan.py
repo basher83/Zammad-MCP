@@ -211,7 +211,7 @@ class SecurityScanner:
                     fix_version = None
                     if vulns and vulns[0].get("fix_versions"):
                         fix_version = vulns[0]["fix_versions"][0]
-                    
+
                     issue = SecurityIssue(
                         tool="pip-audit",
                         severity=vuln_severity,

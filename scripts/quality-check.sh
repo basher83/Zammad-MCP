@@ -21,7 +21,7 @@ uv run mypy mcp_zammad/
 echo "🔒 Running security scans..."
 echo ""
 echo "💡 Tip: You can also use the unified security scanner:"
-echo "   ./scripts/uv/security-scan.py"
+echo "   uv run scripts/uv/security-scan.py"
 echo ""
 
 echo "🔒 Security scanning with bandit..."

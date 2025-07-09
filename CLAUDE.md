@@ -110,7 +110,7 @@ ZAMMAD_PASSWORD=your-password
 ## Code Quality Standards
 
 - **Formatting**: Ruff format with 120-character line length
-- **Linting**: Ruff with extensive rule set (see pyproject.toml)
+- **Linting**: Ruff with extensive rule set (see @pyproject.toml)
 - **Type Checking**: MyPy with strict settings
 - **Python Version**: 3.10+ required
 
