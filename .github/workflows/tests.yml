@@ -74,7 +74,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             
             # Coverage badge
-            COVERAGE=$COVERAGE python -c "import os; cov = float(os.environ['COVERAGE']); print('✅ **Status**: Good coverage (target: 80%)' if cov >= 80 else '⚠️ **Status**: Moderate coverage (target: 80%)' if cov >= 60 else '❌ **Status**: Low coverage (target: 80%)')" >> $GITHUB_STEP_SUMMARY
+            COVERAGE=$COVERAGE python -c "import os; cov = float(os.environ['COVERAGE']); print('✅ **Status**: Good coverage (target: 90%)' if cov >= 90 else '⚠️ **Status**: Below target (target: 90%)' if cov >= 80 else '❌ **Status**: Low coverage (target: 90%)')" >> $GITHUB_STEP_SUMMARY
             
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "📈 Coverage details available in [Codacy](https://app.codacy.com)" >> $GITHUB_STEP_SUMMARY

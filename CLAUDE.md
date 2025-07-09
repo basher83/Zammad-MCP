@@ -97,7 +97,7 @@ ZAMMAD_PASSWORD=your-password
 - Integration tests would require a test Zammad instance
 - Use `pytest-asyncio` for async test support
 - Coverage reports help identify untested code paths
-- **Current Coverage**: 67% (target: 80%+)
+- **Current Coverage**: 67% (target: 90%+)
 
 ### Testing Best Practices
 
@@ -204,7 +204,7 @@ The server automatically loads environment variables from the `.env` file in the
 
 1. **Immediate**
    - Fix test collection error in test_server.py (URI parameter mismatch)
-   - Increase test coverage to 80%+
+   - Increase test coverage to 90%+
    - Fix unused parameters in functions
    - Implement custom exception classes
    - Add proper URL validation

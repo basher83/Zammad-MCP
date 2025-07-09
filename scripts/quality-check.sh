@@ -49,7 +49,7 @@ uv run pytest tests/ \
   --cov-report=term-missing \
   --cov-report=xml:coverage.xml \
   --cov-report=html:htmlcov \
-  --cov-fail-under=80
+  --cov-fail-under=90
 
 echo "🎉 Quality checks complete!"
 echo ""
