@@ -36,8 +36,9 @@ Thumbs.db
 
 # Documentation
 docs/
-*.md
 LICENSE
+# Keep README.md as it's required by hatchling
+!README.md
 
 # CI/CD
 .github/

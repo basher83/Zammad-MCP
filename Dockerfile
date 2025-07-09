@@ -6,11 +6,10 @@ FROM python:3.12-slim@sha256:4600f71648e110b005bf7bca92dbb335e549e6b27f2e83fceee
 
 WORKDIR /app
 
-# Install uv – pin the exact image digest for reproducible builds
-# (replace <digest> with the current digest shown on GHCR)
-COPY --from=ghcr.io/astral-sh/uv@sha256:3f6e2...actualDigest... /usr/local/bin/uv /usr/local/bin/uvx
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+# Copy dependency files and README (required by hatchling)
+COPY pyproject.toml uv.lock README.md ./
 
 # Install dependencies with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -26,7 +25,7 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 WORKDIR /app
 
 # Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 # Copy dependency files and virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 COPY pyproject.toml uv.lock ./
