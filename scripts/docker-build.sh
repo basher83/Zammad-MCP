@@ -9,6 +9,9 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Check for required tools
+command -v docker >/dev/null 2>&1 || { echo -e "${RED}Docker CLI not found – install Docker first.${NC}"; exit 1; }
+
 # Configuration
 IMAGE_NAME="zammad-mcp"
 REGISTRY="ghcr.io/basher83"
