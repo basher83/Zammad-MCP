@@ -234,7 +234,8 @@ tmp/
 zammad_cache/
 mcp_logs/
 
-
+# logs
+logs/
 
 # Security and quality reports
 bandit-report.json
