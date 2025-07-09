@@ -103,6 +103,9 @@ exclude_lines = [
 precision = 2
 show_missing = true
 
+[tool.coverage.html]
+directory = "htmlcov"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
