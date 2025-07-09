@@ -315,8 +315,8 @@ The project currently uses bash scripts for:
 ### Phase 1: Pilot Scripts (Week 1-2)
 
 1. Start with `validate-env.py` as proof of concept
-2. Implement `coverage-report.py` for immediate value
-3. Gather feedback from contributors
+1. Implement `coverage-report.py` for immediate value
+1. Gather feedback from contributors
 
 **Success Criteria**:
 
@@ -327,8 +327,8 @@ The project currently uses bash scripts for:
 ### Phase 2: Core Development Tools (Week 3-4)
 
 1. Implement `dev-setup.py` to improve onboarding
-2. Create `security-scan.py` to consolidate security checks
-3. Develop `test-zammad.py` for API testing
+1. Create `security-scan.py` to consolidate security checks
+1. Develop `test-zammad.py` for API testing
 
 **Success Criteria**:
 
@@ -339,8 +339,8 @@ The project currently uses bash scripts for:
 ### Phase 3: Advanced Tools (Week 5-6)
 
 1. Build `release.py` for release automation
-2. Add `profile-zammad.py` for performance testing
-3. Create `issue-helper.py` for better issue management
+1. Add `profile-zammad.py` for performance testing
+1. Create `issue-helper.py` for better issue management
 
 **Go/No-Go Decision Point**:
 
@@ -352,8 +352,8 @@ The project currently uses bash scripts for:
 ### Phase 4: Deprecation (Week 7-8)
 
 1. Update documentation to prefer UV scripts
-2. Add deprecation notices to bash scripts
-3. Provide migration guide for users
+1. Add deprecation notices to bash scripts
+1. Provide migration guide for users
 
 **Prerequisites for Deprecation**:
 
