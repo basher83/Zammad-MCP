@@ -16,11 +16,12 @@ repos:
     rev: "f3a18ab30bc444e62d02505419ab7059cead0853"  # 1.7.6
     hooks:
       - id: bandit
-        args: ["-f", "json", "-o", "bandit-report.json"]
+        args: ["-f", "json"]
         exclude: ^tests/
         # Note: Removed pass_filenames: false to only scan changed files
         # This improves commit speed while still maintaining security checks
         # Full tree scan still happens in CI/CD via 'bandit -r mcp_zammad/'
+        # Output streams to stdout for pre-commit to capture
 
   - repo: https://github.com/semgrep/semgrep
     rev: "5abdc505a8fe8e663e50beb10b92edb9d990ffa5"  # v1.35.0
@@ -41,5 +42,6 @@ repos:
         name: pip-audit
         entry: uv
         language: system
-        args: ["run", "pip-audit", "--format=json", "--output=pip-audit-report.json"]
+        args: ["run", "pip-audit", "--format=json"]
         pass_filenames: false
+        # Output streams to stdout for pre-commit to capture
