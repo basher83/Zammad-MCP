@@ -305,6 +305,7 @@ class SetupWizard:
         # Normalize URL to ensure it ends with /api/v1
         try:
             from utils import normalize_zammad_url
+
             zammad_url = normalize_zammad_url(zammad_url)
         except (ImportError, ValueError) as e:
             console.print(f"[red]Error normalizing URL:[/red] {e}")

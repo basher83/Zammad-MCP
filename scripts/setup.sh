@@ -12,6 +12,9 @@ if ! command -v uv &> /dev/null; then
     
     # Add uv to PATH for this session
     export PATH="$HOME/.cargo/bin:$PATH"
+    echo ""
+    echo "Note: PATH updated for current session only."
+    echo "Add ~/.cargo/bin to your shell's PATH permanently."
 fi
 
 # Create virtual environment

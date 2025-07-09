@@ -11,6 +11,9 @@ try {
     $confirmation = Read-Host "Continue? (y/N)"
     if ($confirmation -eq 'y' -or $confirmation -eq 'Y') {
         Invoke-WebRequest -Uri "https://astral.sh/uv/install.ps1" | Invoke-Expression
+        Write-Host ""
+        Write-Host "Note: PATH may need to be updated for uv to work in new terminals." -ForegroundColor Yellow
+        Write-Host "The installer should have updated your PATH automatically." -ForegroundColor DarkGray
     } else {
         Write-Host "Installation cancelled. Please install uv manually." -ForegroundColor Red
         exit 1
