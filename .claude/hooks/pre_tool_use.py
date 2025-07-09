@@ -1,13 +1,13 @@
 #!/usr/bin/env -S uv run --script
 # /// script
-# requires-python = ">=3.8"
+# requires-python = ">=3.9"
 # ///
 
 import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
 def is_dangerous_rm_command(command: str) -> bool:
@@ -54,7 +54,7 @@ def is_dangerous_rm_command(command: str) -> bool:
     return False
 
 
-def is_env_file_access(tool_name: str, tool_input: Dict[str, Any]) -> bool:
+def is_env_file_access(tool_name: str, tool_input: dict[str, Any]) -> bool:
     """
     Check if any tool is trying to access .env files containing sensitive data.
     """
