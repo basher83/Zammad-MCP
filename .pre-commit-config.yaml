@@ -45,3 +45,10 @@ repos:
         args: ["run", "pip-audit", "--format=json"]
         pass_filenames: false
         # Output streams to stdout for pre-commit to capture
+
+      - id: no-plaintext-fence
+        name: Block plaintext code fences
+        entry: bash -c 'if rg -n "\`\`\`plaintext" "$@"; then echo "❌ Use \`\`\`text instead of \`\`\`plaintext"; exit 1; fi' --
+        language: system
+        files: '\.md$'
+        pass_filenames: true
