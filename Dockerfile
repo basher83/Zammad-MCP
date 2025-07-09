@@ -1,5 +1,7 @@
 # Build stage
-FROM python:3.13-slim AS builder
+# Pin to specific digest for reproducibility and security
+# python:3.12-slim as of 2025-01-09
+FROM python:3.12-slim@sha256:4600f71648e110b005bf7bca92dbb335e549e6b27f2e83fceee5e11b3e1a4d01 AS builder
 
 WORKDIR /app
 
@@ -13,7 +15,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # Production stage
-FROM python:3.13-slim AS production
+FROM python:3.12-slim@sha256:4600f71648e110b005bf7bca92dbb335e549e6b27f2e83fceee5e11b3e1a4d01 AS production
 
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
@@ -41,13 +43,13 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD uv run python -c "import mcp_zammad; print('OK')" || exit 1
+  CMD /app/.venv/bin/python -c "import mcp_zammad; print('OK')" || exit 1
 
 # MCP doesn't typically expose ports, but keeping for potential future use
 EXPOSE 8080
 
 # Run the MCP server
-CMD ["uv", "run", "mcp-zammad"]
+CMD ["/app/.venv/bin/mcp-zammad"]
 
 # Development stage
 FROM production AS development
