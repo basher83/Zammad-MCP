@@ -1,6 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
+# dependencies = []
 # ///
 """
 Pre-tool-use hook for Claude Code to enforce efficient tool usage.
