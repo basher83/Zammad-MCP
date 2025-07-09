@@ -38,8 +38,20 @@ jobs:
             --cov=mcp_zammad \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
-            --cov-report=html:htmlcov \
-            --cov-fail-under=90
+            --cov-report=html:htmlcov
+
+      - name: Enforce 90 % coverage threshold
+        if: always()            # still runs if tests failed
+        run: |
+          python - <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          try:
+              cov = float(ET.parse("coverage.xml").getroot().get("line-rate")) * 100
+          except Exception:
+              sys.exit("coverage.xml missing or unreadable")
+          if cov < 90:
+              sys.exit(f"Coverage {cov:.1f}% below required 90%")
+          PY
       - name: Upload coverage to Codacy
         # Only upload on push to main or PRs (not on manual triggers)
         if: github.event_name != 'workflow_dispatch'
