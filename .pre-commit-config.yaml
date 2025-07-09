@@ -18,6 +18,7 @@ repos:
       - id: bandit
         args: ["-r", "mcp_zammad/", "-f", "json", "-o", "bandit-report.json"]
         exclude: ^tests/
+        pass_filenames: false
 
   - repo: https://github.com/semgrep/semgrep
     rev: "5abdc505a8fe8e663e50beb10b92edb9d990ffa5"  # v1.35.0
@@ -29,14 +30,14 @@ repos:
     hooks:
       - id: safety
         name: safety
-        entry: safety
+        entry: uv run safety
         language: system
         args: ["check", "--json"]
         pass_filenames: false
 
       - id: pip-audit
         name: pip-audit
-        entry: pip-audit
+        entry: uv run pip-audit
         language: system
         args: ["--format=json", "--output=pip-audit-report.json"]
         pass_filenames: false
