@@ -75,7 +75,11 @@ docker run -d \
   -e ZAMMAD_HTTP_TOKEN=your-api-token \
   ghcr.io/basher83/zammad-mcp:latest
 
-# Or use docker-compose
+# Note: MCP servers communicate via stdio, not HTTP. Port 8080 is exposed
+# for future use but not currently needed. If you need HTTP access, add:
+#   -p 8080:8080
+
+# Or use docker-compose (includes port mapping)
 docker-compose up -d
 ```
 
@@ -196,11 +200,13 @@ Or using Docker:
       "args": ["run", "--rm", "-i", 
                "-e", "ZAMMAD_URL=https://your-instance.zammad.com/api/v1",
                "-e", "ZAMMAD_HTTP_TOKEN=your-api-token",
-               "ghcr.io/basher83/zammad-mcp:latest"],
+               "ghcr.io/basher83/zammad-mcp:latest"]
     }
   }
 }
 ```
+
+**Note**: MCP servers communicate via stdio (stdin/stdout), not HTTP. The `-i` flag is required for interactive mode. Port mapping (`-p 8080:8080`) is not needed for MCP operation.
 
 Or if you have it installed locally:
 

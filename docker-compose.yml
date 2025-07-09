@@ -13,8 +13,9 @@ services:
       # ZAMMAD_OAUTH2_TOKEN: ${ZAMMAD_OAUTH2_TOKEN}
       # ZAMMAD_USERNAME: ${ZAMMAD_USERNAME}
       # ZAMMAD_PASSWORD: ${ZAMMAD_PASSWORD}
-    ports:
-      - "8080:8080"
+    # MCP servers use stdio, not HTTP - uncomment if you add HTTP endpoints
+    # ports:
+    #   - "8080:8080"
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -35,8 +36,9 @@ services:
     environment:
       ZAMMAD_URL: ${ZAMMAD_URL:-https://your-instance.zammad.com/api/v1}
       ZAMMAD_HTTP_TOKEN: ${ZAMMAD_HTTP_TOKEN}
-    ports:
-      - "8081:8080"
+    # Development might need ports for debugging tools
+    # ports:
+    #   - "8081:8080"
     # Development needs write access for hot reload and .pyc files
     # read_only: true  # Disabled for development
     security_opt:

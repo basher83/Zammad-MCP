@@ -45,8 +45,9 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD /app/.venv/bin/python -c "import mcp_zammad; print('OK')" || exit 1
 
-# MCP doesn't typically expose ports, but keeping for potential future use
-EXPOSE 8080
+# MCP servers communicate via stdio, not HTTP
+# Port 8080 is exposed for potential future HTTP API but not currently used
+# EXPOSE 8080
 
 # Run the MCP server
 CMD ["/app/.venv/bin/mcp-zammad"]
