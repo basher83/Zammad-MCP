@@ -41,11 +41,8 @@ LABEL org.opencontainers.image.source="https://github.com/basher83/Zammad-MCP"
 LABEL org.opencontainers.image.description="Model Context Protocol server for Zammad ticket system integration"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD /app/.venv/bin/python -c "import mcp_zammad; print('OK')" || exit 1
-
 # MCP servers communicate via stdio, not HTTP
+# Health checks don't apply to stdio-based servers that exit after each request
 # Port 8080 is exposed for potential future HTTP API but not currently used
 # EXPOSE 8080
 
