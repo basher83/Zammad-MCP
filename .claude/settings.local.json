@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(eza:*)",
+      "Bash(fd:*)",
+      "Bash(mkdir:*)",
+      "Bash(git:*)",
+      "Bash(rg:*)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(uv:*)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run .claude/hooks/pre_tool_use.py"
+          }
+        ]
+      }
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "zammad"
+  ]
+}
