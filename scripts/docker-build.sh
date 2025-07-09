@@ -27,13 +27,13 @@ docker build -t "${REGISTRY}/${IMAGE_NAME}:${VERSION}" .
 echo -e "\n${GREEN}Step 2: Testing Docker image...${NC}"
 
 # Test Python module import
-if ! docker run --rm "${REGISTRY}/${IMAGE_NAME}:${VERSION}" /app/.venv/bin/python -c "import mcp_zammad; print('✅ Import test passed')"; then
+if ! docker run --rm "${REGISTRY}/${IMAGE_NAME}:${VERSION}" python -c "import mcp_zammad; print('✅ Import test passed')"; then
     echo -e "${RED}❌ Failed to import mcp_zammad module${NC}"
     exit 1
 fi
 
 # Test MCP server executable exists
-if ! docker run --rm "${REGISTRY}/${IMAGE_NAME}:${VERSION}" test -x /app/.venv/bin/mcp-zammad; then
+if ! docker run --rm "${REGISTRY}/${IMAGE_NAME}:${VERSION}" which mcp-zammad >/dev/null 2>&1; then
     echo -e "${RED}❌ MCP server executable not found${NC}"
     exit 1
 fi
