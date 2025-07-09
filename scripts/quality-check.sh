@@ -44,12 +44,19 @@ uv run pip-audit --format=json --output=pip-audit-report.json || echo "⚠️ pi
 
 # Tests
 echo "✅ Running tests..."
-uv run pytest tests/ --cov=mcp_zammad --cov-report=term-missing
+uv run pytest tests/ \
+  --cov=mcp_zammad \
+  --cov-report=term-missing \
+  --cov-report=xml:coverage.xml \
+  --cov-report=html:htmlcov \
+  --cov-fail-under=80
 
 echo "🎉 Quality checks complete!"
 echo ""
 echo "📊 Reports generated:"
 echo "  - bandit-report.json (security issues)"
 echo "  - pip-audit-report.json (dependency vulnerabilities)"
+echo "  - coverage.xml (test coverage for Codacy)"
+echo "  - htmlcov/index.html (HTML coverage report)"
 echo ""
 echo "🚀 Ready for commit!"
