@@ -346,7 +346,7 @@ The project currently uses bash scripts for:
 
 ### Script Organization
 
-```plaintext
+```text
 scripts/
 ├── uv/                    # UV single-file scripts
 │   ├── release.py
