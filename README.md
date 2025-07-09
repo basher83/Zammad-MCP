@@ -65,8 +65,8 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 The easiest way to run the MCP server is using Docker:
 
 ```bash
-# Pull the latest image
-docker pull ghcr.io/basher83/zammad-mcp:latest
+# Pull a specific version tag (replace X.Y.Z with the desired release)
+docker pull ghcr.io/basher83/zammad-mcp:X.Y.Z
 
 # Run with environment variables
 docker run -d \
@@ -75,18 +75,18 @@ docker run -d \
   -e ZAMMAD_HTTP_TOKEN=your-api-token \
   ghcr.io/basher83/zammad-mcp:latest
 
-# Note: MCP servers communicate via stdio, not HTTP. Port 8080 is exposed
-# for future use but not currently needed. If you need HTTP access, add:
-#   -p 8080:8080
+# Note: MCP servers communicate via stdio, not HTTP. The -i flag is mandatory
+# for stdin/stdout communication. Port 8080 is declared for potential future 
+# HTTP endpoints; it is unused by the current MCP server.
 
-# Or use docker-compose (pulls from registry)
-docker-compose up -d
+# Or use docker compose (pulls from registry)
+docker compose up -d
 
 # To build locally instead of pulling from registry:
-docker-compose --profile local up -d
+docker compose --profile local up -d
 
 # For development with hot reload:
-docker-compose --profile dev up -d
+docker compose --profile dev up -d
 ```
 
 ### Install the MCP Server
@@ -213,6 +213,33 @@ Or using Docker:
 ```
 
 **Note**: MCP servers communicate via stdio (stdin/stdout), not HTTP. The `-i` flag is required for interactive mode. Port mapping (`-p 8080:8080`) is not needed for MCP operation.
+
+**Important**: The container must run in interactive mode (`-i`) or the MCP server will not receive stdin. Ensure this flag is preserved in any wrapper scripts or shell aliases.
+
+#### Using Docker Secrets (Recommended)
+
+For better security, use Docker secrets to avoid exposing credentials:
+
+1. Create a secrets directory and add your credentials:
+
+```bash
+mkdir -p secrets
+echo "your-api-token" > secrets/zammad_http_token.txt
+# Or for OAuth2:
+echo "your-oauth2-token" > secrets/zammad_oauth2_token.txt
+# Or for username/password:
+echo "your-password" > secrets/zammad_password.txt
+```
+
+1. Use docker compose with secrets:
+
+```bash
+docker compose up  # Production mode
+docker compose --profile local up  # Build locally
+docker compose --profile dev up  # Development with hot reload
+```
+
+The application automatically reads from `/run/secrets/` when `ZAMMAD_*_FILE` environment variables are set.
 
 Or if you have it installed locally:
 

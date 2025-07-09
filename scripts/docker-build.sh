@@ -19,9 +19,10 @@ VERSION="${1:-latest}"
 
 echo -e "${YELLOW}Building Docker image: ${REGISTRY}/${IMAGE_NAME}:${VERSION}${NC}"
 
-# Build the image
+# Build the image (explicitly target production stage)
 echo -e "\n${GREEN}Step 1: Building Docker image...${NC}"
-docker build -t "${REGISTRY}/${IMAGE_NAME}:${VERSION}" .
+docker build --target production \
+             -t "${REGISTRY}/${IMAGE_NAME}:${VERSION}" .
 
 # Test the image
 echo -e "\n${GREEN}Step 2: Testing Docker image...${NC}"
@@ -33,7 +34,7 @@ if ! docker run --rm "${REGISTRY}/${IMAGE_NAME}:${VERSION}" python -c "import mc
 fi
 
 # Test MCP server executable exists
-if ! docker run --rm "${REGISTRY}/${IMAGE_NAME}:${VERSION}" which mcp-zammad >/dev/null 2>&1; then
+if ! docker run --rm "${REGISTRY}/${IMAGE_NAME}:${VERSION}" sh -c 'command -v mcp-zammad >/dev/null'; then
     echo -e "${RED}❌ MCP server executable not found${NC}"
     exit 1
 fi

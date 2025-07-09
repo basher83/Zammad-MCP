@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Install uv – pin the exact image digest for reproducible builds
 # (replace <digest> with the current digest shown on GHCR)
-COPY --from=ghcr.io/astral-sh/uv@sha256:<digest> /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv@sha256:3f6e2...actualDigest... /usr/local/bin/uv /usr/local/bin/uvx
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
@@ -26,8 +26,7 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 WORKDIR /app
 
 # Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
-
+COPY --from=ghcr.io/astral-sh/uv:latest /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
 # Copy dependency files and virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 COPY pyproject.toml uv.lock ./
@@ -64,7 +63,7 @@ USER root
 # Install dev dependencies with cache mounts
 RUN --mount=type=cache,target=/root/.cache/pip \
   --mount=type=cache,target=/root/.cache/uv \
-  uv sync --frozen && \
+  uv sync --dev --frozen && \
   chown -R appuser:appuser /app
 
 # Switch back to appuser

@@ -37,15 +37,26 @@ jobs:
         run: |
           uv sync --dev --frozen
 
-      - name: Run Bandit (full tree scan)
+      - name: Codacy Trivy scan
+        uses: codacy/codacy-analysis-cli-action@v4
+        with:
+          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          tool: "trivy"
+          output: codacy.json
+
+      - name: Run Bandit (HIGH/CRITICAL only)
         run: |
           # Full recursive scan of the entire codebase
-          # -lll flag: Only report issues of severity HIGH or higher
+          # --severity-level HIGH: Only fail on HIGH and CRITICAL severity issues
           echo "Running Bandit security scan (HIGH/CRITICAL only)..."
-          uv run bandit -r mcp_zammad/ -lll -f json -o bandit-report.json
-          
-          # Also generate SARIF for GitHub Security tab (includes all severities for visibility)
-          uv run bandit -r mcp_zammad/ -f sarif -o bandit-sarif.json || true
+          uv run bandit -r mcp_zammad/ --severity-level HIGH -f json -o bandit-report.json
+
+      - name: Generate Bandit SARIF report
+        continue-on-error: true
+        run: |
+          # Generate SARIF for GitHub Security tab (includes all severities for visibility)
+          echo "Generating Bandit SARIF report for Security tab..."
+          uv run bandit -r mcp_zammad/ -f sarif -o bandit-sarif.json
 
       - name: Upload Bandit results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -78,6 +89,7 @@ jobs:
             bandit-sarif.json
             safety-report.json
             pip-audit-report.json
+            codacy.json
 
       - name: Generate Security Summary
         if: always()
