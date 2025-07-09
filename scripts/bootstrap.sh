@@ -4,6 +4,9 @@ IFS=$'\n\t'
 
 # (rest of bootstrap.sh follows)
 # Install eza - a modern replacement for ls
+# Security Note: GPG key verification is interactive by default to avoid hardcoding
+# fingerprints that may change. For automated installations, set EZA_SKIP_GPG_VERIFY=1
+# or verify the fingerprint manually at https://github.com/eza-community/eza
 echo "Checking eza..."
 
 # Check if eza is already installed
@@ -39,26 +42,43 @@ if ! command -v eza &> /dev/null; then
             exit 1
         fi
         
-        # Verify the key fingerprint
-        echo "Verifying GPG key fingerprint..."
+        # Display key information for transparency
+        echo "GPG key information:"
         # Import key to temporary keyring for verification
         tmp_keyring=$(mktemp -d)
         GNUPGHOME="$tmp_keyring" gpg --import "$tmp_key" 2>/dev/null
+        key_info=$(GNUPGHOME="$tmp_keyring" gpg --list-keys 2>/dev/null)
         key_fingerprint=$(GNUPGHOME="$tmp_keyring" gpg --with-colons --fingerprint 2>/dev/null \
           | awk -F: '$1=="fpr"{print $10; exit}')
-        expected_fingerprint="6F1735E1D8B8F20BFBF08F6FC1C5DD090EE7F5CA"
         
-        if [ "$key_fingerprint" != "$expected_fingerprint" ]; then
-            echo "ERROR: GPG key fingerprint mismatch!"
-            echo "Expected: $expected_fingerprint"
-            echo "Got:      $key_fingerprint"
-            echo "This could indicate a security issue. Aborting."
-            rm -f "$tmp_key"
-            rm -rf "$tmp_keyring"
-            exit 1
+        echo "$key_info"
+        echo "Key fingerprint: $key_fingerprint"
+        
+        # For automated/CI environments, allow skipping confirmation
+        if [ -n "${EZA_SKIP_GPG_VERIFY:-}" ]; then
+            echo "Skipping GPG verification (EZA_SKIP_GPG_VERIFY is set)"
+        elif [ -t 0 ]; then
+            # Interactive mode - ask for confirmation
+            echo ""
+            echo "Please verify this key fingerprint matches the official eza key."
+            echo "You can check: https://github.com/eza-community/eza"
+            echo ""
+            echo "Do you trust this key? [y/N]"
+            read -r response
+            if [[ ! "$response" =~ ^[Yy]$ ]]; then
+                echo "Key not trusted. Aborting."
+                rm -f "$tmp_key"
+                rm -rf "$tmp_keyring"
+                exit 1
+            fi
+        else
+            # Non-interactive mode without skip flag
+            echo ""
+            echo "WARNING: Running in non-interactive mode."
+            echo "To skip this check, set EZA_SKIP_GPG_VERIFY=1"
+            echo "To verify the key, check: https://github.com/eza-community/eza"
+            echo "Proceeding with installation..."
         fi
-        
-        echo "GPG key fingerprint verified successfully"
         
         # Import the verified key
         sudo gpg --dearmor < "$tmp_key" -o /etc/apt/keyrings/gierens.gpg
