@@ -299,7 +299,10 @@ The project currently uses bash scripts for:
 
 1. **Dependency Management**: Dependencies declared in script, no separate requirements
 2. **Version Locking**: UV lock files ensure reproducibility
-3. **Testing**: Scripts can be unit tested like regular Python code with 90%+ coverage target
+3. **Testing**: Scripts can be unit tested like regular Python code
+   - Core library modules: 90% coverage target
+   - Interactive CLI scripts: 70% coverage target (excluding `__main__` blocks)
+   - Focus on testing business logic, not UI interactions
 4. **Error Handling**: Python's exception handling provides better error messages
 5. **Quality Assurance**: Scripts run through same quality pipeline as main code
 
@@ -405,13 +408,16 @@ scripts/
 
 ### Script Standards
 
-1. **Shebang**: Use `#!/usr/bin/env -S uv run --script` for executable scripts
+1. **Shebang**: Use `#!/usr/bin/env uv` for executable scripts (portable across platforms)
 2. **Metadata**: Always include inline script metadata
 3. **Type Hints**: Use type hints for all functions
 4. **Error Handling**: Implement proper error handling with helpful messages
 5. **Progress Indication**: Use Rich for progress bars and status updates
 6. **Exit Codes**: Return appropriate exit codes for CI/CD integration
-7. **Testing**: Aim for 90%+ coverage per script with unit tests
+7. **Testing**: Coverage targets based on script type:
+   - Utility/library scripts: 90% coverage minimum
+   - Interactive CLI scripts: 70% coverage (test core logic, not UI)
+   - Exclude `if __name__ == "__main__":` blocks from coverage
 8. **CI Integration**: Scripts should pass all quality checks (ruff, mypy, bandit)
 
 ### Documentation Requirements
