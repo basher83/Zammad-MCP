@@ -30,14 +30,14 @@ repos:
     hooks:
       - id: safety
         name: safety
-        entry: uv run safety
+        entry: uv
         language: system
-        args: ["check", "--json"]
+        args: ["run", "safety", "check", "--json"]
         pass_filenames: false
 
       - id: pip-audit
         name: pip-audit
-        entry: uv run pip-audit
+        entry: uv
         language: system
-        args: ["--format=json", "--output=pip-audit-report.json"]
+        args: ["run", "pip-audit", "--format=json", "--output=pip-audit-report.json"]
         pass_filenames: false
