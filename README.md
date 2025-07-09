@@ -60,6 +60,25 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
+### Docker Installation (Recommended for Production)
+
+The easiest way to run the MCP server is using Docker:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/basher83/zammad-mcp:latest
+
+# Run with environment variables
+docker run -d \
+  --name zammad-mcp \
+  -e ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
+  -e ZAMMAD_HTTP_TOKEN=your-api-token \
+  ghcr.io/basher83/zammad-mcp:latest
+
+# Or use docker-compose
+docker-compose up -d
+```
+
 ### Install the MCP Server
 
 #### Quick Setup (Recommended)
@@ -162,6 +181,22 @@ Add to your Claude Desktop configuration:
         "ZAMMAD_URL": "https://your-instance.zammad.com/api/v1",
         "ZAMMAD_HTTP_TOKEN": "your-api-token"
       }
+    }
+  }
+}
+```
+
+Or using Docker:
+
+```json
+{
+  "mcpServers": {
+    "zammad": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", 
+               "-e", "ZAMMAD_URL=https://your-instance.zammad.com/api/v1",
+               "-e", "ZAMMAD_HTTP_TOKEN=your-api-token",
+               "ghcr.io/basher83/zammad-mcp:latest"],
     }
   }
 }

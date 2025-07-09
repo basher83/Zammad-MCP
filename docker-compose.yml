@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  zammad-mcp:
+    build: .
+    image: ghcr.io/basher83/zammad-mcp:latest
+    container_name: zammad-mcp
+    environment:
+      # Zammad configuration - update these values
+      ZAMMAD_URL: ${ZAMMAD_URL:-https://your-instance.zammad.com/api/v1}
+      ZAMMAD_HTTP_TOKEN: ${ZAMMAD_HTTP_TOKEN}
+      # Optional: Use OAuth2 or username/password instead
+      # ZAMMAD_OAUTH2_TOKEN: ${ZAMMAD_OAUTH2_TOKEN}
+      # ZAMMAD_USERNAME: ${ZAMMAD_USERNAME}
+      # ZAMMAD_PASSWORD: ${ZAMMAD_PASSWORD}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    # Optional: Mount local .env file
+    # env_file:
+    #   - .env
+
+# Optional: For development with hot reload
+  zammad-mcp-dev:
+    profiles: ["dev"]
+    build: 
+      context: .
+      target: development
+    volumes:
+      - ./mcp_zammad:/app/mcp_zammad:ro
+      - ./.env:/app/.env:ro
+    environment:
+      ZAMMAD_URL: ${ZAMMAD_URL:-https://your-instance.zammad.com/api/v1}
+      ZAMMAD_HTTP_TOKEN: ${ZAMMAD_HTTP_TOKEN}
+    ports:
+      - "8081:8080"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    command: ["uv", "run", "--watch", "mcp-zammad"]

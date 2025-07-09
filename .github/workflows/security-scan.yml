@@ -1,0 +1,97 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run weekly on Monday at 09:00 UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev
+          uv pip install bandit[sarif]
+
+      - name: Run Bandit (full tree scan)
+        run: |
+          # Full recursive scan of the entire codebase
+          uv run bandit -r mcp_zammad/ -f json -o bandit-report.json || true
+          
+          # Also generate SARIF for GitHub Security tab
+          uv run bandit -r mcp_zammad/ -f sarif -o bandit-sarif.json || true
+
+      - name: Upload Bandit results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: bandit-sarif.json
+          category: bandit
+
+      - name: Run safety check
+        run: |
+          uv run safety check --json --output safety-report.json || true
+
+      - name: Run pip-audit
+        run: |
+          uv run pip-audit --format json --output pip-audit-report.json || true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            bandit-sarif.json
+            safety-report.json
+            pip-audit-report.json
+
+      - name: Comment PR with security summary
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request' && always()
+        with:
+          script: |
+            const fs = require('fs');
+            let comment = '## 🔒 Security Scan Results\n\n';
+            
+            // Parse and summarize results
+            try {
+              const banditReport = JSON.parse(fs.readFileSync('bandit-report.json', 'utf8'));
+              const issues = banditReport.results.length;
+              comment += `### Bandit (Static Analysis)\n`;
+              comment += issues > 0 ? `⚠️ Found ${issues} potential security issues\n` : `✅ No security issues found\n`;
+              comment += '\n';
+            } catch (e) {
+              comment += '### Bandit\n❌ Failed to parse results\n\n';
+            }
+            
+            // Add more result summaries as needed
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
