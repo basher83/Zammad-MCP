@@ -318,11 +318,23 @@ The project currently uses bash scripts for:
 2. Implement `coverage-report.py` for immediate value
 3. Gather feedback from contributors
 
+**Success Criteria**:
+
+- Both scripts pass 90%+ coverage
+- No critical bugs reported after 1 week of use
+- Positive feedback from at least 2 contributors
+
 ### Phase 2: Core Development Tools (Week 3-4)
 
 1. Implement `dev-setup.py` to improve onboarding
 2. Create `security-scan.py` to consolidate security checks
 3. Develop `test-zammad.py` for API testing
+
+**Success Criteria**:
+
+- All scripts integrated into CI/CD pipeline
+- Zero CI failures caused by UV scripts for 5 consecutive days
+- Successfully onboard 1 new contributor using `dev-setup.py`
 
 ### Phase 3: Advanced Tools (Week 5-6)
 
@@ -330,11 +342,25 @@ The project currently uses bash scripts for:
 2. Add `profile-zammad.py` for performance testing
 3. Create `issue-helper.py` for better issue management
 
+**Go/No-Go Decision Point**:
+
+- ✅ All UV scripts stable in CI for ≥2 weeks
+- ✅ No rollbacks needed in Phase 1 or 2
+- ✅ Team consensus on proceeding
+- ❌ If any criterion fails: Pause and address issues
+
 ### Phase 4: Deprecation (Week 7-8)
 
 1. Update documentation to prefer UV scripts
 2. Add deprecation notices to bash scripts
 3. Provide migration guide for users
+
+**Prerequisites for Deprecation**:
+
+- All CI jobs green using UV scripts for ≥2 weeks
+- Zero regression issues reported
+- Fallback plan documented and tested
+- Bash scripts remain available for emergency rollback for 30 days
 
 ### Backward Compatibility
 
@@ -342,6 +368,25 @@ The project currently uses bash scripts for:
 - Add UV script equivalents alongside
 - Provide clear documentation on both approaches
 - Remove bash scripts only after full adoption
+
+### Rollback Plan
+
+If issues arise during migration:
+
+1. **Immediate Actions**:
+   - Revert CI/CD to use bash scripts
+   - Document the failure reason
+   - Keep UV scripts but mark as experimental
+
+2. **Recovery Criteria**:
+   - Fix identified issues
+   - Add regression tests
+   - Wait 1 additional week before retry
+
+3. **Communication**:
+   - Notify team via GitHub issue
+   - Update project status in README
+   - Post-mortem after resolution
 
 ## Best Practices for UV Scripts
 
