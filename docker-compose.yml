@@ -30,14 +30,15 @@ services:
       context: .
       target: development
     volumes:
-      - ./mcp_zammad:/app/mcp_zammad:ro
+      - ./mcp_zammad:/app/mcp_zammad
       - ./.env:/app/.env:ro
     environment:
       ZAMMAD_URL: ${ZAMMAD_URL:-https://your-instance.zammad.com/api/v1}
       ZAMMAD_HTTP_TOKEN: ${ZAMMAD_HTTP_TOKEN}
     ports:
       - "8081:8080"
-    read_only: true
+    # Development needs write access for hot reload and .pyc files
+    # read_only: true  # Disabled for development
     security_opt:
       - no-new-privileges:true
     command: ["uv", "run", "--watch", "mcp-zammad"]
