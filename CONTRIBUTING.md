@@ -12,7 +12,7 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
 ### Getting Started
 
 1. Fork the repository
-2. Clone your fork:
+1. Clone your fork:
 
    ```bash
    git clone https://github.com/YOUR-USERNAME/zammad-mcp.git
@@ -33,14 +33,15 @@ This wizard will guide you through all setup steps including UV installation, vi
 
 If you prefer manual setup:
 
-3. (Optional) Install recommended development tools:
+
+1. (Optional) Install recommended development tools:
 
    ```bash
    # Install eza, ripgrep, and ensure uv is available
    ./scripts/bootstrap.sh
    ```
 
-4. Run the Python environment setup script:
+1. Run the Python environment setup script:
 
    ```bash
    # macOS/Linux
@@ -50,14 +51,14 @@ If you prefer manual setup:
    .\scripts\setup.ps1
    ```
 
-5. Create a `.env` file with your Zammad credentials:
+1. Create a `.env` file with your Zammad credentials:
 
    ```env
    ZAMMAD_URL=https://your-instance.zammad.com/api/v1
    ZAMMAD_HTTP_TOKEN=your-api-token
    ```
 
-6. (Optional) Validate your environment configuration:
+1. (Optional) Validate your environment configuration:
 
    ```bash
    ./scripts/uv/validate-env.py
@@ -168,7 +169,7 @@ def test_error_handling():
 
 Follow conventional commit format:
 
-```plaintext
+```text
 feat: add attachment support for tickets
 fix: resolve memory leak in get_ticket_stats
 docs: update README with uvx instructions
@@ -226,12 +227,12 @@ def new_api_method(self, param: str) -> dict[str, Any]:
 ## Pull Request Process
 
 1. Create a feature branch: `git checkout -b feature/your-feature-name`
-2. Make your changes following the guidelines above
-3. Add tests for new functionality
-4. Update documentation as needed
-5. Run all quality checks
-6. Commit with clear messages
-7. Push and create a PR with:
+1. Make your changes following the guidelines above
+1. Add tests for new functionality
+1. Update documentation as needed
+1. Run all quality checks
+1. Commit with clear messages
+1. Push and create a PR with:
    - Clear description of changes
    - Link to related issues
    - Test results/coverage report

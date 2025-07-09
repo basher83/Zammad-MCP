@@ -9,7 +9,10 @@
       "Bash(chmod:*)",
       "Bash(uv:*)",
       "Bash(gh issue create:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "WebFetch(domain:docs.codacy.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api:*)"
     ],
     "deny": []
   },
