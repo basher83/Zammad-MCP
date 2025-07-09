@@ -41,7 +41,10 @@ if ! command -v eza &> /dev/null; then
         
         # Verify the key fingerprint
         echo "Verifying GPG key fingerprint..."
-        key_fingerprint=$(gpg --with-colons --fingerprint "$tmp_key" 2>/dev/null \
+        # Import key to temporary keyring for verification
+        tmp_keyring=$(mktemp -d)
+        GNUPGHOME="$tmp_keyring" gpg --import "$tmp_key" 2>/dev/null
+        key_fingerprint=$(GNUPGHOME="$tmp_keyring" gpg --with-colons --fingerprint 2>/dev/null \
           | awk -F: '$1=="fpr"{print $10; exit}')
         expected_fingerprint="6F1735E1D8B8F20BFBF08F6FC1C5DD090EE7F5CA"
         
@@ -50,6 +53,8 @@ if ! command -v eza &> /dev/null; then
             echo "Expected: $expected_fingerprint"
             echo "Got:      $key_fingerprint"
             echo "This could indicate a security issue. Aborting."
+            rm -f "$tmp_key"
+            rm -rf "$tmp_keyring"
             exit 1
         fi
         
@@ -62,6 +67,7 @@ if ! command -v eza &> /dev/null; then
         
         # Clean up
         rm -f "$tmp_key"
+        rm -rf "$tmp_keyring"
     else
         echo "eza repository already configured"
     fi
