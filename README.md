@@ -79,8 +79,14 @@ docker run -d \
 # for future use but not currently needed. If you need HTTP access, add:
 #   -p 8080:8080
 
-# Or use docker-compose (includes port mapping)
+# Or use docker-compose (pulls from registry)
 docker-compose up -d
+
+# To build locally instead of pulling from registry:
+docker-compose --profile local up -d
+
+# For development with hot reload:
+docker-compose --profile dev up -d
 ```
 
 ### Install the MCP Server

@@ -1,8 +1,8 @@
 version: '3.8'
 
 services:
+  # Production: Pull from registry
   zammad-mcp:
-    build: .
     image: ghcr.io/basher83/zammad-mcp:latest
     container_name: zammad-mcp
     environment:
@@ -26,6 +26,23 @@ services:
     # Optional: Mount local .env file
     # env_file:
     #   - .env
+
+  # Local build: Build from source (use with --profile local)
+  zammad-mcp-local:
+    profiles: ["local"]
+    build: .
+    image: zammad-mcp:local  # Local tag to avoid registry confusion
+    container_name: zammad-mcp-local
+    environment:
+      ZAMMAD_URL: ${ZAMMAD_URL:-https://your-instance.zammad.com/api/v1}
+      ZAMMAD_HTTP_TOKEN: ${ZAMMAD_HTTP_TOKEN}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+      - /app/.cache:size=50M
+    security_opt:
+      - no-new-privileges:true
 
 # Optional: For development with hot reload
   zammad-mcp-dev:
