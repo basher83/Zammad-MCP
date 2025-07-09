@@ -165,17 +165,17 @@ Avoid granting admin permissions unless absolutely necessary.
    - Change any exposed credentials
    - Check Zammad audit logs for suspicious activity
 
-2. **Assessment**
+1. **Assessment**
    - Determine scope of potential exposure
    - Identify affected systems and data
    - Document timeline of events
 
-3. **Notification**
+1. **Notification**
    - Report to this project's maintainers
    - Notify your organization's security team
    - Consider customer notification if data was exposed
 
-4. **Recovery**
+1. **Recovery**
    - Implement security fixes
    - Update credentials and tokens
    - Monitor for continued suspicious activity

@@ -127,18 +127,18 @@ BaseModel
 ### Tool Execution Flow
 
 1. **Request Reception**: MCP client sends tool invocation
-2. **Parameter Validation**: FastMCP validates against tool schema
-3. **Client Check**: Ensure Zammad client is initialized
-4. **API Call**: Execute Zammad API operation
-5. **Response Transform**: Convert to Pydantic model
-6. **MCP Response**: Return structured data to client
+1. **Parameter Validation**: FastMCP validates against tool schema
+1. **Client Check**: Ensure Zammad client is initialized
+1. **API Call**: Execute Zammad API operation
+1. **Response Transform**: Convert to Pydantic model
+1. **MCP Response**: Return structured data to client
 
 ### Resource Access Flow
 
 1. **URI Parsing**: Extract entity type and ID from URI
-2. **Direct Fetch**: Retrieve specific entity from Zammad
-3. **Model Transform**: Convert to appropriate Pydantic model
-4. **Content Generation**: Format for MCP resource response
+1. **Direct Fetch**: Retrieve specific entity from Zammad
+1. **Model Transform**: Convert to appropriate Pydantic model
+1. **Content Generation**: Format for MCP resource response
 
 ## Authentication
 
@@ -150,13 +150,13 @@ Supports three authentication methods with precedence:
    ZAMMAD_HTTP_TOKEN=your-token
    ```
 
-2. **OAuth2 Token**
+1. **OAuth2 Token**
 
    ```bash
    ZAMMAD_OAUTH2_TOKEN=your-oauth-token
    ```
 
-3. **Username/Password**
+1. **Username/Password**
 
    ```bash
    ZAMMAD_USERNAME=user
@@ -209,12 +209,12 @@ async def lifespan(app: FastMCP):
 
    - This pattern is applied consistently across all models (Ticket, Article, User, Organization)
 
-2. **Search API**:
+1. **Search API**:
    - Uses custom query syntax for filtering
    - Supports field-specific searches (e.g., `state.name:open`)
    - Returns paginated results with metadata
 
-3. **State Handling**: When processing ticket states:
+1. **State Handling**: When processing ticket states:
    - Must check if state is a string (expanded) or object (non-expanded)
    - Helper functions may be needed to extract state names consistently
 
@@ -223,9 +223,9 @@ async def lifespan(app: FastMCP):
 ### Error Hierarchy
 
 1. **Configuration Errors**: Missing credentials, invalid URL
-2. **Authentication Errors**: Invalid token, expired credentials
-3. **API Errors**: Rate limits, permissions, not found
-4. **Validation Errors**: Invalid parameters, type mismatches
+1. **Authentication Errors**: Invalid token, expired credentials
+1. **API Errors**: Rate limits, permissions, not found
+1. **Validation Errors**: Invalid parameters, type mismatches
 
 ### Error Responses
 
@@ -240,9 +240,9 @@ MCP errors include:
 ### Current Limitations
 
 1. **Memory Usage**: `get_ticket_stats` loads all tickets
-2. **Blocking I/O**: Synchronous HTTP calls
-3. **No Caching**: Repeated API calls for static data
-4. **No Pooling**: New connections for each request
+1. **Blocking I/O**: Synchronous HTTP calls
+1. **No Caching**: Repeated API calls for static data
+1. **No Pooling**: New connections for each request
 
 ### Optimization Opportunities
 
@@ -251,7 +251,7 @@ MCP errors include:
    - In-memory for development
    - TTL for different data types
 
-2. **Connection Pooling**
+1. **Connection Pooling**
 
    ```python
    httpx.Client(
@@ -259,7 +259,7 @@ MCP errors include:
    )
    ```
 
-3. **Async Implementation**
+1. **Async Implementation**
    - Use `httpx.AsyncClient`
    - Concurrent request handling
    - Better resource utilization
@@ -279,12 +279,12 @@ MCP errors include:
    - Input sanitization for user data
    - Parameter bounds checking
 
-2. **Rate Limiting**
+1. **Rate Limiting**
    - Client-side rate limiting
    - Exponential backoff
    - Circuit breaker pattern
 
-3. **Audit Logging**
+1. **Audit Logging**
    - Operation logging
    - Security event tracking
    - Compliance support
@@ -294,23 +294,23 @@ MCP errors include:
 ### Adding New Tools
 
 1. Define tool function with `@mcp.tool()` decorator
-2. Implement using `get_zammad_client()`
-3. Return Pydantic model instance
-4. Add tests with mocked client
+1. Implement using `get_zammad_client()`
+1. Return Pydantic model instance
+1. Add tests with mocked client
 
 ### Adding New Resources
 
 1. Define resource handler with URI pattern
-2. Parse entity ID from URI
-3. Fetch and transform data
-4. Return appropriate content type
+1. Parse entity ID from URI
+1. Fetch and transform data
+1. Return appropriate content type
 
 ### Adding New Prompts
 
 1. Use `@mcp.prompt()` decorator
-2. Define parameters and template
-3. Include example usage
-4. Test with various inputs
+1. Define parameters and template
+1. Include example usage
+1. Test with various inputs
 
 ## Testing Architecture
 
