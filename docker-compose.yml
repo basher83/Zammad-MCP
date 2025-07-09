@@ -1,31 +1,46 @@
 version: '3.8'
 
+# Define secrets for sensitive data
+secrets:
+  zammad_http_token:
+    file: ./secrets/zammad_http_token.txt
+  zammad_oauth2_token:
+    file: ./secrets/zammad_oauth2_token.txt
+  zammad_password:
+    file: ./secrets/zammad_password.txt
+
 services:
   # Production: Pull from registry
   zammad-mcp:
     image: ghcr.io/basher83/zammad-mcp:latest
     container_name: zammad-mcp
     environment:
-      # Zammad configuration - update these values
+      # Non-sensitive configuration
       ZAMMAD_URL: ${ZAMMAD_URL:-https://your-instance.zammad.com/api/v1}
-      ZAMMAD_HTTP_TOKEN: ${ZAMMAD_HTTP_TOKEN}
-      # Optional: Use OAuth2 or username/password instead
-      # ZAMMAD_OAUTH2_TOKEN: ${ZAMMAD_OAUTH2_TOKEN}
-      # ZAMMAD_USERNAME: ${ZAMMAD_USERNAME}
-      # ZAMMAD_PASSWORD: ${ZAMMAD_PASSWORD}
+      # For username-based auth (username is not sensitive)
+      ZAMMAD_USERNAME: ${ZAMMAD_USERNAME:-}
+      # Secret references - the app will read from /run/secrets/
+      ZAMMAD_HTTP_TOKEN_FILE: /run/secrets/zammad_http_token
+      ZAMMAD_OAUTH2_TOKEN_FILE: /run/secrets/zammad_oauth2_token
+      ZAMMAD_PASSWORD_FILE: /run/secrets/zammad_password
+    secrets:
+      - zammad_http_token
+      - zammad_oauth2_token
+      - zammad_password
     # MCP servers use stdio, not HTTP - uncomment if you add HTTP endpoints
     # ports:
     #   - "8080:8080"
-    restart: unless-stopped
+    # Note: MCP servers are invoked on-demand and exit after processing
+    # - No health checks needed (not a persistent daemon)
+    # - No restart policy needed (started per request)
+    # - Communicates via stdio, not network
+    user: "appuser:appuser"
     read_only: true
     tmpfs:
       - /tmp:size=100M,mode=1777
       - /app/.cache:size=50M  # For any Python cache needs
     security_opt:
       - no-new-privileges:true
-    # Optional: Mount local .env file
-    # env_file:
-    #   - .env
 
   # Local build: Build from source (use with --profile local)
   zammad-mcp-local:
@@ -35,8 +50,16 @@ services:
     container_name: zammad-mcp-local
     environment:
       ZAMMAD_URL: ${ZAMMAD_URL:-https://your-instance.zammad.com/api/v1}
-      ZAMMAD_HTTP_TOKEN: ${ZAMMAD_HTTP_TOKEN}
-    restart: unless-stopped
+      ZAMMAD_USERNAME: ${ZAMMAD_USERNAME:-}
+      ZAMMAD_HTTP_TOKEN_FILE: /run/secrets/zammad_http_token
+      ZAMMAD_OAUTH2_TOKEN_FILE: /run/secrets/zammad_oauth2_token
+      ZAMMAD_PASSWORD_FILE: /run/secrets/zammad_password
+    secrets:
+      - zammad_http_token
+      - zammad_oauth2_token
+      - zammad_password
+    # MCP server - invoked on-demand, exits after processing
+    user: "appuser:appuser"
     read_only: true
     tmpfs:
       - /tmp:size=100M,mode=1777
@@ -54,12 +77,21 @@ services:
       - ./mcp_zammad:/app/mcp_zammad
     environment:
       ZAMMAD_URL: ${ZAMMAD_URL:-https://your-instance.zammad.com/api/v1}
-      ZAMMAD_HTTP_TOKEN: ${ZAMMAD_HTTP_TOKEN}
+      ZAMMAD_USERNAME: ${ZAMMAD_USERNAME:-}
+      ZAMMAD_HTTP_TOKEN_FILE: /run/secrets/zammad_http_token
+      ZAMMAD_OAUTH2_TOKEN_FILE: /run/secrets/zammad_oauth2_token
+      ZAMMAD_PASSWORD_FILE: /run/secrets/zammad_password
+    secrets:
+      - zammad_http_token
+      - zammad_oauth2_token
+      - zammad_password
+    # MCP server - invoked on-demand, exits after processing
     # Development might need ports for debugging tools
     # ports:
     #   - "8081:8080"
     # Development needs write access for hot reload and .pyc files
-    # read_only: true  # Disabled for development
+    read_only: false  # Writable FS required for hot-reload
+    user: "appuser:appuser"
     security_opt:
       - no-new-privileges:true
     command: ["uv", "run", "--watch", "mcp-zammad"]

@@ -21,12 +21,24 @@ class ZammadClient:
         http_token: str | None = None,
         oauth2_token: str | None = None,
     ):
-        """Initialize Zammad client with environment variables or provided credentials."""
+        """Initialize Zammad client with environment variables or provided credentials.
+
+        Supports reading secrets from files using Docker secrets pattern:
+        - ZAMMAD_HTTP_TOKEN_FILE: Path to file containing HTTP token
+        - ZAMMAD_OAUTH2_TOKEN_FILE: Path to file containing OAuth2 token
+        - ZAMMAD_PASSWORD_FILE: Path to file containing password
+        """
         self.url = url or os.getenv("ZAMMAD_URL")
         self.username = username or os.getenv("ZAMMAD_USERNAME")
-        self.password = password or os.getenv("ZAMMAD_PASSWORD")
-        self.http_token = http_token or os.getenv("ZAMMAD_HTTP_TOKEN")
-        self.oauth2_token = oauth2_token or os.getenv("ZAMMAD_OAUTH2_TOKEN")
+
+        # Try to read secrets from files first (Docker secrets pattern)
+        self.password = password or self._read_secret_file("ZAMMAD_PASSWORD_FILE") or os.getenv("ZAMMAD_PASSWORD")
+        self.http_token = (
+            http_token or self._read_secret_file("ZAMMAD_HTTP_TOKEN_FILE") or os.getenv("ZAMMAD_HTTP_TOKEN")
+        )
+        self.oauth2_token = (
+            oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
+        )
 
         if not self.url:
             raise ConfigException("Zammad URL is required. Set ZAMMAD_URL environment variable.")
@@ -44,6 +56,26 @@ class ZammadClient:
             http_token=self.http_token,
             oauth2_token=self.oauth2_token,
         )
+
+    def _read_secret_file(self, env_var: str) -> str | None:
+        """Read secret from file path specified in environment variable.
+
+        Args:
+            env_var: Name of environment variable containing the file path
+
+        Returns:
+            Secret content from file or None if not found/readable
+        """
+        secret_file = os.getenv(env_var)
+        if not secret_file:
+            return None
+
+        try:
+            with open(secret_file) as f:
+                return f.read().strip()
+        except OSError as e:
+            logger.warning(f"Failed to read secret from {secret_file}: {e}")
+            return None
 
     def search_tickets(
         self,
