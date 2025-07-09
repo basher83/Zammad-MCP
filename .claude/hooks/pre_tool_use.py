@@ -123,6 +123,55 @@ def should_use_ripgrep(command: str) -> bool:
     return False
 
 
+def should_use_fd(command: str) -> bool:
+    """
+    Check if the command uses find when fd would be more efficient.
+    Returns True if find is used for searching files/directories.
+    """
+    # Normalize command
+    normalized = command.strip()
+    
+    # Check if command uses find as a command
+    find_patterns = [
+        r"^find\s",  # Command starts with find
+        r";\s*find\s",  # find after semicolon
+        r"&&\s*find\s",  # find after &&
+        r"\|\s*find\s",  # find after pipe
+        r"^\s*find\s",  # find with leading whitespace
+    ]
+    
+    for pattern in find_patterns:
+        if re.search(pattern, normalized):
+            # Check if it's the 'find' command and not just a word in a string
+            # Exclude cases where 'find' might be part of another command or path
+            if "findstr" in normalized:  # Windows findstr command
+                return False
+            
+            # Common find usage patterns that should use fd instead
+            find_usage_patterns = [
+                r"find\s+\.",  # find . (current directory)
+                r"find\s+/",  # find /path
+                r"find\s+~",  # find ~ (home directory)
+                r"find\s+\$",  # find with variables
+                r"find\s+['\"]",  # find with quoted paths
+                r"find\s+.*-name",  # find with -name
+                r"find\s+.*-type",  # find with -type
+                r"find\s+.*-iname",  # find with -iname
+                r"find\s+.*-path",  # find with -path
+                r"find\s+.*-regex",  # find with -regex
+            ]
+            
+            for usage in find_usage_patterns:
+                if re.search(usage, normalized):
+                    return True
+                    
+            # If it's just 'find' followed by a path or option, it's likely file search
+            if re.match(r"^find\s+[^|;&]+$", normalized.strip()):
+                return True
+                
+    return False
+
+
 def main() -> None:
     try:
         # Read JSON input from stdin
@@ -151,6 +200,16 @@ def main() -> None:
                 print("BLOCKED: Use 'rg' (ripgrep) instead of 'grep' for better performance", file=sys.stderr)
                 print("Ripgrep is faster and respects .gitignore by default", file=sys.stderr)
                 print("Example: rg 'pattern' instead of grep -r 'pattern'", file=sys.stderr)
+                sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
+                
+            # Check for inefficient find usage
+            if should_use_fd(command):
+                print("BLOCKED: Use 'fd' instead of 'find' for better performance and usability", file=sys.stderr)
+                print("fd is faster, has intuitive syntax, and respects .gitignore by default", file=sys.stderr)
+                print("Examples:", file=sys.stderr)
+                print("  fd 'pattern' instead of find . -name '*pattern*'", file=sys.stderr)
+                print("  fd -e py instead of find . -name '*.py'", file=sys.stderr)
+                print("  fd -t f instead of find . -type f", file=sys.stderr)
                 sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
         # Ensure log directory exists
