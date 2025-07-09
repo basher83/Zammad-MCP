@@ -74,7 +74,7 @@ class ZammadClient:
             with open(secret_file) as f:
                 return f.read().strip()
         except OSError:
-            logger.warning("Failed to read secret file.")
+            logger.warning(f"Failed to read secret for environment variable '{env_var}'.")
             return None
 
     def search_tickets(
