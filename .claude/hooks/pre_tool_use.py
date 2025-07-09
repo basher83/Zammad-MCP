@@ -197,20 +197,20 @@ def has_inefficient_cat(command: str) -> bool:
     """
     # Normalize command
     normalized = command.strip()
-    
+
     # Pattern for inefficient cat usage: cat file | tool
     inefficient_patterns = [
         r"cat\s+[^|<>]+\|\s*grep",  # cat file | grep
-        r"cat\s+[^|<>]+\|\s*awk",   # cat file | awk
-        r"cat\s+[^|<>]+\|\s*sed",   # cat file | sed
+        r"cat\s+[^|<>]+\|\s*awk",  # cat file | awk
+        r"cat\s+[^|<>]+\|\s*sed",  # cat file | sed
         r"cat\s+[^|<>]+\|\s*head",  # cat file | head
         r"cat\s+[^|<>]+\|\s*tail",  # cat file | tail
         r"cat\s+[^|<>]+\|\s*sort",  # cat file | sort
         r"cat\s+[^|<>]+\|\s*uniq",  # cat file | uniq
-        r"cat\s+[^|<>]+\|\s*wc",    # cat file | wc
-        r"cat\s+[^|<>]+\|\s*cut",   # cat file | cut
+        r"cat\s+[^|<>]+\|\s*wc",  # cat file | wc
+        r"cat\s+[^|<>]+\|\s*cut",  # cat file | cut
     ]
-    
+
     for pattern in inefficient_patterns:
         if re.search(pattern, normalized):
             # Check for exceptions where cat might be needed
@@ -222,13 +222,13 @@ def has_inefficient_cat(command: str) -> bool:
                 r"zcat",  # zcat (compressed files)
                 r"cat.*\.gz\s*\|",  # cat of gzipped files
             ]
-            
+
             for acceptable in acceptable_cat_uses:
                 if re.search(acceptable, normalized):
                     return False
-                    
+
             return True
-            
+
     return False
 
 
@@ -325,7 +325,7 @@ def main() -> None:
                 print("  eza --tree instead of ls -R", file=sys.stderr)
                 print("  eza --git -l for git status integration", file=sys.stderr)
                 sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
-                
+
             # Check for inefficient cat usage
             if has_inefficient_cat(command):
                 print("BLOCKED: Inefficient use of 'cat' detected", file=sys.stderr)
