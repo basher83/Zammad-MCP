@@ -43,6 +43,8 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from utils import normalize_zammad_url
+
 console = Console()
 
 
@@ -62,21 +64,8 @@ class ZammadConfig(BaseModel):
         if not v:
             raise ValueError("Zammad URL is required")
 
-        # Parse URL
-        parsed = urlparse(v)
-        if not parsed.scheme:
-            raise ValueError("URL must include protocol (http:// or https://)")
-
-        if parsed.scheme not in ["http", "https"]:
-            raise ValueError("URL must use http or https protocol")
-
-        # Ensure URL ends with /api/v1
-        if not v.endswith("/api/v1"):
-            if v.endswith("/"):
-                v = v[:-1]
-            v = f"{v}/api/v1"
-
-        return v
+        # Use shared utility for URL normalization
+        return normalize_zammad_url(v)
 
     @property
     def has_auth(self) -> bool:

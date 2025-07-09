@@ -46,6 +46,8 @@ from rich.table import Table
 from rich.tree import Tree
 from zammad_py import ZammadAPI
 
+from utils import normalize_zammad_url
+
 console = Console()
 
 
@@ -74,11 +76,12 @@ class ZammadTestClient:
             console.print("[red]Error:[/red] ZAMMAD_URL not configured")
             return False
 
-        # Ensure URL ends with /api/v1
-        if not self.url.endswith("/api/v1"):
-            if self.url.endswith("/"):
-                self.url = self.url[:-1]
-            self.url += "/api/v1"
+        # Normalize URL to ensure it ends with /api/v1
+        try:
+            self.url = normalize_zammad_url(self.url)
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] Invalid URL: {e}")
+            return False
 
         return True
 
@@ -288,6 +291,9 @@ class ZammadTestClient:
                 progress.add_task("Creating ticket...", total=None)
 
                 start_time = time.time()
+                if not self.user_info:
+                    console.print("[red]Error:[/red] User information not available")
+                    return
                 ticket_data = {
                     "title": title,
                     "group": group,
@@ -413,7 +419,7 @@ class ZammadTestClient:
         console.print(f"  Successful tests: {successful}/{len(tests)}")
         if successful > 0:
             console.print(f"  Total average time: {total_avg:.3f}s")
-            console.print(f"  Average per operation: {total_avg/successful:.3f}s")
+            console.print(f"  Average per operation: {total_avg / successful:.3f}s")
 
     def interactive_mode(self) -> None:
         """Run in interactive mode."""
@@ -568,13 +574,16 @@ def main(env_file: Path | None, operation: str | None, limit: int, benchmark: bo
         client.run_benchmark()
     elif operation == "list-tickets":
         client.list_tickets(limit)
-    elif operation == "list-users":
-        client.search_users("*")
     elif operation == "list-groups":
+        if not client.client:
+            console.print("[red]Error:[/red] Not connected to Zammad API")
+            sys.exit(1)
         groups = client.client.group.all()
         for group in groups[:limit]:
             console.print(f"  {group['id']}: {group['name']}")
     elif operation == "info":
+        # Info already displayed
+        pass
         # Info already displayed
         pass
     else:

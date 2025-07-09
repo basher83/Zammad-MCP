@@ -114,10 +114,14 @@ class SetupWizard:
         requirements.add_row("Git", "✅" if git_installed else "❌", "Required for version control")
 
         # Check operating system
+        # Check operating system
         os_name = platform.system()
         os_supported = os_name in ["Linux", "Darwin", "Windows"]
-        requirements.add_row("Operating System", "✅" if os_supported else "⚠️", f"{os_name} ({platform.machine()})")
-
+        os_status = "✅" if os_supported else "⚠️"
+        os_details = f"{os_name} ({platform.machine()})"
+        if not os_supported:
+            os_details += " - Untested, may still work"
+        requirements.add_row("Operating System", os_status, os_details)
         # Check project structure
         required_files = ["pyproject.toml", "README.md", "mcp_zammad/__init__.py"]
         files_exist = all((self.project_root / f).exists() for f in required_files)
@@ -170,7 +174,7 @@ class SetupWizard:
         console.print("\n[bold]Installing UV...[/bold]")
 
         system = platform.system()
-        
+
         # Security notice
         console.print("\n[yellow]⚠️  Security Notice:[/yellow]")
         console.print("This will download and execute an installation script from the internet.")
@@ -190,6 +194,8 @@ class SetupWizard:
                 cargo_bin = home / ".cargo" / "bin"
                 if cargo_bin.exists():
                     os.environ["PATH"] = f"{cargo_bin}:{os.environ.get('PATH', '')}"
+                    console.print("\n[yellow]Note: PATH updated for current session only.[/yellow]")
+                    console.print("[dim]Add ~/.cargo/bin to your shell's PATH permanently.[/dim]")
 
             elif system == "Windows":
                 # Windows
@@ -296,11 +302,13 @@ class SetupWizard:
         if not zammad_url:
             return False
 
-        # Ensure URL ends with /api/v1
-        if not zammad_url.endswith("/api/v1"):
-            if zammad_url.endswith("/"):
-                zammad_url = zammad_url[:-1]
-            zammad_url += "/api/v1"
+        # Normalize URL to ensure it ends with /api/v1
+        try:
+            from utils import normalize_zammad_url
+            zammad_url = normalize_zammad_url(zammad_url)
+        except (ImportError, ValueError) as e:
+            console.print(f"[red]Error normalizing URL:[/red] {e}")
+            return False
 
         # Choose authentication method
         auth_method = questionary.select(
