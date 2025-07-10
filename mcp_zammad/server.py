@@ -439,7 +439,7 @@ class ZammadMCPServer:
         """Register all resources with the MCP server."""
 
         @self.mcp.resource("zammad://ticket/{ticket_id}")
-        def get_ticket_resource(self, ticket_id: str) -> str:
+        def get_ticket_resource(ticket_id: str) -> str:
             """Get a ticket as a resource."""
             client = self.get_client()
             try:
@@ -472,7 +472,7 @@ class ZammadMCPServer:
                 return f"Error retrieving ticket {ticket_id}: {e!s}"
 
         @self.mcp.resource("zammad://user/{user_id}")
-        def get_user_resource(self, user_id: str) -> str:
+        def get_user_resource(user_id: str) -> str:
             """Get a user as a resource."""
             client = self.get_client()
             try:
@@ -493,7 +493,7 @@ class ZammadMCPServer:
                 return f"Error retrieving user {user_id}: {e!s}"
 
         @self.mcp.resource("zammad://organization/{org_id}")
-        def get_organization_resource(self, org_id: str) -> str:
+        def get_organization_resource(org_id: str) -> str:
             """Get an organization as a resource."""
             client = self.get_client()
             try:
@@ -573,3 +573,113 @@ server.mcp.lifespan = lifespan
 
 # Export the MCP server instance
 mcp = server.mcp
+
+# Legacy constants and functions for backward compatibility with tests
+_UNINITIALIZED = None
+zammad_client = None
+
+async def initialize() -> None:
+    """Initialize the Zammad client (legacy wrapper for test compatibility)."""
+    global zammad_client
+    await server.initialize()
+    zammad_client = server.client
+
+def search_tickets(
+    query: str | None = None,
+    state: str | None = None,
+    priority: str | None = None,
+    group: str | None = None,
+    owner: str | None = None,
+    customer: str | None = None,
+    page: int = 1,
+    per_page: int = 25,
+) -> list[Ticket]:
+    """Search for tickets (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    tickets_data = zammad_client.search_tickets(
+        query=query,
+        state=state,
+        priority=priority,
+        group=group,
+        owner=owner,
+        customer=customer,
+        page=page,
+        per_page=per_page,
+    )
+    return [Ticket(**ticket) for ticket in tickets_data]
+
+def get_ticket(
+    ticket_id: int,
+    include_articles: bool = False,
+    article_limit: int = 10,
+    article_offset: int = 0,
+) -> Ticket:
+    """Get a ticket by ID (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    ticket_data = zammad_client.get_ticket(ticket_id, include_articles, article_limit, article_offset)
+    return Ticket(**ticket_data)
+
+def create_ticket(
+    title: str,
+    group: str,
+    customer: str,
+    article_body: str,
+    state: str = "new",
+    priority: str = "2 normal",
+    article_type: str = "note",
+    article_internal: bool = False,
+) -> Ticket:
+    """Create a new ticket (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    ticket_data = zammad_client.create_ticket(
+        title=title,
+        group=group,
+        customer=customer,
+        article_body=article_body,
+        state=state,
+        priority=priority,
+        article_type=article_type,
+        article_internal=article_internal,
+    )
+    return Ticket(**ticket_data)
+
+def add_article(
+    ticket_id: int,
+    body: str,
+    article_type: str = "note",
+    internal: bool = False,
+    sender: str = "Agent",
+) -> Article:
+    """Add an article to a ticket (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    article_data = zammad_client.add_article(
+        ticket_id=ticket_id,
+        body=body,
+        article_type=article_type,
+        internal=internal,
+        sender=sender,
+    )
+    return Article(**article_data)
+
+def get_user(user_id: int) -> User:
+    """Get a user by ID (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    user_data = zammad_client.get_user(user_id)
+    return User(**user_data)
+
+def add_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
+    """Add a tag to a ticket (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    return zammad_client.add_ticket_tag(ticket_id, tag)
+
+def remove_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
+    """Remove a tag from a ticket (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    return zammad_client.remove_ticket_tag(ticket_id, tag)
