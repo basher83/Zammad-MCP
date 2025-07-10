@@ -515,7 +515,7 @@ class ZammadMCPServer:
         """Register all prompts with the MCP server."""
 
         @self.mcp.prompt()
-        def analyze_ticket(self, ticket_id: int) -> str:
+        def analyze_ticket(ticket_id: int) -> str:
             """Generate a prompt to analyze a ticket."""
             return f"""Please analyze ticket {ticket_id} from Zammad. Use the get_ticket tool to retrieve the ticket details including all articles.
 
@@ -528,7 +528,7 @@ After retrieving the ticket, provide:
 Use appropriate tools to gather any additional context about the customer or organization if needed."""
 
         @self.mcp.prompt()
-        def draft_response(self, ticket_id: int, tone: str = "professional") -> str:
+        def draft_response(ticket_id: int, tone: str = "professional") -> str:
             """Generate a prompt to draft a response to a ticket."""
             return f"""Please help draft a {tone} response to ticket {ticket_id}. 
 
@@ -541,7 +541,7 @@ First, use get_ticket to understand the issue and conversation history. Then dra
 After drafting, you can use add_article to add the response to the ticket if approved."""
 
         @self.mcp.prompt()
-        def escalation_summary(self, group: str | None = None) -> str:
+        def escalation_summary(group: str | None = None) -> str:
             """Generate a prompt to summarize escalated tickets."""
             group_filter = f" for group '{group}'" if group else ""
             return f"""Please provide a summary of escalated tickets{group_filter}.

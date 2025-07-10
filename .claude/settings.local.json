@@ -12,7 +12,10 @@
       "Bash(curl:*)",
       "WebFetch(domain:docs.codacy.com)",
       "WebFetch(domain:github.com)",
-      "Bash(gh api:*)"
+      "Bash(gh api:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)"
     ],
     "deny": []
   },

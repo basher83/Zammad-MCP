@@ -43,3 +43,8 @@ jobs:
 
       - name: Install Zammad MCP package in development mode
         run: uv pip install -e .
+
+      - name: Run Safety security check
+        uses: pyupio/safety-action@v1
+        with:
+          api-key: ${{ secrets.SAFETY_API_KEY }}
