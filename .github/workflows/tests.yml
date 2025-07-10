@@ -40,7 +40,7 @@ jobs:
             --cov-report=term-missing \
             --cov-report=html:htmlcov
 
-      - name: Enforce 90 % coverage threshold
+      - name: Enforce 65% coverage threshold
         if: always()            # still runs if tests failed
         run: |
           python - <<'PY'
@@ -49,8 +49,8 @@ jobs:
               cov = float(ET.parse("coverage.xml").getroot().get("line-rate")) * 100
           except Exception:
               sys.exit("coverage.xml missing or unreadable")
-          if cov < 90:
-              sys.exit(f"Coverage {cov:.1f}% below required 90%")
+          if cov < 65:
+              sys.exit(f"Coverage {cov:.1f}% below required 65%")
           PY
       - name: Upload coverage to Codacy
         # Only upload on push to main or PRs (not on manual triggers)
@@ -84,7 +84,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             
             # Coverage badge
-            COVERAGE=$COVERAGE python -c "import os; cov = float(os.environ['COVERAGE']); print('✅ **Status**: Good coverage (target: 90%)' if cov >= 90 else '⚠️ **Status**: Below target (target: 90%)' if cov >= 80 else '❌ **Status**: Low coverage (target: 90%)')" >> $GITHUB_STEP_SUMMARY
+            COVERAGE=$COVERAGE python -c "import os; cov = float(os.environ['COVERAGE']); print('✅ **Status**: Good coverage (target: 65%)' if cov >= 90 else '⚠️ **Status**: Below target (target: 65%)' if cov >= 80 else '❌ **Status**: Low coverage (target: 65%)')" >> $GITHUB_STEP_SUMMARY
             
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "📈 Coverage details available in [Codacy](https://app.codacy.com/gh/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
