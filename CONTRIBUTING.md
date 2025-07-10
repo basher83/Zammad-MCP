@@ -90,7 +90,7 @@ uv run ruff check mcp_zammad tests     # Lint code
 uv run mypy mcp_zammad                 # Type checking
 uv run bandit -r mcp_zammad/           # Security scanning
 uv run semgrep --config=auto mcp_zammad/ # Security & quality
-uv run safety check                    # Dependency vulnerabilities
+uv run safety scan --output json       # Dependency vulnerabilities
 uv run pip-audit                       # Additional dependency audit
 
 # Run tests

@@ -30,7 +30,7 @@ uv run mypy mcp_zammad  # type check
 uv run pip-audit  # check for vulnerabilities
 uv run bandit -r mcp_zammad  # security analysis
 uv run semgrep --config=auto mcp_zammad  # static analysis
-uv run safety check  # dependency security check
+uv run safety scan --output json  # dependency security scan
 
 # Run all quality checks
 ./scripts/quality-check.sh  # runs all checks above

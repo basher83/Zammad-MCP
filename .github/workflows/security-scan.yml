@@ -63,12 +63,13 @@ jobs:
           sarif_file: bandit-sarif.json
           category: bandit
 
-      - name: Run safety check
+      - name: Run safety scan
         run: |
-          echo "Running safety vulnerability check..."
-          # Will exit non-zero if vulnerabilities are found
-          uv run safety check --json > safety-report.json || echo "⚠️ Safety check failed - see report for details"
-          echo "✅ Safety check completed"
+          echo "Running safety vulnerability scan..."
+          # Using the new 'scan' command instead of deprecated 'check'
+          # Continue on error to capture the report even if vulnerabilities are found
+          uv run safety scan --output json > safety-report.json || true
+          echo "✅ Safety scan completed"
 
       - name: Run pip-audit
         run: |
@@ -111,13 +112,23 @@ jobs:
           
           # Check safety results
           echo "### Dependency Vulnerability Scans" >> $GITHUB_STEP_SUMMARY
-          if [ -f safety-report.json ]; then
-            SAFETY_VULNS=$(jq '.vulnerabilities | length' safety-report.json)
+          if [ -f safety-report.json ] && [ -s safety-report.json ]; then
+            # Try to parse the new scan format
+            if jq -e '.scan_results' safety-report.json > /dev/null 2>&1; then
+              # New format
+              SAFETY_VULNS=$(jq '[.scan_results[].vulnerabilities[]?] | length' safety-report.json 2>/dev/null || echo "0")
+            else
+              # Old format fallback
+              SAFETY_VULNS=$(jq '.vulnerabilities | length' safety-report.json 2>/dev/null || echo "0")
+            fi
+            
             if [ "$SAFETY_VULNS" -gt 0 ]; then
               echo "❌ **Safety**: Found $SAFETY_VULNS vulnerabilities" >> $GITHUB_STEP_SUMMARY
             else
               echo "✅ **Safety**: No known vulnerabilities" >> $GITHUB_STEP_SUMMARY
             fi
+          else
+            echo "⚠️ **Safety**: No report generated" >> $GITHUB_STEP_SUMMARY
           fi
           
           # Check pip-audit results

@@ -272,7 +272,7 @@ class SecurityScanner:
             console.print(f"[yellow]Bandit error: {e}[/yellow]")
 
     def run_safety(self) -> None:
-        """Run safety check for dependency vulnerabilities."""
+        """Run safety scan for dependency vulnerabilities."""
         req_file = None
         try:
             # Create requirements file from current environment
@@ -287,9 +287,9 @@ class SecurityScanner:
                 f.write(req_result.stdout)
                 req_file = f.name
 
-            # Run safety check
+            # Run safety scan
             result = subprocess.run(
-                ["uv", "run", "safety", "check", "--json", "-r", req_file],
+                ["uv", "run", "safety", "scan", "--output", "json", "--file", req_file],
                 capture_output=True,
                 text=True,
                 cwd=self.project_path,
@@ -298,7 +298,16 @@ class SecurityScanner:
 
             if result.stdout:
                 data = json.loads(result.stdout)
-                vulnerabilities = data.get("vulnerabilities", [])
+                
+                # Handle new safety scan format
+                if "scan_results" in data:
+                    # New format
+                    vulnerabilities = []
+                    for scan_result in data.get("scan_results", []):
+                        vulnerabilities.extend(scan_result.get("vulnerabilities", []))
+                else:
+                    # Old format fallback
+                    vulnerabilities = data.get("vulnerabilities", [])
 
                 for vuln in vulnerabilities:
                     # Safety uses different severity names
