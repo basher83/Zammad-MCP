@@ -15,7 +15,8 @@
       "Bash(gh api:*)",
       "Bash(gh pr comment:*)",
       "Bash(gh run list:*)",
-      "Bash(gh run view:*)"
+      "Bash(gh run view:*)",
+      "mcp__safety-mcp-sse__check_package_security"
     ],
     "deny": []
   },

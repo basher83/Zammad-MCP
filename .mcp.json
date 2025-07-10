@@ -8,6 +8,10 @@
         "-m",
         "mcp_zammad"
       ]
+    },
+    "safety-mcp-sse": {
+      "type": "sse",
+      "url": "https://mcp.safetycli.com/sse"
     }
   }
 }
