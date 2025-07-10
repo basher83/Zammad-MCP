@@ -578,11 +578,13 @@ mcp = server.mcp
 _UNINITIALIZED = None
 zammad_client = None
 
+
 async def initialize() -> None:
     """Initialize the Zammad client (legacy wrapper for test compatibility)."""
     global zammad_client
     await server.initialize()
     zammad_client = server.client
+
 
 def search_tickets(
     query: str | None = None,
@@ -609,6 +611,7 @@ def search_tickets(
     )
     return [Ticket(**ticket) for ticket in tickets_data]
 
+
 def get_ticket(
     ticket_id: int,
     include_articles: bool = False,
@@ -620,6 +623,7 @@ def get_ticket(
         raise RuntimeError("Zammad client not initialized")
     ticket_data = zammad_client.get_ticket(ticket_id, include_articles, article_limit, article_offset)
     return Ticket(**ticket_data)
+
 
 def create_ticket(
     title: str,
@@ -646,6 +650,7 @@ def create_ticket(
     )
     return Ticket(**ticket_data)
 
+
 def add_article(
     ticket_id: int,
     body: str,
@@ -665,6 +670,7 @@ def add_article(
     )
     return Article(**article_data)
 
+
 def get_user(user_id: int) -> User:
     """Get a user by ID (legacy wrapper for test compatibility)."""
     if zammad_client is None:
@@ -672,11 +678,13 @@ def get_user(user_id: int) -> User:
     user_data = zammad_client.get_user(user_id)
     return User(**user_data)
 
+
 def add_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
     """Add a tag to a ticket (legacy wrapper for test compatibility)."""
     if zammad_client is None:
         raise RuntimeError("Zammad client not initialized")
     return zammad_client.add_ticket_tag(ticket_id, tag)
+
 
 def remove_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
     """Remove a tag from a ticket (legacy wrapper for test compatibility)."""
