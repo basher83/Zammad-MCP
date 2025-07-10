@@ -48,14 +48,16 @@ repos:
 
       - id: no-plaintext-fence
         name: Block plaintext code fences
-        entry: bash -c 'found=0; for file in "$@"; do inside_fence=0; while IFS= read -r line; do if [[ "$line" =~ ^[[:space:]]*\`\`\` ]]; then inside_fence=$((1-inside_fence)); fi; if [[ $inside_fence -eq 0 && "$line" =~ \`\`\`[Pp][Ll][Aa][Ii][Nn][Tt][Ee][Xx][Tt][[:space:]]*$ ]]; then echo "❌ $file: Use \`\`\`text instead of \`\`\`plaintext"; found=1; fi; done < "$file"; done; exit $found' --
+        entry: |
+          bash -c 'found=0; for file in "$@"; do inside_fence=0; while IFS= read -r line; do if [[ "$line" =~ ^[[:space:]]*\`\`\` ]]; then inside_fence=$((1-inside_fence)); fi; if [[ $inside_fence -eq 0 && "$line" =~ \`\`\`[Pp][Ll][Aa][Ii][Nn][Tt][Ee][Xx][Tt][[:space:]]*$ ]]; then echo "❌ $file: Use \`\`\`text instead of \`\`\`plaintext"; found=1; fi; done < "$file"; done; exit $found' --
         language: system
         files: '\.md$'
         pass_filenames: true
 
       - id: markdown-consistent-numbering
         name: Enforce '1.' for markdown lists
-        entry: bash -c 'found=0; for file in "$@"; do inside_fence=0; line_num=0; while IFS= read -r line; do line_num=$((line_num+1)); if [[ "$line" =~ ^[[:space:]]*\`\`\` ]]; then inside_fence=$((1-inside_fence)); fi; if [[ $inside_fence -eq 0 && "$line" =~ ^[[:space:]]*([2-9]|[0-9]{2,})\. ]]; then echo "❌ $file:$line_num Use '\''1.'\'' for all numbered list items to reduce diff churn"; found=1; fi; done < "$file"; done; exit $found' --
+        entry: |
+          bash -c 'found=0; for file in "$@"; do inside_fence=0; line_num=0; while IFS= read -r line; do line_num=$((line_num+1)); if [[ "$line" =~ ^[[:space:]]*\`\`\` ]]; then inside_fence=$((1-inside_fence)); fi; if [[ $inside_fence -eq 0 && "$line" =~ ^[[:space:]]*([2-9]|[0-9]{2,})\. ]]; then echo "❌ $file:$line_num Use '\''1.'\'' for all numbered list items to reduce diff churn"; found=1; fi; done < "$file"; done; exit $found' --
         language: system
         files: '\.md$'
         pass_filenames: true
