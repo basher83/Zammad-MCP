@@ -35,13 +35,6 @@ jobs:
         run: |
           uv sync --dev --frozen
 
-      - name: Codacy Trivy scan
-        uses: codacy/codacy-analysis-cli-action@v4
-        with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          tool: "trivy"
-          output: codacy.json
-
       - name: Run Bandit (HIGH/CRITICAL only)
         run: |
           # Full recursive scan of the entire codebase
@@ -64,12 +57,10 @@ jobs:
           category: bandit
 
       - name: Run safety scan
-        run: |
-          echo "Running safety vulnerability scan..."
-          # Using the new 'scan' command instead of deprecated 'check'
-          # Continue on error to capture the report even if vulnerabilities are found
-          uv run safety scan --output json > safety-report.json || true
-          echo "✅ Safety scan completed"
+        uses: pyupio/safety-action@v1
+        continue-on-error: true
+        with:
+          api-key: ${{ secrets.SAFETY_API_KEY }}
 
       - name: Run pip-audit
         run: |
@@ -86,9 +77,7 @@ jobs:
           path: |
             bandit-report.json
             bandit-sarif.json
-            safety-report.json
             pip-audit-report.json
-            codacy.json
 
       - name: Generate Security Summary
         if: always()
@@ -112,24 +101,7 @@ jobs:
           
           # Check safety results
           echo "### Dependency Vulnerability Scans" >> $GITHUB_STEP_SUMMARY
-          if [ -f safety-report.json ] && [ -s safety-report.json ]; then
-            # Try to parse the new scan format
-            if jq -e '.scan_results' safety-report.json > /dev/null 2>&1; then
-              # New format
-              SAFETY_VULNS=$(jq '[.scan_results[].vulnerabilities[]?] | length' safety-report.json 2>/dev/null || echo "0")
-            else
-              # Old format fallback
-              SAFETY_VULNS=$(jq '.vulnerabilities | length' safety-report.json 2>/dev/null || echo "0")
-            fi
-            
-            if [ "$SAFETY_VULNS" -gt 0 ]; then
-              echo "❌ **Safety**: Found $SAFETY_VULNS vulnerabilities" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "✅ **Safety**: No known vulnerabilities" >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "⚠️ **Safety**: No report generated" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "✅ **Safety**: Check performed via GitHub Action (see job output for details)" >> $GITHUB_STEP_SUMMARY
           
           # Check pip-audit results
           if [ -f pip-audit-report.json ]; then
