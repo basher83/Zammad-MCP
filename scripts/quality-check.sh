@@ -26,7 +26,7 @@ echo ""
 
 echo "🔒 Security scanning with bandit..."
 # Only fail on HIGH/CRITICAL issues (--severity-level HIGH)
-if uv run bandit -r mcp_zammad/ --severity-level HIGH -f json -o bandit-report.json; then
+if uv run bandit -r mcp_zammad/ --severity-level high -f json -o bandit-report.json; then
     echo "✅ Bandit: No HIGH/CRITICAL security issues found"
 else
     echo "❌ Bandit: HIGH/CRITICAL security issues found - check bandit-report.json"

@@ -180,6 +180,31 @@ Avoid granting admin permissions unless absolutely necessary.
    - Update credentials and tokens
    - Monitor for continued suspicious activity
 
+## GitHub Actions Security
+
+### Required Secrets
+
+For the security scanning workflow to function properly, configure the following secrets in your repository:
+
+- **`SAFETY_API_KEY`**: Required for the Safety vulnerability scanner
+  - Sign up at https://safetycli.com/resources/plans
+  - Add the key to Settings → Secrets → Actions
+- **`CODACY_PROJECT_TOKEN`**: For Codacy security analysis (optional)
+  - Available from your Codacy project settings
+
+### Security Workflow
+
+The repository includes automated security scanning that runs on:
+- Every push to main branch
+- All pull requests
+- Weekly scheduled scans (Mondays at 09:00 UTC)
+
+The workflow includes:
+- **Bandit**: Static security analysis for Python code
+- **Safety**: Dependency vulnerability scanning
+- **pip-audit**: Additional dependency security checks
+- **Codacy Trivy**: Container and dependency scanning
+
 ## Security Contact
 
 For security-related questions or concerns:

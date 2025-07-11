@@ -18,12 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setup scripts for Windows and Unix systems
 - Support for running via `uvx` directly from GitHub
 - Sentinel pattern for better type safety with `_UNINITIALIZED`
+- Documentation for GitHub Actions security secrets configuration
+- Comprehensive GitHub workflows documentation in CONTRIBUTING.md
 
 ### Changed
 
 - Simplified escalated ticket count calculation using tuple instead of list
 - Updated all development commands to use `uv run` prefix
 - Modern Python 3.10+ type annotations throughout
+- Switched from manual Safety CLI execution to official pyupio/safety-action in GitHub workflows
+- Removed duplicate Codacy Trivy scan from security-scan.yml (already covered by dedicated Codacy workflow)
 
 ### Fixed
 
