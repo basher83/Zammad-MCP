@@ -65,8 +65,11 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 The easiest way to run the MCP server is using Docker:
 
 ```bash
-# Pull a specific version tag (replace X.Y.Z with the desired release)
-docker pull ghcr.io/basher83/zammad-mcp:X.Y.Z
+# Pull the latest version
+docker pull ghcr.io/basher83/zammad-mcp:latest
+
+# Or pull a specific version (see available versions below)
+docker pull ghcr.io/basher83/zammad-mcp:1.0.0
 
 # Run with environment variables
 docker run -d \
@@ -88,6 +91,32 @@ docker compose --profile local up -d
 # For development with hot reload:
 docker compose --profile dev up -d
 ```
+
+#### Docker Image Versioning
+
+This project publishes Docker images with semantic versioning. When a new version is released (via git tags), the following Docker tags are automatically created:
+
+- `latest` - Always points to the most recent stable release
+- `1.2.3` - Specific version tag (recommended for production)
+- `1.2` - Latest patch version of the 1.2 minor release
+- `1` - Latest minor and patch version of the 1.x major release
+- `main` - Latest build from the main branch (may be unstable)
+- `sha-1234567` - Specific commit hash
+
+To use a specific version in production, replace `latest` with the desired version tag:
+
+```bash
+# Recommended for production - pin to specific version
+docker pull ghcr.io/basher83/zammad-mcp:1.0.0
+
+# For automatic patch updates
+docker pull ghcr.io/basher83/zammad-mcp:1.0
+
+# For automatic minor and patch updates
+docker pull ghcr.io/basher83/zammad-mcp:1
+```
+
+View all available versions on the [GitHub Container Registry](https://github.com/basher83/Zammad-MCP/pkgs/container/zammad-mcp).
 
 ### Install the MCP Server
 
@@ -380,12 +409,13 @@ The server respects Zammad's rate limits. If you encounter rate limit errors:
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
+See [CONTRIBUTING](CONTRIBUTING.md) for detailed guidelines on:
 
 - Development setup
 - Code style and quality standards
 - Testing requirements
 - Pull request process
+- GitHub workflows and CI/CD pipeline
 
 ## License
 
@@ -401,9 +431,9 @@ This project uses the same license as the [Zammad project](https://github.com/za
 
 ## Support
 
-- GitHub Issues: [Report bugs or request features]
-- Zammad Documentation: <https://docs.zammad.org/>
-- MCP Documentation: <https://modelcontextprotocol.io/>
+- [GitHub Issues:](https://github.com/basher83/Zammad-MCP/issues)
+- [Zammad Documentation:](https://docs.zammad.org/)
+- [MCP Documentation:](https://modelcontextprotocol.io/)
 
 ## Trademark Notice
 
