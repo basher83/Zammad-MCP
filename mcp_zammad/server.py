@@ -77,6 +77,12 @@ class ZammadMCPServer:
 
     def _setup_tools(self) -> None:
         """Register all tools with the MCP server."""
+        self._setup_ticket_tools()
+        self._setup_user_org_tools()
+        self._setup_system_tools()
+
+    def _setup_ticket_tools(self) -> None:
+        """Register ticket-related tools."""
 
         @self.mcp.tool()
         def search_tickets(
@@ -246,7 +252,38 @@ class ZammadMCPServer:
             return Article(**article_data)
 
         @self.mcp.tool()
-        def get_user(self, user_id: int) -> User:
+        def add_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
+            """Add a tag to a ticket.
+
+            Args:
+                ticket_id: The ticket ID
+                tag: The tag to add
+
+            Returns:
+                Operation result
+            """
+            client = self.get_client()
+            return client.add_ticket_tag(ticket_id, tag)
+
+        @self.mcp.tool()
+        def remove_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
+            """Remove a tag from a ticket.
+
+            Args:
+                ticket_id: The ticket ID
+                tag: The tag to remove
+
+            Returns:
+                Operation result
+            """
+            client = self.get_client()
+            return client.remove_ticket_tag(ticket_id, tag)
+
+    def _setup_user_org_tools(self) -> None:
+        """Register user and organization tools."""
+
+        @self.mcp.tool()
+        def get_user(user_id: int) -> User:
             """Get user information by ID.
 
             Args:
@@ -260,7 +297,7 @@ class ZammadMCPServer:
             return User(**user_data)
 
         @self.mcp.tool()
-        def search_users(self, query: str, page: int = 1, per_page: int = 25) -> list[User]:
+        def search_users(query: str, page: int = 1, per_page: int = 25) -> list[User]:
             """Search for users.
 
             Args:
@@ -276,7 +313,7 @@ class ZammadMCPServer:
             return [User(**user) for user in users_data]
 
         @self.mcp.tool()
-        def get_organization(self, org_id: int) -> Organization:
+        def get_organization(org_id: int) -> Organization:
             """Get organization information by ID.
 
             Args:
@@ -290,7 +327,7 @@ class ZammadMCPServer:
             return Organization(**org_data)
 
         @self.mcp.tool()
-        def search_organizations(self, query: str, page: int = 1, per_page: int = 25) -> list[Organization]:
+        def search_organizations(query: str, page: int = 1, per_page: int = 25) -> list[Organization]:
             """Search for organizations.
 
             Args:
@@ -306,8 +343,21 @@ class ZammadMCPServer:
             return [Organization(**org) for org in orgs_data]
 
         @self.mcp.tool()
+        def get_current_user() -> User:
+            """Get information about the currently authenticated user.
+
+            Returns:
+                Current user details
+            """
+            client = self.get_client()
+            user_data = client.get_current_user()
+            return User(**user_data)
+
+    def _setup_system_tools(self) -> None:
+        """Register system information tools."""
+
+        @self.mcp.tool()
         def get_ticket_stats(
-            self,
             group: str | None = None,
             start_date: str | None = None,
             end_date: str | None = None,
@@ -364,7 +414,7 @@ class ZammadMCPServer:
             )
 
         @self.mcp.tool()
-        def list_groups(self) -> list[Group]:
+        def list_groups() -> list[Group]:
             """Get all available groups.
 
             Returns:
@@ -375,7 +425,7 @@ class ZammadMCPServer:
             return [Group(**group) for group in groups_data]
 
         @self.mcp.tool()
-        def list_ticket_states(self) -> list[TicketState]:
+        def list_ticket_states() -> list[TicketState]:
             """Get all available ticket states.
 
             Returns:
@@ -386,7 +436,7 @@ class ZammadMCPServer:
             return [TicketState(**state) for state in states_data]
 
         @self.mcp.tool()
-        def list_ticket_priorities(self) -> list[TicketPriority]:
+        def list_ticket_priorities() -> list[TicketPriority]:
             """Get all available ticket priorities.
 
             Returns:
@@ -395,45 +445,6 @@ class ZammadMCPServer:
             client = self.get_client()
             priorities_data = client.get_ticket_priorities()
             return [TicketPriority(**priority) for priority in priorities_data]
-
-        @self.mcp.tool()
-        def add_ticket_tag(self, ticket_id: int, tag: str) -> dict[str, Any]:
-            """Add a tag to a ticket.
-
-            Args:
-                ticket_id: The ticket ID
-                tag: The tag to add
-
-            Returns:
-                Operation result
-            """
-            client = self.get_client()
-            return client.add_ticket_tag(ticket_id, tag)
-
-        @self.mcp.tool()
-        def remove_ticket_tag(self, ticket_id: int, tag: str) -> dict[str, Any]:
-            """Remove a tag from a ticket.
-
-            Args:
-                ticket_id: The ticket ID
-                tag: The tag to remove
-
-            Returns:
-                Operation result
-            """
-            client = self.get_client()
-            return client.remove_ticket_tag(ticket_id, tag)
-
-        @self.mcp.tool()
-        def get_current_user(self) -> User:
-            """Get information about the currently authenticated user.
-
-            Returns:
-                Current user details
-            """
-            client = self.get_client()
-            user_data = client.get_current_user()
-            return User(**user_data)
 
     def _setup_resources(self) -> None:
         """Register all resources with the MCP server."""
@@ -569,7 +580,7 @@ async def lifespan(_app: FastMCP) -> AsyncIterator[None]:
 
 
 # Apply lifespan to the MCP instance
-server.mcp.lifespan = lifespan
+server.mcp.lifespan = lifespan  # type: ignore[attr-defined]
 
 # Export the MCP server instance
 mcp = server.mcp
@@ -581,9 +592,9 @@ zammad_client = None
 
 async def initialize() -> None:
     """Initialize the Zammad client (legacy wrapper for test compatibility)."""
-    global zammad_client
     await server.initialize()
-    zammad_client = server.client
+    # Update the module-level client reference
+    globals()["zammad_client"] = server.client
 
 
 def search_tickets(
