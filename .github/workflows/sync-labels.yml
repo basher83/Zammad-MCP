@@ -1,0 +1,13 @@
+name: Sync Labels via Central Definition
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync-labels:
+    uses: basher83/.github/.github/workflows/sync-labels.yml@main
+    with:
+      # Optional: override the label definitions URL if you want a custom source
+      # label_definitions_url: "https://raw.githubusercontent.com/basher83/docs/main/mission-control/github-configs/label-definitions.yml"
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
