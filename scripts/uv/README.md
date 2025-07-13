@@ -7,6 +7,7 @@ This directory contains UV single-file scripts that provide development and oper
 These scripts can be executed in several ways:
 
 ### Direct Execution (Recommended for GNU/Linux)
+
 ```bash
 ./dev-setup.py
 ./test-zammad.py
@@ -14,6 +15,7 @@ These scripts can be executed in several ways:
 ```
 
 ### Using UV directly (Most Portable)
+
 ```bash
 uv run --script dev-setup.py
 uv run --script test-zammad.py
@@ -24,26 +26,29 @@ uv run --script test-zammad.py
 
 The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag is a GNU coreutils extension that allows passing multiple arguments through env.
 
-### Platform Compatibility:
+### Platform Compatibility
 
 - ✅ **Linux (GNU coreutils)**: Full support
 - ❌ **macOS (BSD env)**: No `-S` flag support
 - ❌ **Alpine (BusyBox)**: No `-S` flag support
 - ❌ **FreeBSD/OpenBSD**: No `-S` flag support
 
-### Workarounds for Non-GNU Systems:
+### Workarounds for Non-GNU Systems
 
 1. **Use UV directly** (recommended):
+
    ```bash
    uv run --script scriptname.py
    ```
 
-2. **Create an alias**:
+1. **Create an alias**:
+
    ```bash
    alias dev-setup='uv run --script ~/path/to/dev-setup.py'
    ```
 
-3. **Create a wrapper script**:
+1. **Create a wrapper script**:
+
    ```bash
    #!/bin/sh
    exec uv run --script "$(dirname "$0")/scriptname.py" "$@"
