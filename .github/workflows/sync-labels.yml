@@ -6,5 +6,3 @@ on:
 jobs:
   sync-labels:
     uses: basher83/.github/.github/workflows/sync-labels.yml@main
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
