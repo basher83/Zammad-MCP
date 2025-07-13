@@ -36,10 +36,7 @@ fi
 echo "🔍 Security scanning with semgrep..."
 uv run semgrep --config=auto --error mcp_zammad/ || echo "⚠️ Semgrep found issues"
 
-echo "🛡️ Dependency vulnerability scan with safety..."
-uv run safety scan --output json || echo "⚠️ Safety found vulnerabilities"
-
-echo "🔐 Additional dependency audit with pip-audit..."
+echo "🔐 Dependency audit with pip-audit..."
 uv run pip-audit --format=json --output=pip-audit-report.json || echo "⚠️ pip-audit found vulnerabilities - check pip-audit-report.json"
 
 # Tests

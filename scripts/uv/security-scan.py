@@ -3,7 +3,6 @@
 # dependencies = [
 #   "pip-audit>=2.6.0",
 #   "bandit[sarif]>=1.7.6",
-#   "safety>=2.3.1",
 #   "rich>=13.0.0",
 #   "pydantic>=2.0.0",
 #   "click>=8.0.0",
@@ -20,7 +19,6 @@ actionable reports with clear remediation guidance.
 Security tools included:
 - pip-audit: Checks for known vulnerabilities in dependencies
 - bandit: Static security analysis for Python code
-- safety: Another dependency vulnerability scanner
 - semgrep: Advanced static analysis with security rules
 
 Usage:
@@ -36,7 +34,6 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 from collections import defaultdict
 from datetime import datetime
 from enum import Enum
@@ -126,7 +123,6 @@ class SecurityScanner:
         available_tools = {
             "pip-audit": self.run_pip_audit,
             "bandit": self.run_bandit,
-            "safety": self.run_safety,
             "semgrep": self.run_semgrep,
         }
 
@@ -270,70 +266,6 @@ class SecurityScanner:
             console.print("[yellow]Bandit output was not valid JSON[/yellow]")
         except Exception as e:
             console.print(f"[yellow]Bandit error: {e}[/yellow]")
-
-    def run_safety(self) -> None:
-        """Run safety scan for dependency vulnerabilities."""
-        req_file = None
-        try:
-            # Create requirements file from current environment
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-                req_result = subprocess.run(
-                    ["uv", "pip", "freeze"],
-                    capture_output=True,
-                    text=True,
-                    cwd=self.project_path,
-                    check=False,
-                )
-                f.write(req_result.stdout)
-                req_file = f.name
-
-            # Run safety scan
-            result = subprocess.run(
-                ["uv", "run", "safety", "scan", "--output", "json", "--file", req_file],
-                capture_output=True,
-                text=True,
-                cwd=self.project_path,
-                check=False,
-            )
-
-            if result.stdout:
-                data = json.loads(result.stdout)
-                
-                # Handle new safety scan format
-                if "scan_results" in data:
-                    # New format
-                    vulnerabilities = []
-                    for scan_result in data.get("scan_results", []):
-                        vulnerabilities.extend(scan_result.get("vulnerabilities", []))
-                else:
-                    # Old format fallback
-                    vulnerabilities = data.get("vulnerabilities", [])
-
-                for vuln in vulnerabilities:
-                    # Safety uses different severity names
-                    severity = Severity.HIGH if vuln.get("severity", "").lower() == "high" else Severity.MEDIUM
-
-                    issue = SecurityIssue(
-                        tool="safety",
-                        severity=severity,
-                        title=f"Vulnerable dependency: {vuln['package_name']}",
-                        description=vuln.get("advisory", "Known security vulnerability"),
-                        package=vuln["package_name"],
-                        installed_version=vuln.get("analyzed_version"),
-                        fixed_version=vuln.get("vulnerable_spec", "See advisory"),
-                        cve_id=vuln.get("cve"),
-                        remediation=vuln.get("more_info_url", "Check security advisory"),
-                    )
-                    self.report.issues.append(issue)
-
-        except json.JSONDecodeError:
-            console.print("[yellow]Safety output was not valid JSON[/yellow]")
-        except Exception as e:
-            console.print(f"[yellow]Safety error: {e}[/yellow]")
-        finally:
-            # Clean up temp file
-            if req_file and Path(req_file).exists():
-                Path(req_file).unlink()
 
     def run_semgrep(self) -> None:
         """Run semgrep for advanced static analysis."""
@@ -503,9 +435,6 @@ def generate_sarif_report(report: SecurityReport) -> dict:
         Severity.INFO: "note",
     }
 
-    # Group by tool to create proper rules
-    tools_rules = defaultdict(list)
-
     for i, issue in enumerate(report.issues):
         rule_id = f"{issue.tool}-{i}"
 
@@ -546,7 +475,7 @@ def generate_sarif_report(report: SecurityReport) -> dict:
 @click.option(
     "--tool",
     multiple=True,
-    type=click.Choice(["pip-audit", "bandit", "safety", "semgrep"]),
+    type=click.Choice(["pip-audit", "bandit", "semgrep"]),
     help="Run specific tool(s) only",
 )
 @click.option(

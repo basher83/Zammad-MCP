@@ -31,13 +31,6 @@ repos:
 
   - repo: local
     hooks:
-      - id: safety
-        name: safety
-        entry: uv
-        language: system
-        args: ["run", "safety", "check", "--json"]
-        pass_filenames: false
-
       - id: pip-audit
         name: pip-audit
         entry: uv
