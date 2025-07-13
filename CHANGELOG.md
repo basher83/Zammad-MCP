@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2025-07-13
+
 ### Added
 
 - Initial implementation of Zammad MCP Server
@@ -20,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sentinel pattern for better type safety with `_UNINITIALIZED`
 - Documentation for GitHub Actions security secrets configuration
 - Comprehensive GitHub workflows documentation in CONTRIBUTING.md
+- Docker image published to GitHub Container Registry (ghcr.io)
+- Comprehensive security scanning pipeline (bandit, semgrep, pip-audit)
+- Pre-commit hooks for code quality enforcement
 
 ### Changed
 
@@ -47,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added authentication support for API tokens (recommended)
 - Environment variable configuration for credentials
+- Integrated multiple security scanning tools in CI/CD pipeline
+- Pre-commit hooks for security checks
 
 ### Known Issues
 
@@ -55,9 +62,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No URL validation (potential SSRF vulnerability)
 - Missing `zammad://queue/{group}` resource
 - Test coverage at 67% (target: 80%+)
-
-## [0.1.0] - TBD
-
-### Initial Release
-
-- Initial release
