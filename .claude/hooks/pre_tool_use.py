@@ -276,6 +276,115 @@ def should_use_eza(command: str) -> bool:
     return False
 
 
+def print_blocked_message(reason: str, examples: list[str] | None = None) -> None:
+    """Print a standardized blocked message with optional examples."""
+    print(f"BLOCKED: {reason}", file=sys.stderr)
+    if examples:
+        for example in examples:
+            print(example, file=sys.stderr)
+    print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
+
+
+def validate_env_file_access(tool_name: str, tool_input: dict[str, Any]) -> bool:
+    """Validate and block .env file access if needed. Returns True if blocked."""
+    if is_env_file_access(tool_name, tool_input):
+        print_blocked_message(
+            "Access to .env files containing sensitive data is prohibited",
+            ["Use .env.sample for template files instead"],
+        )
+        return True
+    return False
+
+
+def validate_bash_command(command: str) -> bool:
+    """Validate bash command for dangerous or inefficient patterns. Returns True if blocked."""
+    # Check for dangerous rm -rf commands
+    if is_dangerous_rm_command(command):
+        print_blocked_message("Dangerous rm command detected and prevented")
+        return True
+
+    # Check for inefficient grep usage
+    if should_use_ripgrep(command):
+        print_blocked_message(
+            "Use 'rg' (ripgrep) instead of 'grep' for better performance",
+            [
+                "Ripgrep is faster and respects .gitignore by default",
+                "Example: rg 'pattern' instead of grep -r 'pattern'",
+            ],
+        )
+        return True
+
+    # Check for inefficient find usage
+    if should_use_fd(command):
+        print_blocked_message(
+            "Use 'fd' instead of 'find' for better performance and usability",
+            [
+                "fd is faster, has intuitive syntax, and respects .gitignore by default",
+                "Examples:",
+                "  fd 'pattern' instead of find . -name '*pattern*'",
+                "  fd -e py instead of find . -name '*.py'",
+                "  fd -t f instead of find . -type f",
+            ],
+        )
+        return True
+
+    # Check for ls usage when eza would be better
+    if should_use_eza(command):
+        print_blocked_message(
+            "Use 'eza' instead of 'ls' for better output and features",
+            [
+                "eza provides colors, icons, git status, tree view, and more",
+                "Examples:",
+                "  eza instead of ls",
+                "  eza -la instead of ls -la",
+                "  eza --tree instead of ls -R",
+                "  eza --git -l for git status integration",
+            ],
+        )
+        return True
+
+    # Check for inefficient cat usage
+    if has_inefficient_cat(command):
+        print_blocked_message(
+            "Inefficient use of 'cat' detected",
+            [
+                "Most commands can read files directly without cat",
+                "Examples:",
+                "  grep 'pattern' file instead of cat file | grep 'pattern'",
+                "  awk '{print $1}' file instead of cat file | awk '{print $1}'",
+                "  sed 's/old/new/' file instead of cat file | sed 's/old/new/'",
+                "  head -n 10 file instead of cat file | head -n 10",
+            ],
+        )
+        return True
+
+    return False
+
+
+def log_tool_usage(input_data: dict[str, Any]) -> None:
+    """Log tool usage to JSON file."""
+    # Ensure log directory exists
+    log_dir = Path.cwd() / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "pre_tool_use.json"
+
+    # Read existing log data or initialize empty list
+    log_data = []
+    if log_path.exists():
+        with open(log_path) as f:
+            try:
+                log_data = json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                log_data = []
+
+    # Append new data
+    log_data.append(input_data)
+
+    # Write back to file with formatting
+    with open(log_path, "w") as f:
+        json.dump(log_data, f, indent=2)
+
+
 def main() -> None:
     try:
         # Read JSON input from stdin
@@ -284,87 +393,18 @@ def main() -> None:
         tool_name = input_data.get("tool_name", "")
         tool_input = input_data.get("tool_input", {})
 
-        # Check for .env file access (blocks access to sensitive environment files)
-        if is_env_file_access(tool_name, tool_input):
-            print("BLOCKED: Access to .env files containing sensitive data is prohibited", file=sys.stderr)
-            print("Use .env.sample for template files instead", file=sys.stderr)
-            print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
+        # Check for .env file access
+        if validate_env_file_access(tool_name, tool_input):
             sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
-        # Check for dangerous rm -rf commands and inefficient tool usage
+        # Check for dangerous or inefficient bash commands
         if tool_name == "Bash":
             command = tool_input.get("command", "")
-
-            # Block rm -rf commands with comprehensive pattern matching
-            if is_dangerous_rm_command(command):
-                print("BLOCKED: Dangerous rm command detected and prevented", file=sys.stderr)
-                print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
+            if validate_bash_command(command):
                 sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
 
-            # Check for inefficient grep usage
-            if should_use_ripgrep(command):
-                print("BLOCKED: Use 'rg' (ripgrep) instead of 'grep' for better performance", file=sys.stderr)
-                print("Ripgrep is faster and respects .gitignore by default", file=sys.stderr)
-                print("Example: rg 'pattern' instead of grep -r 'pattern'", file=sys.stderr)
-                print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
-                sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
-
-            # Check for inefficient find usage
-            if should_use_fd(command):
-                print("BLOCKED: Use 'fd' instead of 'find' for better performance and usability", file=sys.stderr)
-                print("fd is faster, has intuitive syntax, and respects .gitignore by default", file=sys.stderr)
-                print("Examples:", file=sys.stderr)
-                print("  fd 'pattern' instead of find . -name '*pattern*'", file=sys.stderr)
-                print("  fd -e py instead of find . -name '*.py'", file=sys.stderr)
-                print("  fd -t f instead of find . -type f", file=sys.stderr)
-                print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
-                sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
-
-            # Check for ls usage when eza would be better
-            if should_use_eza(command):
-                print("BLOCKED: Use 'eza' instead of 'ls' for better output and features", file=sys.stderr)
-                print("eza provides colors, icons, git status, tree view, and more", file=sys.stderr)
-                print("Examples:", file=sys.stderr)
-                print("  eza instead of ls", file=sys.stderr)
-                print("  eza -la instead of ls -la", file=sys.stderr)
-                print("  eza --tree instead of ls -R", file=sys.stderr)
-                print("  eza --git -l for git status integration", file=sys.stderr)
-                print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
-                sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
-
-            # Check for inefficient cat usage
-            if has_inefficient_cat(command):
-                print("BLOCKED: Inefficient use of 'cat' detected", file=sys.stderr)
-                print("Most commands can read files directly without cat", file=sys.stderr)
-                print("Examples:", file=sys.stderr)
-                print("  grep 'pattern' file instead of cat file | grep 'pattern'", file=sys.stderr)
-                print("  awk '{print $1}' file instead of cat file | awk '{print $1}'", file=sys.stderr)
-                print("  sed 's/old/new/' file instead of cat file | sed 's/old/new/'", file=sys.stderr)
-                print("  head -n 10 file instead of cat file | head -n 10", file=sys.stderr)
-                print("See docs/claude-pre-tool-use-hook.md for more details and exceptions", file=sys.stderr)
-                sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
-
-        # Ensure log directory exists
-        log_dir = Path.cwd() / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / "pre_tool_use.json"
-
-        # Read existing log data or initialize empty list
-        if log_path.exists():
-            with open(log_path) as f:
-                try:
-                    log_data = json.load(f)
-                except (json.JSONDecodeError, ValueError):
-                    log_data = []
-        else:
-            log_data = []
-
-        # Append new data
-        log_data.append(input_data)
-
-        # Write back to file with formatting
-        with open(log_path, "w") as f:
-            json.dump(log_data, f, indent=2)
+        # Log the tool usage
+        log_tool_usage(input_data)
 
         sys.exit(0)
 
