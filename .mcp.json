@@ -12,6 +12,17 @@
     "safety-mcp-sse": {
       "type": "sse",
       "url": "https://mcp.safetycli.com/sse"
+    },
+    "zammad-graphql": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@toolprint/mcp-graphql-forge"
+      ],
+      "env": {
+        "GRAPHQL_ENDPOINT": "http://dockervm.homelab.net:8880/graphql",
+        "GRAPHQL_AUTH_HEADER": "Bearer ${ZAMMAD_HTTP_TOKEN}"
+      }
     }
   }
 }
