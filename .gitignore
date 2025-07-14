@@ -234,6 +234,8 @@ tmp/
 zammad_cache/
 mcp_logs/
 
+schema.json
+
 # logs
 logs/
 
