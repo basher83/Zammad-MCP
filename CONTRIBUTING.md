@@ -7,12 +7,19 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
 ### Prerequisites
 
 - Python 3.10 or higher
-- `uv` package manager ([installation instructions](https://github.com/astral-sh/uv))
+- `uv` package manager:
+  ```bash
+  # macOS/Linux
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  
+  # Windows
+  powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+  ```
 
 ### Getting Started
 
 1. Fork the repository
-1. Clone your fork:
+2. Clone your fork:
 
    ```bash
    git clone https://github.com/YOUR-USERNAME/zammad-mcp.git
@@ -40,7 +47,7 @@ If you prefer manual setup:
    ./scripts/bootstrap.sh
    ```
 
-1. Run the Python environment setup script:
+2. Run the Python environment setup script:
 
    ```bash
    # macOS/Linux
@@ -50,14 +57,14 @@ If you prefer manual setup:
    .\scripts\setup.ps1
    ```
 
-1. Create a `.env` file with your Zammad credentials:
+3. Create a `.env` file with your Zammad credentials:
 
    ```env
    ZAMMAD_URL=https://your-instance.zammad.com/api/v1
    ZAMMAD_HTTP_TOKEN=your-api-token
    ```
 
-1. (Optional) Validate your environment configuration:
+4. (Optional) Validate your environment configuration:
 
    ```bash
    ./scripts/uv/validate-env.py
