@@ -1,6 +1,7 @@
-# UV Single-File Scripts
+# UV Scripts
 
-This directory contains UV single-file scripts that enhance the Zammad MCP development workflow. These scripts are self-contained Python files with inline dependency management using UV.
+This directory contains UV single-file scripts that provide development and operational tools for the Zammad MCP project.
+
 
 ## Available Scripts
 
@@ -90,28 +91,14 @@ uv run pytest --cov=mcp_zammad --cov-report=xml
 
 **Exit Codes:**
 
-- 0: Coverage meets target
-- 1: Coverage below target or error parsing coverage file
+## Script Execution
 
-### dev-setup.py
 
-Interactive setup wizard for new contributors to get started quickly.
+These scripts can be executed in several ways:
 
-**Features:**
-
-- System requirements verification (Python 3.10+, Git, OS compatibility)
-- Automatic UV installation if not present
-- Virtual environment creation and management
-- Interactive .env configuration with guided prompts
-- Dependency installation with progress tracking
-- Setup validation and initial tests
-- Comprehensive next steps guidance
-- Cross-platform support (Windows, macOS, Linux)
-
-**Usage:**
+### Direct Execution (Recommended for GNU/Linux)
 
 ```bash
-# Run interactive setup wizard
 ./dev-setup.py
 
 # Quick setup with minimal prompts
@@ -218,56 +205,17 @@ Interactive CLI for testing Zammad API connections and operations without the MC
 ```bash
 # Interactive mode (default)
 ./test-zammad.py
-
-# Run specific operations
-./test-zammad.py --operation list-tickets --limit 20
-./test-zammad.py --operation list-users
-./test-zammad.py --operation benchmark
-
-# Use custom environment file
-./test-zammad.py --env-file production.env
-
-# Quick benchmark
-./test-zammad.py --benchmark
+# etc.
 ```
 
-**Interactive Mode Options:**
+### Using UV directly (Most Portable)
 
-- List tickets (with optional state filtering)
-- Get ticket details (shows articles and metadata)
-- Create test ticket (guided ticket creation)
-- Search users (by name, email, or wildcard)
-- List groups/states/priorities
-- Run performance benchmark
-- Show API configuration
-
-**Benchmark Tests:**
-
-- Get current user
-- List first 10 tickets
-- List all groups
-- List ticket states
-- List priorities
-
-**Exit Codes:**
-
-- 0: Successful connection and operations
-- 1: Connection failed or configuration error
-
-## How UV Scripts Work
-
-UV scripts use inline metadata to declare their dependencies:
-
-```python
-# /// script
-# dependencies = [
-#   "python-dotenv>=1.0.0",
-#   "httpx>=0.25.0",
-#   "rich>=13.0.0",
-# ]
-# requires-python = ">=3.10"
-# ///
+```bash
+uv run --script dev-setup.py
+uv run --script test-zammad.py
+# etc.
 ```
+
 
 When you run a UV script, UV automatically:
 
@@ -275,59 +223,54 @@ When you run a UV script, UV automatically:
 1. Installs the specified dependencies
 1. Runs the script with the correct Python version
 
-## Benefits
 
-- **No Manual Setup**: Dependencies are automatically managed
-- **Cross-Platform**: Works on Windows, macOS, and Linux
-- **Isolated**: Each script has its own environment
-- **Type-Safe**: Full Python IDE support with type hints
-- **Fast**: UV caches environments for quick subsequent runs
+## Cross-Platform Considerations
 
-## Creating New Scripts
+The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag is a GNU coreutils extension that allows passing multiple arguments through env.
+
+### Platform Compatibility
+
+- ✅ **Linux (GNU coreutils)**: Full support
+- ❌ **macOS (BSD env)**: No `-S` flag support
+- ❌ **Alpine (BusyBox)**: No `-S` flag support
+- ❌ **FreeBSD/OpenBSD**: No `-S` flag support
+
 
 1. Create a new `.py` file in this directory
 1. Add the shebang: `#!/usr/bin/env -S uv run --script`
 1. Add script metadata with dependencies
 1. Make it executable: `chmod +x script.py`
 
-Example template:
 
-```python
-#!/usr/bin/env -S uv run --script
-# /// script
-# dependencies = [
-#   "click>=8.0.0",
-#   "rich>=13.0.0",
-# ]
-# requires-python = ">=3.10"
-# ///
-"""Script description."""
+### Workarounds for Non-GNU Systems
 
-import click
-from rich.console import Console
+1. **Use UV directly** (recommended):
 
-console = Console()
+   ```bash
+   uv run --script scriptname.py
+   ```
 
-@click.command()
-def main():
-    """Main function."""
-    console.print("[green]Hello from UV script![/green]")
+1. **Create an alias**:
 
-if __name__ == "__main__":
-    main()
-```
+   ```bash
+   alias dev-setup='uv run --script ~/path/to/dev-setup.py'
+   ```
 
-## Completed Scripts
+1. **Create a wrapper script**:
 
-- `dev-setup.py` - Interactive development setup
-- `test-zammad.py` - Interactive Zammad API testing
-- `coverage-report.py` - Enhanced coverage reporting
+   ```bash
+   #!/bin/sh
+   exec uv run --script "$(dirname "$0")/scriptname.py" "$@"
+   ```
 
-## Planned Scripts
+## Available Scripts
 
-- `release.py` - Automated release management
-- `security-scan.py` - Consolidated security scanning
-- `issue-helper.py` - GitHub issue template generator
-- `profile-zammad.py` - Performance profiling tool
+- **dev-setup.py**: Interactive development environment setup wizard
+- **test-zammad.py**: Test Zammad API connections and operations
+- **validate-env.py**: Validate environment configuration
+- **coverage-report.py**: Generate enhanced coverage reports
+- **security-scan.py**: Run consolidated security scans
 
-See [docs/uv-scripts-opportunities.md](../../docs/uv-scripts-opportunities.md) for detailed proposals.
+## Script Dependencies
+
+Each script declares its dependencies in the script metadata section. UV automatically manages these dependencies in isolated environments, ensuring no conflicts with your system packages.

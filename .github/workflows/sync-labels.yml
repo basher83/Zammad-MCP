@@ -1,0 +1,8 @@
+name: Sync Labels via Central Definition
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync-labels:
+    uses: basher83/.github/.github/workflows/sync-labels.yml@main

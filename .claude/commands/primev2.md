@@ -1,15 +1,17 @@
 ---
 allowed-tools: Bash, Read, Grep, Glob
-description: Prime the agent with comprehensive codebase context using activity-first analysis
+description: Prime the agent with codebase context using activity-first analysis
 ---
 
 # Prime v2
 
-This command loads essential context by analyzing what's actively being developed (recent activity) first, then understanding structure - based on extensive testing showing that "what's alive" matters more than "how it's organized" when first encountering a codebase.
+This command loads essential context by analyzing what's actively being developed then understanding structure.
 
 ## Instructions
 
 Phase 1 - Activity Analysis:
+
+**You MUST run all commands in the Context section below before proceeding.**
 
 - Identify recently modified files to understand what's actively being worked on
 - Detect the tech stack and dependencies
@@ -20,7 +22,7 @@ Phase 2 - Structure Analysis:
 
 - Understand the codebase organization with git-aware tree view
 - Read key documentation
-- Provide a comprehensive, actionable overview
+- Provide a concise, actionable overview
 
 ## Context
 

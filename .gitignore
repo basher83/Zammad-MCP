@@ -234,11 +234,14 @@ tmp/
 zammad_cache/
 mcp_logs/
 
+schema.json
+
 # logs
 logs/
 
 # Security and quality reports
 bandit-report.json
+bandit-sarif.json
 pip-audit-report.json
 semgrep-report.json
 safety-report.json

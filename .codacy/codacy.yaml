@@ -1,0 +1,7 @@
+runtimes:
+    - python@3.11.11
+tools:
+    - lizard@1.17.19
+    - pylint@3.3.7
+    - semgrep@1.78.0
+    - trivy@0.59.1

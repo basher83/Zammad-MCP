@@ -30,7 +30,7 @@ uv run mypy mcp_zammad  # type check
 uv run pip-audit  # check for vulnerabilities
 uv run bandit -r mcp_zammad  # security analysis
 uv run semgrep --config=auto mcp_zammad  # static analysis
-uv run safety check  # dependency security check
+uv run safety scan --output json  # dependency security scan
 
 # Run all quality checks
 ./scripts/quality-check.sh  # runs all checks above
@@ -97,7 +97,7 @@ ZAMMAD_PASSWORD=your-password
 - Integration tests would require a test Zammad instance
 - Use `pytest-asyncio` for async test support
 - Coverage reports help identify untested code paths
-- **Current Coverage**: 67% (target: 80%+)
+- **Current Coverage**: 67% (target: 90%+)
 
 ### Testing Best Practices
 
@@ -204,7 +204,7 @@ The server automatically loads environment variables from the `.env` file in the
 
 1. **Immediate**
    - Fix test collection error in test_server.py (URI parameter mismatch)
-   - Increase test coverage to 80%+
+   - Increase test coverage to 90%+ (as configured in quality-check.sh)
    - Fix unused parameters in functions
    - Implement custom exception classes
    - Add proper URL validation

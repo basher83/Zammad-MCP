@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Simplified deployment by removing Docker Compose in favor of direct `docker run` and `uvx` commands
+- Prioritized `uvx` as the recommended installation method for simplicity
+- Updated Docker documentation to focus on `docker run` with clear examples for environment variables and secrets
+- Removed `docker-compose.yml`, `docker-compose.override.yml`, and `docker-compose.dev.yml` as they added unnecessary complexity for MCP servers
+
+## [0.1.0] - 2025-07-13
+
 ### Added
 
 - Initial implementation of Zammad MCP Server
@@ -18,12 +27,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setup scripts for Windows and Unix systems
 - Support for running via `uvx` directly from GitHub
 - Sentinel pattern for better type safety with `_UNINITIALIZED`
+- Documentation for GitHub Actions security secrets configuration
+- Comprehensive GitHub workflows documentation in CONTRIBUTING.md
+- Docker image published to GitHub Container Registry (ghcr.io)
+- Comprehensive security scanning pipeline (bandit, semgrep, pip-audit)
+- Pre-commit hooks for code quality enforcement
 
 ### Changed
 
 - Simplified escalated ticket count calculation using tuple instead of list
 - Updated all development commands to use `uv run` prefix
 - Modern Python 3.10+ type annotations throughout
+- Switched from manual Safety CLI execution to official pyupio/safety-action in GitHub workflows
+- Removed duplicate Codacy Trivy scan from security-scan.yml (already covered by dedicated Codacy workflow)
 
 ### Fixed
 
@@ -43,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added authentication support for API tokens (recommended)
 - Environment variable configuration for credentials
+- Integrated multiple security scanning tools in CI/CD pipeline
+- Pre-commit hooks for security checks
 
 ### Known Issues
 
@@ -51,9 +69,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No URL validation (potential SSRF vulnerability)
 - Missing `zammad://queue/{group}` resource
 - Test coverage at 67% (target: 80%+)
-
-## [0.1.0] - TBD
-
-### Initial Release
-
-- Initial release

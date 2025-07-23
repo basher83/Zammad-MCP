@@ -24,9 +24,9 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp>=1.10.1",
     "zammad-py>=3.2.0",
-    "pydantic>=2.0.0",
+    "pydantic>=2.11.7",
     "python-dotenv>=1.0.0",
     "httpx>=0.25.0",
 ]
@@ -39,7 +39,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "pip-audit>=2.6.0",
-    "bandit[sarif]>=1.7.6",
+    "bandit[sarif]>=1.8.6",
     "semgrep>=1.35.0",
     "safety>=2.3.1",
     "pre-commit>=3.0.0",
@@ -74,7 +74,7 @@ dev-dependencies = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "pip-audit>=2.6.0",
-    "bandit[sarif]>=1.7.6",
+    "bandit[sarif]>=1.8.6",
     "semgrep>=1.35.0",
     "safety>=2.3.1",
     "pre-commit>=3.0.0",
@@ -86,3 +86,31 @@ skips = ["B101"]  # Skip assert_used test
 
 [tool.bandit.assert_used]
 skips = ["*_test.py", "*/test_*.py"]
+
+[tool.coverage.run]
+source = ["mcp_zammad"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == \"__main__\":",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+precision = 2
+show_missing = true
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --strict-markers --tb=short"
