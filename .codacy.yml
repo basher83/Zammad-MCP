@@ -1,0 +1,55 @@
+---
+# Codacy configuration file
+# This file configures which tools Codacy runs and which files to analyze
+
+engines:
+  # Python-specific tools
+  pylint:
+    enabled: true
+  bandit:
+    enabled: true
+  prospector:
+    enabled: true
+  pydocstyle:
+    enabled: false  # Optional: Enable if you want docstring style checking
+  
+  # Explicitly disable non-Python tools
+  pmd:
+    enabled: false
+  checkstyle:
+    enabled: false
+  spotbugs:
+    enabled: false
+  
+  # General tools
+  duplication:
+    enabled: true
+    config:
+      languages:
+        - python
+  metrics:
+    enabled: true
+  coverage:
+    enabled: true
+
+exclude_paths:
+  - 'tests/**'
+  - '**/test_*.py'
+  - '**/*_test.py'
+  - '**/__pycache__/**'
+  - '*.pyc'
+  - '.git/**'
+  - 'docs/**'
+  - 'scripts/**'
+  - 'htmlcov/**'
+  - '.coverage'
+  - 'dist/**'
+  - 'build/**'
+  - '**/*.egg-info/**'
+  - '.github/**'
+  - 'venv/**'
+  - '.venv/**'
+  - '.tox/**'
+  - '.mypy_cache/**'
+  - '.pytest_cache/**'
+  - '.ruff_cache/**'

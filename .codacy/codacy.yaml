@@ -4,4 +4,23 @@ tools:
     - lizard@1.17.19
     - pylint@3.3.7
     - semgrep@1.78.0
-    - trivy@0.59.1
+    - ruff@0.6.7
+    - bandit@1.7.9
+    - mypy@1.11.2
+    # Exclude tools that don't apply to Python projects
+    # - trivy  # Container scanner - not needed for Python code
+    # - pmd    # Java static analyzer - not applicable
+exclude_paths:
+    - 'tests/**'
+    - '**/__pycache__/**'
+    - '*.pyc'
+    - '.git/**'
+    - '.github/**'
+    - 'docs/**'
+    - 'scripts/**/*.sh'
+    - 'scripts/**/*.ps1'
+    - 'htmlcov/**'
+    - '.coverage'
+    - 'dist/**'
+    - 'build/**'
+    - '*.egg-info/**'
