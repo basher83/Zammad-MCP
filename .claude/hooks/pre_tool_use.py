@@ -368,14 +368,15 @@ def log_tool_usage(input_data: dict[str, Any]) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "pre_tool_use.json"
 
-    # Read existing log data or initialize empty list
-    log_data = []
+    # Read existing log data
     if log_path.exists():
         with open(log_path) as f:
             try:
                 log_data = json.load(f)
             except (json.JSONDecodeError, ValueError):
                 log_data = []
+    else:
+        log_data = []
 
     # Append new data
     log_data.append(input_data)
