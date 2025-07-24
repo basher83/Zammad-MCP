@@ -38,9 +38,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Login to Docker Hub to avoid rate limits
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       # Execute Codacy Analysis CLI and generate a SARIF output with the security issues identified during the analysis
       - name: Run Codacy Analysis CLI
         uses: codacy/codacy-analysis-cli-action@d28ce580f19309cd493628eba4641f745822082c
+        continue-on-error: true
         with:
           # Check https://github.com/codacy/codacy-analysis-cli#project-token to get your project token from your Codacy repository
           # You can also omit the token and run the tools that support default configurations
@@ -54,9 +63,22 @@ jobs:
           # This will handover control about PR rejection to the GitHub side
           max-allowed-issues: 2147483647
 
+      # Check if SARIF file was generated
+      - name: Check SARIF file
+        id: check_sarif
+        if: always()
+        run: |
+          if [ -f results.sarif ]; then
+            echo "sarif_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "sarif_exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No SARIF file generated - likely due to Docker Hub rate limits"
+          fi
+
       # Upload the SARIF file generated in the previous step
       - name: Upload SARIF results file
         uses: github/codeql-action/upload-sarif@v3
+        if: always() && steps.check_sarif.outputs.sarif_exists == 'true'
         with:
           sarif_file: results.sarif
           category: codacy

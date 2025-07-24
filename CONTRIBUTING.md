@@ -155,7 +155,7 @@ The repository includes several GitHub Actions workflows that run automatically 
 |----------|---------|----------|------------------|
 | **Tests and Coverage** | Runs tests and reports coverage | Push, PR to main | None |
 | **Security Scan** | Python security analysis | Push, PR to main, Weekly (Mon 9:00 UTC) | `SAFETY_API_KEY` |
-| **Codacy Security Scan** | Comprehensive code analysis | Push, PR to main, Weekly (Thu 5:28 UTC) | `CODACY_PROJECT_TOKEN` |
+| **Codacy Security Scan** | Comprehensive code analysis | Push, PR to main, Weekly (Thu 5:28 UTC) | `CODACY_PROJECT_TOKEN`, `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` |
 | **Build and Publish Docker** | Builds and publishes Docker images | Push to main, tags, Manual | None (uses GITHUB_TOKEN) |
 | **Copilot Setup Steps** | Development environment setup | Manual only | None |
 
@@ -188,7 +188,10 @@ The repository includes several GitHub Actions workflows that run automatically 
   - Runs Codacy's full analysis suite
   - Uploads results to GitHub Security tab as SARIF
   - Integrates with PR checks
-- **Configuration**: Set `CODACY_PROJECT_TOKEN` in repository secrets
+- **Configuration**: 
+  - Set `CODACY_PROJECT_TOKEN` in repository secrets
+  - Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` to avoid Docker Hub rate limits
+  - Note: Without Docker Hub authentication, the workflow may fail due to rate limits when pulling analysis images
 
 #### 4. Build and Publish Docker (`docker-publish.yml`)
 
