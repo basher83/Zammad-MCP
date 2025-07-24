@@ -3,7 +3,8 @@
   "extends": [
     "config:recommended",
     ":semanticCommits",
-    ":preserveSemverRanges"
+    ":preserveSemverRanges",
+    "helpers:pinGitHubActionDigests"
   ],
   "labels": [
     "dependencies",
@@ -75,6 +76,17 @@
         "actions/setup-python"
       ],
       "rangeStrategy": "pin"
+    },
+    {
+      "description": "Auto-update GitHub Actions digests",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "digest": {
+        "automerge": true
+      },
+      "commitMessageTopic": "{{depName}} digest to {{newDigestShort}}",
+      "commitMessageExtra": "({{currentValue}})"
     },
     {
       "description": "Use different commit prefix for dev dependencies",
