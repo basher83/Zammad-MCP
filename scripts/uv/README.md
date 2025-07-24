@@ -2,10 +2,7 @@
 
 This directory contains UV single-file scripts that provide development and operational tools for the Zammad MCP project.
 
-
-## Available Scripts
-
-### Environment Validation
+## Environment Validation
 
 Validates the Zammad MCP Server environment configuration before startup.
 
@@ -92,7 +89,6 @@ uv run pytest --cov=mcp_zammad --cov-report=xml
 **Exit Codes:**
 
 ## Script Execution
-
 
 These scripts can be executed in several ways:
 
@@ -216,13 +212,11 @@ uv run --script test-zammad.py
 # etc.
 ```
 
-
 When you run a UV script, UV automatically:
 
 1. Creates an isolated virtual environment
 1. Installs the specified dependencies
 1. Runs the script with the correct Python version
-
 
 ## Cross-Platform Considerations
 
@@ -235,12 +229,10 @@ The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag i
 - ❌ **Alpine (BusyBox)**: No `-S` flag support
 - ❌ **FreeBSD/OpenBSD**: No `-S` flag support
 
-
-1. Create a new `.py` file in this directory
-1. Add the shebang: `#!/usr/bin/env -S uv run --script`
-1. Add script metadata with dependencies
-1. Make it executable: `chmod +x script.py`
-
+  1. Create a new `.py` file in this directory
+  1. Add the shebang: `#!/usr/bin/env -S uv run --script`
+  1. Add script metadata with dependencies
+  1. Make it executable: `chmod +x script.py`
 
 ### Workarounds for Non-GNU Systems
 
