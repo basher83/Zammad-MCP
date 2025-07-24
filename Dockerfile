@@ -1,15 +1,22 @@
 # syntax=docker/dockerfile:1
 # Build stage
 # Pin to specific digest for reproducibility and security
-# python:3.12-slim as of 2025-01-09
+# python:3.13-slim as of 2025-01-09
 FROM python:3.13-slim@sha256:6544e0e002b40ae0f59bc3618b07c1e48064c4faed3a15ae2fbd2e8f663e8283 AS builder
 
 WORKDIR /app
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
-# Copy dependency files and README (required by hatchling)
-COPY pyproject.toml uv.lock README.md ./
+
+# Copy only dependency files first for better layer caching
+# This ensures dependency installation is only re-run when these files change
+COPY pyproject.toml uv.lock ./
+
+# Create minimal README.md to satisfy hatchling build requirements
+# Using a placeholder prevents cache invalidation when the actual README changes
+# The actual README is not needed during the build process
+RUN echo "# mcp-zammad\nPlaceholder for build process" > README.md
 
 # Install dependencies with cache mounts for faster rebuilds
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -24,11 +31,8 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
-# Copy dependency files and virtual environment from builder
+# Copy only the virtual environment from builder (no need for uv in production)
 COPY --from=builder /app/.venv /app/.venv
-COPY pyproject.toml uv.lock ./
 
 # Add virtual environment to PATH
 ENV PATH="/app/.venv/bin:${PATH}"
@@ -45,9 +49,10 @@ LABEL org.opencontainers.image.source="https://github.com/basher83/Zammad-MCP"
 LABEL org.opencontainers.image.description="Model Context Protocol server for Zammad ticket system integration"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
-# MCP servers communicate via stdio, not HTTP
-# Health checks don't apply to stdio-based servers that exit after each request
-# Port 8080 is exposed for potential future HTTP API but not currently used
+# IMPORTANT: MCP servers communicate via stdio (stdin/stdout), NOT network ports
+# The EXPOSE directive below is ONLY for Docker metadata/documentation
+# This server does NOT listen on any network ports - it reads from stdin and writes to stdout
+# If you need network access, you would need to wrap the MCP server with an HTTP proxy
 # EXPOSE 8080
 
 # Run the MCP server
@@ -58,6 +63,12 @@ FROM production AS development
 
 # Switch to root temporarily for installation
 USER root
+
+# Install uv for development
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+# Copy dependency files needed for dev sync
+COPY pyproject.toml uv.lock ./
 
 # Install dev dependencies with cache mounts
 RUN --mount=type=cache,target=/root/.cache/pip \

@@ -9,7 +9,11 @@
       "Bash(chmod:*)",
       "Bash(uv:*)",
       "Bash(gh issue create:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr status:*)",
+      "Bash(gh pr checks:*)"
     ],
     "deny": []
   },
