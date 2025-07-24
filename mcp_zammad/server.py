@@ -702,3 +702,135 @@ def remove_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
     if zammad_client is None:
         raise RuntimeError("Zammad client not initialized")
     return zammad_client.remove_ticket_tag(ticket_id, tag)
+
+
+def update_ticket(
+    ticket_id: int,
+    title: str | None = None,
+    state: str | None = None,
+    priority: str | None = None,
+    owner: str | None = None,
+    group: str | None = None,
+) -> Ticket:
+    """Update a ticket (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    ticket_data = zammad_client.update_ticket(
+        ticket_id,
+        title=title,
+        state=state,
+        priority=priority,
+        owner=owner,
+        group=group,
+    )
+    return Ticket(**ticket_data)
+
+
+def get_organization(org_id: int) -> Organization:
+    """Get organization by ID (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    org_data = zammad_client.get_organization(org_id)
+    return Organization(**org_data)
+
+
+def search_organizations(
+    query: str,
+    page: int = 1,
+    per_page: int = 25,
+) -> list[Organization]:
+    """Search organizations (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    results = zammad_client.search_organizations(query=query, page=page, per_page=per_page)
+    return [Organization(**org) for org in results]
+
+
+def list_groups() -> list[Group]:
+    """List all groups (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    groups = zammad_client.get_groups()
+    return [Group(**g) for g in groups]
+
+
+def list_ticket_states() -> list[TicketState]:
+    """List all ticket states (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    states = zammad_client.get_ticket_states()
+    return [TicketState(**s) for s in states]
+
+
+def list_ticket_priorities() -> list[TicketPriority]:
+    """List all ticket priorities (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    priorities = zammad_client.get_ticket_priorities()
+    return [TicketPriority(**p) for p in priorities]
+
+
+def get_current_user() -> User:
+    """Get current user (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    user_data = zammad_client.get_current_user()
+    return User(**user_data)
+
+
+def search_users(
+    query: str,
+    page: int = 1,
+    per_page: int = 25,
+) -> list[User]:
+    """Search users (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    results = zammad_client.search_users(query=query, page=page, per_page=per_page)
+    return [User(**user) for user in results]
+
+
+def get_ticket_stats(
+    group: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> TicketStats:
+    """Get ticket statistics (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    
+    # This implementation matches the tool implementation
+    if start_date or end_date:
+        logger.warning("Date filtering not yet implemented - ignoring date parameters")
+    
+    all_tickets = zammad_client.search_tickets(group=group, per_page=100)
+    
+    def get_state_name(ticket: dict[str, Any]) -> str:
+        state = ticket.get("state")
+        if isinstance(state, str):
+            return state
+        if isinstance(state, dict):
+            name = state.get("name", "")
+            return str(name) if name else ""
+        return ""
+    
+    open_count = sum(1 for t in all_tickets if get_state_name(t) in ["new", "open"])
+    closed_count = sum(1 for t in all_tickets if get_state_name(t) == "closed")
+    pending_count = sum(1 for t in all_tickets if "pending" in get_state_name(t))
+    escalated_count = sum(
+        1
+        for t in all_tickets
+        if (
+            t.get("first_response_escalation_at")
+            or t.get("close_escalation_at")
+            or t.get("update_escalation_at")
+        )
+    )
+    
+    return TicketStats(
+        total_count=len(all_tickets),
+        open_count=open_count,
+        closed_count=closed_count,
+        pending_count=pending_count,
+        escalated_count=escalated_count,
+    )
