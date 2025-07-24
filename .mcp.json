@@ -7,20 +7,6 @@
     "grep": {
       "type": "http",
       "url": "https://mcp.grep.app"
-    },
-    "serena": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/oraios/serena",
-        "serena-mcp-server",
-        "--context",
-        "ide-assistant",
-        "--project",
-        "/Users/basher8383/dev/learning/Zammad-MCP"
-      ],
-      "env": {}
     }
   }
 }
