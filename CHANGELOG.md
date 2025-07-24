@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed Docker image build to properly install the mcp-zammad package (#32)
+- Improved error message when ZAMMAD_TOKEN is used instead of ZAMMAD_HTTP_TOKEN (#33)
+- Added client configuration tests for better coverage
+
 ### Changed
 
 - Simplified deployment by removing Docker Compose in favor of direct `docker run` and `uvx` commands

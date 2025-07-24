@@ -23,6 +23,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
   --mount=type=cache,target=/root/.cache/uv \
   uv sync --frozen --no-dev
 
+# Build and install the package
+COPY mcp_zammad/ ./mcp_zammad/
+RUN --mount=type=cache,target=/root/.cache/pip \
+  --mount=type=cache,target=/root/.cache/uv \
+  uv pip install --python /app/.venv/bin/python -e .
+
 # Production stage
 FROM python:3.13-slim@sha256:6544e0e002b40ae0f59bc3618b07c1e48064c4faed3a15ae2fbd2e8f663e8283 AS production
 
@@ -37,8 +43,8 @@ COPY --from=builder /app/.venv /app/.venv
 # Add virtual environment to PATH
 ENV PATH="/app/.venv/bin:${PATH}"
 
-# Copy source code
-COPY mcp_zammad/ ./mcp_zammad/
+# Copy source code and installed package from builder
+COPY --from=builder /app/mcp_zammad /app/mcp_zammad
 
 # Change ownership to non-root user
 RUN chown -R appuser:appuser /app
@@ -69,6 +75,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 # Copy dependency files needed for dev sync
 COPY pyproject.toml uv.lock ./
+
+# Create README.md for hatchling build requirements (same as builder stage)
+RUN echo "# mcp-zammad\nPlaceholder for build process" > README.md
 
 # Install dev dependencies with cache mounts
 RUN --mount=type=cache,target=/root/.cache/pip \

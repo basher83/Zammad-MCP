@@ -44,6 +44,12 @@ class ZammadClient:
             raise ConfigException("Zammad URL is required. Set ZAMMAD_URL environment variable.")
 
         if not any([self.http_token, self.oauth2_token, (self.username and self.password)]):
+            # Check if user mistakenly used ZAMMAD_TOKEN
+            if os.getenv("ZAMMAD_TOKEN"):
+                raise ConfigException(
+                    "Found ZAMMAD_TOKEN but this server expects ZAMMAD_HTTP_TOKEN. "
+                    "Please rename your environment variable from ZAMMAD_TOKEN to ZAMMAD_HTTP_TOKEN."
+                )
             raise ConfigException(
                 "Authentication credentials required. Set either ZAMMAD_HTTP_TOKEN, "
                 "ZAMMAD_OAUTH2_TOKEN, or both ZAMMAD_USERNAME and ZAMMAD_PASSWORD."
