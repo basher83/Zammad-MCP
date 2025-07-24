@@ -10,35 +10,15 @@
       "Bash(uv:*)",
       "Bash(gh issue create:*)",
       "Bash(curl:*)",
-      "WebFetch(domain:docs.codacy.com)",
-      "WebFetch(domain:github.com)",
-      "Bash(gh api:*)",
-      "Bash(gh pr comment:*)",
-      "Bash(gh run list:*)",
-      "Bash(gh run view:*)",
-      "mcp__safety-mcp-sse__check_package_security",
-      "Bash(./scripts/quality-check.sh:*)",
-      "Bash(SKIP=safety git commit -m \"📚 docs: add Docker versioning and release process documentation\n\n- Added Docker Image Versioning section to README explaining:\n  - Available tag formats (latest, X.Y.Z, X.Y, X)\n  - How to use specific versions in production\n  - Link to GitHub Container Registry\n- Added comprehensive Release Process section to CONTRIBUTING:\n  - Step-by-step instructions for creating releases\n  - Git tag format and pushing process\n  - Semantic versioning guidelines\n  - Pre-release version conventions\n- Added GitHub Workflows documentation to CONTRIBUTING:\n  - Overview table of all workflows\n  - Detailed descriptions and configurations\n  - Required secrets setup instructions\n\nThis enables proper version management for Docker deployments.\")",
-      "Bash(SKIP=safety,markdown-consistent-numbering git commit -m \"📚 docs: add Docker versioning and release process documentation\n\n- Added Docker Image Versioning section to README explaining:\n  - Available tag formats (latest, X.Y.Z, X.Y, X)\n  - How to use specific versions in production\n  - Link to GitHub Container Registry\n- Added comprehensive Release Process section to CONTRIBUTING:\n  - Step-by-step instructions for creating releases\n  - Git tag format and pushing process\n  - Semantic versioning guidelines\n  - Pre-release version conventions\n- Added GitHub Workflows documentation to CONTRIBUTING:\n  - Overview table of all workflows\n  - Detailed descriptions and configurations\n  - Required secrets setup instructions\n\nThis enables proper version management for Docker deployments.\")",
-      "Bash(SKIP=safety,markdown-consistent-numbering git commit -m \"👷 ci: improve security scanning workflow and fix bandit arg\n\n- Switched to official pyupio/safety-action for better reliability\n- Removed duplicate Codacy Trivy scan (already in dedicated workflow)\n- Fixed bandit --severity-level argument (HIGH -> high)\n- Updated SECURITY.md with GitHub Actions secrets documentation\n- Updated CHANGELOG.md to reflect all changes\n\nThis streamlines the security scanning process and ensures\nall tools run correctly in the CI pipeline.\")"
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr status:*)",
+      "Bash(gh pr checks:*)"
     ],
     "deny": []
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "zammad"
-  ],
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run .claude/hooks/pre_tool_use.py"
-          }
-        ]
-      }
-    ]
-  }
+  ]
 }

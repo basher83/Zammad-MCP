@@ -47,11 +47,11 @@ eza -la --tree --git --git-ignore --icons --sort=modified --level=2
 **What it shows:**
 
 1. **Project name** - What am I looking at?
-2. **README preview** - What does this do?
-3. **Tech stack** - What languages/frameworks?
-4. **Structure** - How is it organized?
-5. **Recent activity** - What's being worked on?
-6. **Entry points** - Where do I start?
+1. **README preview** - What does this do?
+1. **Tech stack** - What languages/frameworks?
+1. **Structure** - How is it organized?
+1. **Recent activity** - What's being worked on?
+1. **Entry points** - Where do I start?
 
 **Best for:** Getting a comprehensive overview in seconds.
 
@@ -83,7 +83,7 @@ fd --type f --exclude .git | head -80 | xargs ls -laht | head -40
 The perfect command is actually **two commands in sequence**:
 
 1. First: `fd --type f --exclude .git | head -80 | xargs ls -laht | head -40` (activity)
-2. Then: `eza -la --tree --git --git-ignore --icons --sort=modified --level=2` (structure)
+1. Then: `eza -la --tree --git --git-ignore --icons --sort=modified --level=2` (structure)
 
 But if forced to choose just ONE, recent activity wins because it answers the question: **"Where should I start looking?"**
 

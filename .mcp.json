@@ -1,17 +1,12 @@
 {
   "mcpServers": {
-    "zammad": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "-m",
-        "mcp_zammad"
-      ]
+    "deepwiki": {
+      "type": "http",
+      "url": "https://mcp.deepwiki.com/mcp"
     },
-    "safety-mcp-sse": {
-      "type": "sse",
-      "url": "https://mcp.safetycli.com/sse"
+    "grep": {
+      "type": "http",
+      "url": "https://mcp.grep.app"
     }
   }
 }

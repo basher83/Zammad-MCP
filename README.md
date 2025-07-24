@@ -48,79 +48,70 @@ Pre-configured prompts for common tasks:
 
 ## Installation
 
-### Prerequisites
+### Option 1: Run Directly with uvx (Recommended)
 
-Install `uv` - a fast Python package installer and resolver:
+The quickest way to use the MCP server without installation:
 
 ```bash
-# macOS/Linux
+# Install uv if you haven't already
+# macOS/Linux:
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows
+# Windows:
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Run directly from GitHub
+uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
+
+# Or with environment variables
+ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
+ZAMMAD_HTTP_TOKEN=your-api-token \
+uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
 ```
 
-### Docker Installation (Recommended for Production)
+### Option 2: Docker Run
 
-The easiest way to run the MCP server is using Docker:
+For production deployments or when you need more control:
 
 ```bash
-# Pull the latest version
-docker pull ghcr.io/basher83/zammad-mcp:latest
-
-# Or pull a specific version (see available versions below)
-docker pull ghcr.io/basher83/zammad-mcp:1.0.0
-
-# Run with environment variables
-docker run -d \
-  --name zammad-mcp \
+# Basic usage with environment variables
+docker run --rm -i \
   -e ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
   -e ZAMMAD_HTTP_TOKEN=your-api-token \
   ghcr.io/basher83/zammad-mcp:latest
 
-# Note: MCP servers communicate via stdio, not HTTP. The -i flag is mandatory
-# for stdin/stdout communication. Port 8080 is declared for potential future 
-# HTTP endpoints; it is unused by the current MCP server.
+# Using Docker secrets for better security
+docker run --rm -i \
+  -e ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
+  -e ZAMMAD_HTTP_TOKEN_FILE=/run/secrets/token \
+  -v ./secrets/zammad_http_token.txt:/run/secrets/token:ro \
+  ghcr.io/basher83/zammad-mcp:latest
 
-# Or use docker compose (pulls from registry)
-docker compose up -d
-
-# To build locally instead of pulling from registry:
-docker compose --profile local up -d
-
-# For development with hot reload:
-docker compose --profile dev up -d
+# With .env file
+docker run --rm -i \
+  --env-file .env \
+  ghcr.io/basher83/zammad-mcp:latest
 ```
 
 #### Docker Image Versioning
 
-This project publishes Docker images with semantic versioning. When a new version is released (via git tags), the following Docker tags are automatically created:
+Docker images are published with semantic versioning:
 
-- `latest` - Always points to the most recent stable release
-- `1.2.3` - Specific version tag (recommended for production)
-- `1.2` - Latest patch version of the 1.2 minor release
-- `1` - Latest minor and patch version of the 1.x major release
-- `main` - Latest build from the main branch (may be unstable)
-- `sha-1234567` - Specific commit hash
-
-To use a specific version in production, replace `latest` with the desired version tag:
+- `latest` - Most recent stable release
+- `1.2.3` - Specific version (recommended for production)
+- `1.2` - Latest patch of 1.2 minor release
+- `1` - Latest minor/patch of 1.x major release
+- `main` - Latest main branch (may be unstable)
 
 ```bash
 # Recommended for production - pin to specific version
 docker pull ghcr.io/basher83/zammad-mcp:1.0.0
-
-# For automatic patch updates
-docker pull ghcr.io/basher83/zammad-mcp:1.0
-
-# For automatic minor and patch updates
-docker pull ghcr.io/basher83/zammad-mcp:1
 ```
 
-View all available versions on the [GitHub Container Registry](https://github.com/basher83/Zammad-MCP/pkgs/container/zammad-mcp).
+View all versions on [GitHub Container Registry](https://github.com/basher83/Zammad-MCP/pkgs/container/zammad-mcp).
 
-### Install the MCP Server
+### Option 3: For Developers
 
-#### Quick Setup (Recommended)
+If you're contributing to the project or need to modify the code:
 
 ```bash
 # Clone the repository
@@ -135,42 +126,7 @@ cd zammad-mcp
 .\setup.ps1
 ```
 
-#### Manual Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/basher83/zammad-mcp.git
-cd zammad-mcp
-
-# Create a virtual environment with uv
-uv venv
-
-# Activate the virtual environment
-# On macOS/Linux:
-source .venv/bin/activate
-# On Windows:
-# .venv\Scripts\activate
-
-# Install in development mode
-uv pip install -e .
-
-# Or install directly from PyPI (when published)
-uv pip install mcp-zammad
-```
-
-#### Run Directly from GitHub (No Installation)
-
-You can run the MCP server directly from GitHub using `uvx`:
-
-```bash
-# Run directly from GitHub
-uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
-
-# Or with environment variables
-ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
-ZAMMAD_HTTP_TOKEN=your-api-token \
-uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
-```
+For manual setup, see the [Development](#development) section below.
 
 ## Configuration
 
@@ -245,31 +201,6 @@ Or using Docker:
 
 **Important**: The container must run in interactive mode (`-i`) or the MCP server will not receive stdin. Ensure this flag is preserved in any wrapper scripts or shell aliases.
 
-#### Using Docker Secrets (Recommended)
-
-For better security, use Docker secrets to avoid exposing credentials:
-
-1. Create a secrets directory and add your credentials:
-
-```bash
-mkdir -p secrets
-echo "your-api-token" > secrets/zammad_http_token.txt
-# Or for OAuth2:
-echo "your-oauth2-token" > secrets/zammad_oauth2_token.txt
-# Or for username/password:
-echo "your-password" > secrets/zammad_password.txt
-```
-
-1. Use docker compose with secrets:
-
-```bash
-docker compose up  # Production mode
-docker compose --profile local up  # Build locally
-docker compose --profile dev up  # Development with hot reload
-```
-
-The application automatically reads from `/run/secrets/` when `ZAMMAD_*_FILE` environment variables are set.
-
 Or if you have it installed locally:
 
 ```json
@@ -331,6 +262,45 @@ Use the escalation_summary prompt to get a report of all tickets approaching esc
 
 ## Development
 
+### Setup
+
+For development, you have two options:
+
+#### Using Setup Scripts (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/basher83/zammad-mcp.git
+cd zammad-mcp
+
+# Run the setup script
+# On macOS/Linux:
+./setup.sh
+
+# On Windows (PowerShell):
+.\setup.ps1
+```
+
+#### Manual Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/basher83/zammad-mcp.git
+cd zammad-mcp
+
+# Create a virtual environment with uv
+uv venv
+
+# Activate the virtual environment
+# On macOS/Linux:
+source .venv/bin/activate
+# On Windows:
+# .venv\Scripts\activate
+
+# Install in development mode
+uv pip install -e ".[dev]"
+```
+
 ### Project Structure
 
 ```plaintext
@@ -342,8 +312,11 @@ zammad-mcp/
 │   ├── client.py      # Zammad API client wrapper
 │   └── models.py      # Pydantic models
 ├── tests/
+├── scripts/
+│   └── uv/            # UV single-file scripts
 ├── pyproject.toml
 ├── README.md
+├── Dockerfile
 └── .env.example
 ```
 
@@ -364,13 +337,16 @@ uv run pytest --cov=mcp_zammad
 
 ```bash
 # Format code
-uv run black mcp_zammad
+uv run ruff format mcp_zammad tests
 
 # Lint
-uv run ruff check mcp_zammad
+uv run ruff check mcp_zammad tests
 
 # Type checking
 uv run mypy mcp_zammad
+
+# Run all quality checks
+./scripts/quality-check.sh
 ```
 
 ## API Token Generation

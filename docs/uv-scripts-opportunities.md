@@ -17,11 +17,11 @@ The project currently uses bash scripts for:
 ### Pain Points Identified
 
 1. **Platform Dependency**: Separate scripts needed for Windows (`.ps1`) and Unix (`.sh`)
-2. **Error Handling**: Limited error handling in bash scripts
-3. **No Type Safety**: Bash scripts lack type checking and IDE support
-4. **Complex Operations**: Some tasks (like version bumping, changelog management) are difficult in bash
-5. **Dependency Management**: External tools must be installed separately
-6. **Limited Interactivity**: Bash scripts offer basic user interaction
+1. **Error Handling**: Limited error handling in bash scripts
+1. **No Type Safety**: Bash scripts lack type checking and IDE support
+1. **Complex Operations**: Some tasks (like version bumping, changelog management) are difficult in bash
+1. **Dependency Management**: External tools must be installed separately
+1. **Limited Interactivity**: Bash scripts offer basic user interaction
 
 ## Opportunities Identified
 
@@ -291,27 +291,29 @@ The project currently uses bash scripts for:
 ### Developer Experience
 
 1. **IDE Support**: Full Python IDE features (autocomplete, type checking, refactoring)
-2. **Debugging**: Standard Python debugging tools work with UV scripts
-3. **Cross-Platform**: Single script works on all platforms
-4. **Self-Documenting**: Type hints and docstrings provide inline documentation
+1. **Debugging**: Standard Python debugging tools work with UV scripts
+1. **Cross-Platform**: Single script works on all platforms
+1. **Self-Documenting**: Type hints and docstrings provide inline documentation
 
 ### Maintenance Benefits
 
 1. **Dependency Management**: Dependencies declared in script, no separate requirements
-2. **Version Locking**: UV lock files ensure reproducibility
-3. **Testing**: Scripts can be unit tested like regular Python code
+
+1. **Version Locking**: UV lock files ensure reproducibility
+1. **Error Handling**: Python's exception handling provides better error messages
+1. **Testing**: Scripts can be unit tested like regular Python code
    - Core library modules: 90% coverage target
    - Interactive CLI scripts: 70% coverage target (excluding `__main__` blocks)
    - Focus on testing business logic, not UI interactions
-4. **Error Handling**: Python's exception handling provides better error messages
-5. **Quality Assurance**: Scripts run through same quality pipeline as main code
+1. **Quality Assurance**: Scripts run through same quality pipeline as main code
+
 
 ### Operational Benefits
 
 1. **No Installation**: Scripts can run directly with `uv run script.py`
-2. **Isolated Environments**: Each script gets its own isolated environment
-3. **Fast Execution**: UV's caching makes subsequent runs faster
-4. **CI/CD Friendly**: Easy to integrate into GitHub Actions
+1. **Isolated Environments**: Each script gets its own isolated environment
+1. **Fast Execution**: UV's caching makes subsequent runs faster
+1. **CI/CD Friendly**: Easy to integrate into GitHub Actions
 
 ## Migration Strategy
 
@@ -321,11 +323,6 @@ The project currently uses bash scripts for:
 1. Implement `coverage-report.py` for immediate value
 1. Gather feedback from contributors
 
-**Success Criteria**:
-
-- Both scripts pass 90%+ coverage
-- No critical bugs reported after 1 week of use
-- Positive feedback from at least 2 contributors
 
 ### Phase 2: Core Development Tools (Week 3-4)
 
@@ -333,17 +330,21 @@ The project currently uses bash scripts for:
 1. Create `security-scan.py` to consolidate security checks
 1. Develop `test-zammad.py` for API testing
 
+
 **Success Criteria**:
 
 - All scripts integrated into CI/CD pipeline
 - Zero CI failures caused by UV scripts for 5 consecutive days
 - Successfully onboard 1 new contributor using `dev-setup.py`
 
+
 ### Phase 3: Advanced Tools (Week 5-6)
 
 1. Build `release.py` for release automation
 1. Add `profile-zammad.py` for performance testing
 1. Create `issue-helper.py` for better issue management
+
+=======
 
 **Go/No-Go Decision Point**:
 
@@ -352,11 +353,13 @@ The project currently uses bash scripts for:
 - ✅ Team consensus on proceeding
 - ❌ If any criterion fails: Pause and address issues
 
+
 ### Phase 4: Deprecation (Week 7-8)
 
 1. Update documentation to prefer UV scripts
 1. Add deprecation notices to bash scripts
 1. Provide migration guide for users
+
 
 **Prerequisites for Deprecation**:
 
@@ -364,6 +367,7 @@ The project currently uses bash scripts for:
 - Zero regression issues reported
 - Fallback plan documented and tested
 - Bash scripts remain available for emergency rollback for 30 days
+
 
 ### Backward Compatibility
 
@@ -408,26 +412,28 @@ scripts/
 
 ### Script Standards
 
+
 1. **Shebang**: Use `#!/usr/bin/env -S uv run --script` for executable scripts (requires GNU coreutils)
-2. **Metadata**: Always include inline script metadata
-3. **Type Hints**: Use type hints for all functions
-4. **Error Handling**: Implement proper error handling with helpful messages
-5. **Progress Indication**: Use Rich for progress bars and status updates
-6. **Exit Codes**: Return appropriate exit codes for CI/CD integration
-7. **Testing**: Coverage targets based on script type:
+1. **Metadata**: Always include inline script metadata
+1. **Type Hints**: Use type hints for all functions
+1. **Error Handling**: Implement proper error handling with helpful messages
+1. **Progress Indication**: Use Rich for progress bars and status updates
+1. **Exit Codes**: Return appropriate exit codes for CI/CD integration
+1. **Testing**: Coverage targets based on script type:
    - Utility/library scripts: 90% coverage minimum
    - Interactive CLI scripts: 70% coverage (test core logic, not UI)
    - Exclude `if __name__ == "__main__":` blocks from coverage
-8. **CI Integration**: Scripts should pass all quality checks (ruff, mypy, bandit)
+1. **CI Integration**: Scripts should pass all quality checks (ruff, mypy, bandit)
+
 
 ### Documentation Requirements
 
 Each UV script should include:
 
 1. Module docstring explaining purpose
-2. Usage examples in docstring
-3. `--help` command with detailed options
-4. README section in main project docs
+1. Usage examples in docstring
+1. `--help` command with detailed options
+1. README section in main project docs
 
 ## Conclusion
 

@@ -7,9 +7,9 @@ The `.claude/hooks/pre_tool_use.py` script is a security and efficiency enforcem
 ## Goals
 
 1. **Prevent dangerous operations** - Block destructive commands that could harm your system
-2. **Encourage modern, faster alternatives** - Suggest efficient tools over legacy ones
-3. **Prevent common inefficiencies** - Block wasteful command patterns
-4. **Balance efficiency with practicality** - Allow legitimate use cases
+1. **Encourage modern, faster alternatives** - Suggest efficient tools over legacy ones
+1. **Prevent common inefficiencies** - Block wasteful command patterns
+1. **Balance efficiency with practicality** - Allow legitimate use cases
 
 ## Hook Behavior
 
@@ -226,27 +226,27 @@ All tool invocations are logged to `logs/pre_tool_use.json` for debugging and au
 The hook follows these principles:
 
 1. **Safety First**: Dangerous operations are always blocked
-2. **Performance Matters**: Encourage tools that are 10-100x faster
-3. **Practical Exceptions**: Common scripting patterns are allowed
-4. **Educational**: Error messages explain why and suggest alternatives
-5. **Non-Intrusive**: Silent pass-through for allowed commands
+1. **Performance Matters**: Encourage tools that are 10-100x faster
+1. **Practical Exceptions**: Common scripting patterns are allowed
+1. **Educational**: Error messages explain why and suggest alternatives
+1. **Non-Intrusive**: Silent pass-through for allowed commands
 
 ## Customization
 
 To modify the hook behavior:
 
 1. Edit `.claude/hooks/pre_tool_use.py`
-2. Add patterns to `acceptable_*_uses` lists for exceptions
-3. Add new check functions following the existing pattern
-4. Test thoroughly to ensure legitimate uses aren't blocked
+1. Add patterns to `acceptable_*_uses` lists for exceptions
+1. Add new check functions following the existing pattern
+1. Test thoroughly to ensure legitimate uses aren't blocked
 
 ## Troubleshooting
 
 If a legitimate command is blocked:
 
 1. Check if it matches an acceptable use pattern
-2. Consider if there's a more efficient alternative
-3. Add an exception pattern if truly necessary
-4. Report issues for common false positives
+1. Consider if there's a more efficient alternative
+1. Add an exception pattern if truly necessary
+1. Report issues for common false positives
 
 Remember: The goal is to make development faster and safer, not to create obstacles.
