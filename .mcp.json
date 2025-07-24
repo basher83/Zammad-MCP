@@ -1,28 +1,26 @@
 {
   "mcpServers": {
-    "zammad": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "-m",
-        "mcp_zammad"
-      ]
+    "deepwiki": {
+      "type": "http",
+      "url": "https://mcp.deepwiki.com/mcp"
     },
-    "safety-mcp-sse": {
-      "type": "sse",
-      "url": "https://mcp.safetycli.com/sse"
+    "grep": {
+      "type": "http",
+      "url": "https://mcp.grep.app"
     },
-    "zammad-graphql": {
+    "serena": {
       "type": "stdio",
-      "command": "npx",
+      "command": "uvx",
       "args": [
-        "@toolprint/mcp-graphql-forge"
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "/Users/basher8383/dev/learning/Zammad-MCP"
       ],
-      "env": {
-        "GRAPHQL_ENDPOINT": "http://dockervm.homelab.net:8880/graphql",
-        "GRAPHQL_AUTH_HEADER": "Bearer ${ZAMMAD_HTTP_TOKEN}"
-      }
+      "env": {}
     }
   }
 }
