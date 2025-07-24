@@ -62,6 +62,8 @@ jobs:
           # Force 0 exit code to allow SARIF file generation
           # This will handover control about PR rejection to the GitHub side
           max-allowed-issues: 2147483647
+          # Disable Docker-based tools to avoid PMD/Trivy issues
+          run-docker-tools: false
 
       # Check if SARIF file was generated
       - name: Check SARIF file

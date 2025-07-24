@@ -12,6 +12,8 @@ engines:
     enabled: true
   pydocstyle:
     enabled: false  # Optional: Enable if you want docstring style checking
+  radon:
+    enabled: true
   
   # Explicitly disable non-Python tools
   pmd:
@@ -19,6 +21,12 @@ engines:
   checkstyle:
     enabled: false
   spotbugs:
+    enabled: false
+  trivy:
+    enabled: false
+  hadolint:
+    enabled: false
+  shellcheck:
     enabled: false
   
   # General tools
