@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2025-07-24
+
+### Security
+
+- Updated starlette from 0.47.1 to 0.47.2 to fix CVE-2025-54121 (low impact vulnerability in multipart form handling)
+- Updated mcp from 1.10.1 to 1.12.2
+
 ## [0.1.1] - 2025-07-24
 
 ### Fixed
