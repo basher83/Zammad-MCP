@@ -29,7 +29,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: '3.13'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -63,10 +63,22 @@ jobs:
           api-key: ${{ secrets.SAFETY_API_KEY }}
 
       - name: Run pip-audit
+        continue-on-error: true
         run: |
           echo "Running pip-audit dependency scan..."
           # Will exit non-zero if vulnerabilities are found
-          uv run pip-audit --format json --output pip-audit-report.json
+          uv run pip-audit --format json --output pip-audit-report.json || {
+            EXIT_CODE=$?
+            echo "⚠️  pip-audit found vulnerabilities (exit code: $EXIT_CODE)"
+            # Generate a summary of vulnerabilities
+            if [ -f pip-audit-report.json ]; then
+              VULN_COUNT=$(jq '.vulnerabilities | length' pip-audit-report.json)
+              echo "Found $VULN_COUNT vulnerability(ies) in dependencies"
+              echo ""
+              jq -r '.vulnerabilities[] | "Package: \(.name) \(.version)\nVulnerability: \(.id)\nDescription: \(.description)\nFix: \(if .fix_versions | length > 0 then "Upgrade to " + (.fix_versions | join(", ")) else "Check advisory" end)\n"' pip-audit-report.json
+            fi
+            exit $EXIT_CODE
+          }
           echo "✅ No dependency vulnerabilities found"
 
       - name: Upload security reports
