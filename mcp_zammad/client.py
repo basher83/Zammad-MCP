@@ -3,6 +3,7 @@
 import logging
 import os
 from typing import Any
+from urllib.parse import urlparse
 
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
@@ -43,6 +44,9 @@ class ZammadClient:
         if not self.url:
             raise ConfigException("Zammad URL is required. Set ZAMMAD_URL environment variable.")
 
+        # Validate URL format to prevent SSRF
+        self._validate_url(self.url)
+
         if not any([self.http_token, self.oauth2_token, (self.username and self.password)]):
             # Check if user mistakenly used ZAMMAD_TOKEN
             if os.getenv("ZAMMAD_TOKEN"):
@@ -62,6 +66,36 @@ class ZammadClient:
             http_token=self.http_token,
             oauth2_token=self.oauth2_token,
         )
+
+    def _validate_url(self, url: str) -> None:
+        """Validate URL format to prevent SSRF attacks."""
+        try:
+            parsed = urlparse(url)
+
+            # Ensure URL has a scheme
+            if not parsed.scheme:
+                raise ConfigException("Zammad URL must include protocol (http:// or https://)")
+
+            # Only allow http/https
+            if parsed.scheme not in ["http", "https"]:
+                raise ConfigException("Zammad URL must use http or https protocol")
+
+            # Ensure URL has a hostname
+            if not parsed.hostname:
+                raise ConfigException("Zammad URL must include a valid hostname")
+
+            # Block local/private networks (optional - adjust based on your security requirements)
+            hostname = parsed.hostname.lower()
+            blocked_hosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"]
+            if hostname in blocked_hosts:
+                logger.warning(f"Zammad URL points to local host: {hostname}")
+
+            # Check for private IP ranges (optional)
+            if hostname.startswith(("10.", "192.168.", "172.")):
+                logger.warning(f"Zammad URL points to private network: {hostname}")
+
+        except Exception as e:
+            raise ConfigException(f"Invalid Zammad URL format: {e}") from e
 
     def _read_secret_file(self, env_var: str) -> str | None:
         """Read secret from file path specified in environment variable.

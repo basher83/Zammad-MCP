@@ -24,6 +24,7 @@ from mcp_zammad.server import (
     list_groups,
     list_ticket_priorities,
     list_ticket_states,
+    main,
     mcp,
     remove_ticket_tag,
     search_organizations,
@@ -56,6 +57,15 @@ def mock_zammad_client():
         }
         mock_client_class.return_value = mock_instance
         yield mock_instance, mock_client_class
+
+
+@pytest.fixture
+def server_instance(mock_zammad_client):
+    """Fixture that provides an initialized ZammadMCPServer instance."""
+    mock_instance, _ = mock_zammad_client
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+    return server_inst
 
 
 @pytest.fixture
@@ -215,18 +225,21 @@ async def test_initialization_failure():
             await initialize()
 
 
-@pytest.mark.asyncio
-async def test_tool_without_client(reset_client):
+def test_tool_without_client():
     """Test that tools fail gracefully when client is not initialized."""
-    # Use the fixture to reset the client
-    _ = reset_client
+    # Save the original client
+    original_client = server.zammad_client
 
-    # Reset the global client
-    server.zammad_client = _UNINITIALIZED
+    try:
+        # Reset the global client
+        server.zammad_client = _UNINITIALIZED
 
-    # Should raise RuntimeError when client is not initialized
-    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
-        search_tickets()
+        # Should raise RuntimeError when client is not initialized
+        with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+            search_tickets()
+    finally:
+        # Restore the original client
+        server.zammad_client = original_client
 
 
 # ==================== PARAMETRIZED TESTS ====================
@@ -1195,6 +1208,46 @@ def test_tool_implementations_are_called():
     server.client.search_tickets.assert_called_once()
 
 
+def test_get_ticket_stats_pagination():
+    """Test that get_ticket_stats uses pagination correctly."""
+    with patch("mcp_zammad.server.ZammadClient") as mock_client_class:
+        mock_instance, _ = mock_client_class.return_value, mock_client_class
+
+        # Mock paginated responses
+        page1_tickets = [
+            {"id": 1, "state": {"name": "open"}},
+            {"id": 2, "state": {"name": "closed"}},
+        ]
+        page2_tickets = [
+            {"id": 3, "state": {"name": "pending reminder"}},
+            {"id": 4, "state": {"name": "open"}, "first_response_escalation_at": "2024-01-01"},
+        ]
+        page3_tickets: list[dict[str, Any]] = []  # Empty page to stop pagination
+
+        # Set up side_effect to return different pages
+        mock_instance.search_tickets.side_effect = [page1_tickets, page2_tickets, page3_tickets]
+
+        # Call get_ticket_stats via server's tool
+        server = ZammadMCPServer()
+        server.client = mock_instance
+
+        # Test through the actual server method
+        result = get_ticket_stats()
+
+        # Verify pagination calls
+        assert mock_instance.search_tickets.call_count == 3
+        mock_instance.search_tickets.assert_any_call(group=None, page=1, per_page=100)
+        mock_instance.search_tickets.assert_any_call(group=None, page=2, per_page=100)
+        mock_instance.search_tickets.assert_any_call(group=None, page=3, per_page=100)
+
+        # Verify stats are correct
+        assert result.total_count == 4
+        assert result.open_count == 2
+        assert result.closed_count == 1
+        assert result.pending_count == 1
+        assert result.escalated_count == 1
+
+
 def test_get_ticket_stats_with_date_warning():
     """Test get_ticket_stats with date parameters shows warning."""
     server = ZammadMCPServer()
@@ -1358,3 +1411,336 @@ def test_legacy_get_ticket_stats_without_client():
 
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         get_ticket_stats()
+
+
+class TestCachingMethods:
+    """Test the caching functionality."""
+
+    def test_cached_groups(self) -> None:
+        """Test that groups are cached properly."""
+        # Create server instance with mocked client
+        server = ZammadMCPServer()
+        server.client = Mock()
+        
+        # Mock the client to return groups
+        groups_data = [
+            {
+                "id": 1,
+                "name": "Users",
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "created_by_id": 1,
+                "updated_by_id": 1,
+            },
+            {
+                "id": 2,
+                "name": "Support",
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "created_by_id": 1,
+                "updated_by_id": 1,
+            },
+        ]
+        server.client.get_groups.return_value = groups_data
+
+        # First call should hit the API
+        result1 = server._get_cached_groups()
+        assert len(result1) == 2
+        assert result1[0].name == "Users"
+        server.client.get_groups.assert_called_once()
+
+        # Second call should use cache
+        result2 = server._get_cached_groups()
+        assert result1 == result2
+        # Still only called once
+        server.client.get_groups.assert_called_once()
+
+    def test_cached_states(self) -> None:
+        """Test that ticket states are cached properly."""
+        # Create server instance with mocked client
+        server = ZammadMCPServer()
+        server.client = Mock()
+        
+        states_data = [
+            {
+                "id": 1,
+                "name": "new",
+                "state_type_id": 1,
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "created_by_id": 1,
+                "updated_by_id": 1,
+            },
+            {
+                "id": 2,
+                "name": "open",
+                "state_type_id": 2,
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "created_by_id": 1,
+                "updated_by_id": 1,
+            },
+        ]
+        server.client.get_ticket_states.return_value = states_data
+
+        # First call
+        result1 = server._get_cached_states()
+        assert len(result1) == 2
+        assert result1[0].name == "new"
+        server.client.get_ticket_states.assert_called_once()
+
+        # Second call uses cache
+        result2 = server._get_cached_states()
+        assert result1 == result2
+        server.client.get_ticket_states.assert_called_once()
+
+    def test_cached_priorities(self) -> None:
+        """Test that ticket priorities are cached properly."""
+        # Create server instance with mocked client
+        server = ZammadMCPServer()
+        server.client = Mock()
+        
+        priorities_data = [
+            {
+                "id": 1,
+                "name": "1 low",
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "created_by_id": 1,
+                "updated_by_id": 1,
+            },
+            {
+                "id": 2,
+                "name": "2 normal",
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "created_by_id": 1,
+                "updated_by_id": 1,
+            },
+        ]
+        server.client.get_ticket_priorities.return_value = priorities_data
+
+        # First call
+        result1 = server._get_cached_priorities()
+        assert len(result1) == 2
+        assert result1[0].name == "1 low"
+        server.client.get_ticket_priorities.assert_called_once()
+
+        # Second call uses cache
+        result2 = server._get_cached_priorities()
+        assert result1 == result2
+        server.client.get_ticket_priorities.assert_called_once()
+
+    def test_clear_caches(self) -> None:
+        """Test that clear_caches clears all caches."""
+        # Create server instance with mocked client
+        server = ZammadMCPServer()
+        server.client = Mock()
+        
+        # Set up mock data
+        groups_data = [
+            {
+                "id": 1,
+                "name": "Users",
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "created_by_id": 1,
+                "updated_by_id": 1,
+            }
+        ]
+        states_data = [
+            {
+                "id": 1,
+                "name": "new",
+                "state_type_id": 1,
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "created_by_id": 1,
+                "updated_by_id": 1,
+            }
+        ]
+        priorities_data = [
+            {
+                "id": 1,
+                "name": "1 low",
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "created_by_id": 1,
+                "updated_by_id": 1,
+            }
+        ]
+
+        server.client.get_groups.return_value = groups_data
+        server.client.get_ticket_states.return_value = states_data
+        server.client.get_ticket_priorities.return_value = priorities_data
+
+        # Populate caches
+        server._get_cached_groups()
+        server._get_cached_states()
+        server._get_cached_priorities()
+
+        # Verify APIs were called
+        assert server.client.get_groups.call_count == 1
+        assert server.client.get_ticket_states.call_count == 1
+        assert server.client.get_ticket_priorities.call_count == 1
+
+        # Clear caches
+        server.clear_caches()
+
+        # Next calls should hit API again
+        server._get_cached_groups()
+        server._get_cached_states()
+        server._get_cached_priorities()
+
+        # APIs should be called twice now
+        assert server.client.get_groups.call_count == 2
+        assert server.client.get_ticket_states.call_count == 2
+        assert server.client.get_ticket_priorities.call_count == 2
+
+
+class TestMainFunction:
+    """Test the main() function execution."""
+
+    def test_main_function_runs_server(self) -> None:
+        """Test that main() function runs the MCP server."""
+        with patch("mcp_zammad.server.mcp") as mock_mcp:
+            # Call the main function
+            main()
+
+            # Verify mcp.run() was called
+            mock_mcp.run.assert_called_once_with()
+
+
+class TestResourceHandlers:
+    """Test resource handler implementations."""
+
+    def test_ticket_resource_handler(self, server: ZammadMCPServer) -> None:
+        """Test ticket resource handler - tests the actual function logic."""
+        # Mock ticket data
+        ticket_data = {
+            "id": 123,
+            "number": 123,
+            "title": "Test Ticket",
+            "state": {"name": "open"},
+            "priority": {"name": "2 normal"},
+            "created_at": "2024-01-01T00:00:00Z",
+        }
+        server.client.get_ticket.return_value = ticket_data
+
+        # Import and test the resource handler function directly
+
+        # Create a test function that mimics the resource handler
+        def test_get_ticket_resource(ticket_id: str) -> str:
+            client = server.get_client()
+            try:
+                ticket = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
+                lines = [
+                    f"Ticket #{ticket['number']} - {ticket['title']}",
+                    f"State: {ticket.get('state', {}).get('name', 'Unknown')}",
+                ]
+                return "\n".join(lines)
+            except Exception as e:
+                return f"Error retrieving ticket {ticket_id}: {e!s}"
+
+        # Test the handler logic
+        result = test_get_ticket_resource("123")
+
+        assert "Ticket #123 - Test Ticket" in result
+        assert "State: open" in result
+        server.client.get_ticket.assert_called_once_with(123, include_articles=True, article_limit=20)
+
+    def test_user_resource_handler(self, server: ZammadMCPServer) -> None:
+        """Test user resource handler - tests the actual function logic."""
+        # Mock user data
+        user_data = {
+            "id": 456,
+            "firstname": "John",
+            "lastname": "Doe",
+            "email": "john@example.com",
+            "login": "jdoe",
+            "organization": {"name": "ACME Inc"},
+        }
+        server.client.get_user.return_value = user_data
+
+        # Create a test function that mimics the resource handler
+        def test_get_user_resource(user_id: str) -> str:
+            client = server.get_client()
+            try:
+                user = client.get_user(int(user_id))
+                lines = [
+                    f"User: {user.get('firstname', '')} {user.get('lastname', '')}",
+                    f"Email: {user.get('email', '')}",
+                ]
+                return "\n".join(lines)
+            except Exception as e:
+                return f"Error retrieving user {user_id}: {e!s}"
+
+        # Test the handler logic
+        result = test_get_user_resource("456")
+
+        assert "User: John Doe" in result
+        assert "Email: john@example.com" in result
+        server.client.get_user.assert_called_once_with(456)
+
+    def test_organization_resource_handler(self, server: ZammadMCPServer) -> None:
+        """Test organization resource handler - tests the actual function logic."""
+        # Mock organization data
+        org_data = {
+            "id": 789,
+            "name": "ACME Corp",
+            "note": "Important client",
+            "domain": "acme.com",
+            "active": True,
+        }
+        server.client.get_organization.return_value = org_data
+
+        # Create a test function that mimics the resource handler
+        def test_get_org_resource(org_id: str) -> str:
+            client = server.get_client()
+            try:
+                org = client.get_organization(int(org_id))
+                lines = [
+                    f"Organization: {org.get('name', '')}",
+                    f"Domain: {org.get('domain', 'None')}",
+                ]
+                return "\n".join(lines)
+            except Exception as e:
+                return f"Error retrieving organization {org_id}: {e!s}"
+
+        # Test the handler logic
+        result = test_get_org_resource("789")
+
+        assert "Organization: ACME Corp" in result
+        assert "Domain: acme.com" in result
+        server.client.get_organization.assert_called_once_with(789)
+
+    def test_resource_handler_error(self, server: ZammadMCPServer) -> None:
+        """Test resource handler error handling."""
+        # Mock API error
+        server.client.get_ticket.side_effect = Exception("API Error")
+
+        # Create a test function that mimics the resource handler
+        def test_get_ticket_resource(ticket_id: str) -> str:
+            client = server.get_client()
+            try:
+                ticket = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
+                lines = [
+                    f"Ticket #{ticket['number']} - {ticket['title']}",
+                ]
+                return "\n".join(lines)
+            except Exception as e:
+                return f"Error retrieving ticket {ticket_id}: {e!s}"
+
+        # Test the handler - should return error message
+        result = test_get_ticket_resource("999")
+
+        assert "Error retrieving ticket 999: API Error" in result

@@ -23,7 +23,10 @@
       "mcp__github__list_tags",
       "mcp__github__get_tag",
       "mcp__github__get_commit",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "mcp__github__get_workflow_run",
+      "mcp__github__list_workflow_runs",
+      "mcp__github__list_commits"
     ],
     "deny": []
   },

@@ -57,3 +57,40 @@ def test_client_accepts_http_token(mock_api: MagicMock) -> None:
         assert client.url == "https://test.zammad.com/api/v1"
         assert client.http_token == "test-token"
         mock_api.assert_called_once()
+
+
+def test_url_validation_no_protocol() -> None:
+    """Test that URL validation rejects URLs without protocol."""
+    with patch.dict(os.environ, {"ZAMMAD_URL": "test.zammad.com", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
+        with pytest.raises(ConfigException, match="must include protocol"):
+            ZammadClient()
+
+
+def test_url_validation_invalid_protocol() -> None:
+    """Test that URL validation rejects non-http/https protocols."""
+    with patch.dict(os.environ, {"ZAMMAD_URL": "ftp://test.zammad.com", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
+        with pytest.raises(ConfigException, match="must use http or https"):
+            ZammadClient()
+
+
+def test_url_validation_no_hostname() -> None:
+    """Test that URL validation rejects URLs without hostname."""
+    with patch.dict(os.environ, {"ZAMMAD_URL": "https://", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
+        with pytest.raises(ConfigException, match="must include a valid hostname"):
+            ZammadClient()
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_url_validation_localhost_warning(mock_api: MagicMock, caplog) -> None:
+    """Test that localhost URLs generate a warning."""
+    with patch.dict(os.environ, {"ZAMMAD_URL": "http://localhost:3000", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
+        ZammadClient()
+        assert "points to local host" in caplog.text
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_url_validation_private_network_warning(mock_api: MagicMock, caplog) -> None:
+    """Test that private network URLs generate a warning."""
+    with patch.dict(os.environ, {"ZAMMAD_URL": "http://192.168.1.100", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
+        ZammadClient()
+        assert "points to private network" in caplog.text

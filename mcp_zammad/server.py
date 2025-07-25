@@ -26,6 +26,9 @@ from .models import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Constants
+MAX_TICKETS_FOR_MEMORY_SCAN = 1000
+
 
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
@@ -353,6 +356,39 @@ class ZammadMCPServer:
             user_data = client.get_current_user()
             return User(**user_data)
 
+    def _get_cached_groups(self) -> list[Group]:
+        """Get cached list of groups."""
+        if not hasattr(self, '_groups_cache'):
+            client = self.get_client()
+            groups_data = client.get_groups()
+            self._groups_cache = [Group(**group) for group in groups_data]
+        return self._groups_cache
+
+    def _get_cached_states(self) -> list[TicketState]:
+        """Get cached list of ticket states."""
+        if not hasattr(self, '_states_cache'):
+            client = self.get_client()
+            states_data = client.get_ticket_states()
+            self._states_cache = [TicketState(**state) for state in states_data]
+        return self._states_cache
+
+    def _get_cached_priorities(self) -> list[TicketPriority]:
+        """Get cached list of ticket priorities."""
+        if not hasattr(self, '_priorities_cache'):
+            client = self.get_client()
+            priorities_data = client.get_ticket_priorities()
+            self._priorities_cache = [TicketPriority(**priority) for priority in priorities_data]
+        return self._priorities_cache
+
+    def clear_caches(self) -> None:
+        """Clear all cached data."""
+        if hasattr(self, '_groups_cache'):
+            del self._groups_cache
+        if hasattr(self, '_states_cache'):
+            del self._states_cache
+        if hasattr(self, '_priorities_cache'):
+            del self._priorities_cache
+
     def _setup_system_tools(self) -> None:
         """Register system information tools."""
 
@@ -362,49 +398,81 @@ class ZammadMCPServer:
             start_date: str | None = None,
             end_date: str | None = None,
         ) -> TicketStats:
-            """Get ticket statistics.
+            """Get ticket statistics using pagination for better performance.
 
             Args:
                 group: Filter by group name
-                start_date: Start date (ISO format)
-                end_date: End date (ISO format)
+                start_date: Start date (ISO format) - NOT YET IMPLEMENTED
+                end_date: End date (ISO format) - NOT YET IMPLEMENTED
 
             Returns:
                 Ticket statistics
+
+            Note: This implementation uses pagination to avoid loading all tickets
+            into memory at once, improving performance for large datasets.
             """
             client = self.get_client()
-            # This is a simplified implementation
-            # In a real implementation, you would calculate these stats from the API
             # TODO: Implement date filtering when the API supports it
             if start_date or end_date:
                 logger.warning("Date filtering not yet implemented - ignoring date parameters")
-            all_tickets = client.search_tickets(group=group, per_page=100)
 
-            # Handle both expanded (string) and non-expanded (object) state formats
-            def get_state_name(ticket: dict[str, Any]) -> str:
-                state = ticket.get("state")
-                if isinstance(state, str):
-                    return state
-                if isinstance(state, dict):
-                    name = state.get("name", "")
-                    return str(name) if name else ""
-                return ""
+            # Initialize counters
+            total_count = 0
+            open_count = 0
+            closed_count = 0
+            pending_count = 0
+            escalated_count = 0
 
-            open_count = sum(1 for t in all_tickets if get_state_name(t) in ["new", "open"])
-            closed_count = sum(1 for t in all_tickets if get_state_name(t) == "closed")
-            pending_count = sum(1 for t in all_tickets if "pending" in get_state_name(t))
-            escalated_count = sum(
-                1
-                for t in all_tickets
-                if (
-                    t.get("first_response_escalation_at")
-                    or t.get("close_escalation_at")
-                    or t.get("update_escalation_at")
-                )
-            )
+            # Process tickets in batches
+            page = 1
+            per_page = 100
+
+            while True:
+                # Get a batch of tickets
+                tickets = client.search_tickets(group=group, page=page, per_page=per_page)
+
+                if not tickets:
+                    # No more tickets
+                    break
+
+                # Process this batch
+                for ticket in tickets:
+                    total_count += 1
+
+                    # Handle both expanded (string) and non-expanded (object) state formats
+                    state = ticket.get("state")
+                    state_name = ""
+                    if isinstance(state, str):
+                        state_name = state
+                    elif isinstance(state, dict):
+                        state_name = str(state.get("name", ""))
+
+                    # Count by state
+                    if state_name in ["new", "open"]:
+                        open_count += 1
+                    elif state_name == "closed":
+                        closed_count += 1
+                    elif "pending" in state_name:
+                        pending_count += 1
+
+                    # Check for escalation
+                    if (
+                        ticket.get("first_response_escalation_at")
+                        or ticket.get("close_escalation_at")
+                        or ticket.get("update_escalation_at")
+                    ):
+                        escalated_count += 1
+
+                # Move to next page
+                page += 1
+
+                # Safety check to prevent infinite loops
+                if page > MAX_TICKETS_FOR_MEMORY_SCAN:  # Safety limit to prevent infinite loops
+                    logger.warning("Reached maximum page limit, some tickets may not be counted")
+                    break
 
             return TicketStats(
-                total_count=len(all_tickets),
+                total_count=total_count,
                 open_count=open_count,
                 closed_count=closed_count,
                 pending_count=pending_count,
@@ -415,36 +483,30 @@ class ZammadMCPServer:
 
         @self.mcp.tool()
         def list_groups() -> list[Group]:
-            """Get all available groups.
+            """Get all available groups (cached).
 
             Returns:
                 List of all groups
             """
-            client = self.get_client()
-            groups_data = client.get_groups()
-            return [Group(**group) for group in groups_data]
+            return self._get_cached_groups()
 
         @self.mcp.tool()
         def list_ticket_states() -> list[TicketState]:
-            """Get all available ticket states.
+            """Get all available ticket states (cached).
 
             Returns:
                 List of all ticket states
             """
-            client = self.get_client()
-            states_data = client.get_ticket_states()
-            return [TicketState(**state) for state in states_data]
+            return self._get_cached_states()
 
         @self.mcp.tool()
         def list_ticket_priorities() -> list[TicketPriority]:
-            """Get all available ticket priorities.
+            """Get all available ticket priorities (cached).
 
             Returns:
                 List of all ticket priorities
             """
-            client = self.get_client()
-            priorities_data = client.get_ticket_priorities()
-            return [TicketPriority(**priority) for priority in priorities_data]
+            return self._get_cached_priorities()
 
     def _setup_resources(self) -> None:
         """Register all resources with the MCP server."""
@@ -830,3 +892,8 @@ def get_ticket_stats(
         pending_count=pending_count,
         escalated_count=escalated_count,
     )
+
+
+def main() -> None:
+    """Main entry point for the server."""
+    mcp.run()

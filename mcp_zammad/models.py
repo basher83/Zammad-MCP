@@ -1,8 +1,9 @@
 """Pydantic models for Zammad entities."""
 
+import html
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class UserBrief(BaseModel):
@@ -124,24 +125,36 @@ class Ticket(BaseModel):
 class TicketCreate(BaseModel):
     """Create ticket request."""
 
-    title: str = Field(description="Ticket title/subject")
-    group: str = Field(description="Group name or ID")
-    customer: str = Field(description="Customer email or ID")
-    article_body: str = Field(description="Initial article/comment body")
-    state: str = Field(default="new", description="State name (new, open, pending reminder, etc.)")
-    priority: str = Field(default="2 normal", description="Priority name (1 low, 2 normal, 3 high)")
-    article_type: str = Field(default="note", description="Article type (note, email, phone)")
+    title: str = Field(description="Ticket title/subject", max_length=200)
+    group: str = Field(description="Group name or ID", max_length=100)
+    customer: str = Field(description="Customer email or ID", max_length=255)
+    article_body: str = Field(description="Initial article/comment body", max_length=100000)
+    state: str = Field(default="new", description="State name (new, open, pending reminder, etc.)", max_length=100)
+    priority: str = Field(default="2 normal", description="Priority name (1 low, 2 normal, 3 high)", max_length=100)
+    article_type: str = Field(default="note", description="Article type (note, email, phone)", max_length=50)
     article_internal: bool = Field(default=False, description="Whether the article is internal")
+
+    @field_validator("title", "article_body")
+    @classmethod
+    def sanitize_html(cls, v: str) -> str:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v)
 
 
 class TicketUpdate(BaseModel):
     """Update ticket request."""
 
-    title: str | None = Field(None, description="New ticket title")
-    state: str | None = Field(None, description="New state name")
-    priority: str | None = Field(None, description="New priority name")
-    owner: str | None = Field(None, description="New owner login/email")
-    group: str | None = Field(None, description="New group name")
+    title: str | None = Field(None, description="New ticket title", max_length=200)
+    state: str | None = Field(None, description="New state name", max_length=100)
+    priority: str | None = Field(None, description="New priority name", max_length=100)
+    owner: str | None = Field(None, description="New owner login/email", max_length=255)
+    group: str | None = Field(None, description="New group name", max_length=100)
+
+    @field_validator("title")
+    @classmethod
+    def sanitize_title(cls, v: str | None) -> str | None:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v) if v else v
 
 
 class TicketSearchParams(BaseModel):
@@ -160,11 +173,17 @@ class TicketSearchParams(BaseModel):
 class ArticleCreate(BaseModel):
     """Create article request."""
 
-    ticket_id: int = Field(description="Ticket ID to add article to")
-    body: str = Field(description="Article body content")
-    type: str = Field(default="note", description="Article type (note, email, phone)")
+    ticket_id: int = Field(description="Ticket ID to add article to", gt=0)
+    body: str = Field(description="Article body content", max_length=100000)
+    type: str = Field(default="note", description="Article type (note, email, phone)", max_length=50)
     internal: bool = Field(default=False, description="Whether the article is internal")
-    sender: str = Field(default="Agent", description="Sender type (Agent, Customer, System)")
+    sender: str = Field(default="Agent", description="Sender type (Agent, Customer, System)", max_length=50)
+
+    @field_validator("body")
+    @classmethod
+    def sanitize_body(cls, v: str) -> str:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v)
 
 
 class User(BaseModel):

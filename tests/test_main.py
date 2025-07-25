@@ -2,6 +2,7 @@
 
 from unittest.mock import Mock, patch
 
+import mcp_zammad.__main__ as main_module
 from mcp_zammad.__main__ import main
 
 
@@ -22,7 +23,6 @@ class TestMain:
         """Test that __main__ block would execute main() when run as a script."""
         # We'll test the pattern rather than executing it
         # Since the __main__ guard is at module level, we verify the pattern exists
-        import mcp_zammad.__main__ as main_module
 
         # Verify the module has the expected structure
         assert hasattr(main_module, "main")
