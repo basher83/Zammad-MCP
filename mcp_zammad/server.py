@@ -798,13 +798,13 @@ def get_ticket_stats(
     """Get ticket statistics (legacy wrapper for test compatibility)."""
     if zammad_client is None:
         raise RuntimeError("Zammad client not initialized")
-    
+
     # This implementation matches the tool implementation
     if start_date or end_date:
         logger.warning("Date filtering not yet implemented - ignoring date parameters")
-    
+
     all_tickets = zammad_client.search_tickets(group=group, per_page=100)
-    
+
     def get_state_name(ticket: dict[str, Any]) -> str:
         state = ticket.get("state")
         if isinstance(state, str):
@@ -813,20 +813,16 @@ def get_ticket_stats(
             name = state.get("name", "")
             return str(name) if name else ""
         return ""
-    
+
     open_count = sum(1 for t in all_tickets if get_state_name(t) in ["new", "open"])
     closed_count = sum(1 for t in all_tickets if get_state_name(t) == "closed")
     pending_count = sum(1 for t in all_tickets if "pending" in get_state_name(t))
     escalated_count = sum(
         1
         for t in all_tickets
-        if (
-            t.get("first_response_escalation_at")
-            or t.get("close_escalation_at")
-            or t.get("update_escalation_at")
-        )
+        if (t.get("first_response_escalation_at") or t.get("close_escalation_at") or t.get("update_escalation_at"))
     )
-    
+
     return TicketStats(
         total_count=len(all_tickets),
         open_count=open_count,

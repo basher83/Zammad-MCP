@@ -1,6 +1,8 @@
 """Tests for ZammadClient methods to improve coverage."""
 
 import os
+import pathlib
+from collections.abc import Generator
 from unittest.mock import Mock, patch
 
 import pytest
@@ -12,12 +14,12 @@ class TestZammadClientMethods:
     """Test ZammadClient methods."""
 
     @pytest.fixture
-    def mock_zammad_api(self):
+    def mock_zammad_api(self) -> Generator[Mock, None, None]:
         """Mock the underlying zammad_py.ZammadAPI."""
         with patch("mcp_zammad.client.ZammadAPI") as mock_api:
             yield mock_api
 
-    def test_get_organization(self, mock_zammad_api):
+    def test_get_organization(self, mock_zammad_api: Mock) -> None:
         """Test get_organization method."""
         mock_instance = Mock()
         mock_instance.organization.find.return_value = {
@@ -36,7 +38,7 @@ class TestZammadClientMethods:
         assert result["name"] == "Test Org"
         mock_instance.organization.find.assert_called_once_with(1)
 
-    def test_search_organizations(self, mock_zammad_api):
+    def test_search_organizations(self, mock_zammad_api: Mock) -> None:
         """Test search_organizations method."""
         mock_instance = Mock()
         mock_instance.organization.search.return_value = [{"id": 1, "name": "Org 1"}, {"id": 2, "name": "Org 2"}]
@@ -52,7 +54,7 @@ class TestZammadClientMethods:
             "test", filters={"page": 1, "per_page": 25, "expand": True}
         )
 
-    def test_update_ticket(self, mock_zammad_api):
+    def test_update_ticket(self, mock_zammad_api: Mock) -> None:
         """Test update_ticket method."""
         mock_instance = Mock()
         mock_instance.ticket.update.return_value = {"id": 1, "title": "Updated Title", "state": "open"}
@@ -65,7 +67,7 @@ class TestZammadClientMethods:
         assert result["title"] == "Updated Title"
         mock_instance.ticket.update.assert_called_once_with(1, {"title": "Updated Title", "state": "open"})
 
-    def test_get_groups(self, mock_zammad_api):
+    def test_get_groups(self, mock_zammad_api: Mock) -> None:
         """Test get_groups method."""
         mock_instance = Mock()
         mock_instance.group.all.return_value = [{"id": 1, "name": "Users"}, {"id": 2, "name": "Support"}]
@@ -79,7 +81,7 @@ class TestZammadClientMethods:
         assert result[0]["name"] == "Users"
         mock_instance.group.all.assert_called_once()
 
-    def test_get_ticket_states(self, mock_zammad_api):
+    def test_get_ticket_states(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket_states method."""
         mock_instance = Mock()
         mock_instance.ticket_state.all.return_value = [{"id": 1, "name": "new"}, {"id": 2, "name": "open"}]
@@ -93,7 +95,7 @@ class TestZammadClientMethods:
         assert result[0]["name"] == "new"
         mock_instance.ticket_state.all.assert_called_once()
 
-    def test_get_ticket_priorities(self, mock_zammad_api):
+    def test_get_ticket_priorities(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket_priorities method."""
         mock_instance = Mock()
         mock_instance.ticket_priority.all.return_value = [{"id": 1, "name": "1 low"}, {"id": 2, "name": "2 normal"}]
@@ -107,7 +109,7 @@ class TestZammadClientMethods:
         assert result[0]["name"] == "1 low"
         mock_instance.ticket_priority.all.assert_called_once()
 
-    def test_search_users(self, mock_zammad_api):
+    def test_search_users(self, mock_zammad_api: Mock) -> None:
         """Test search_users method."""
         mock_instance = Mock()
         mock_instance.user.search.return_value = [
@@ -124,7 +126,7 @@ class TestZammadClientMethods:
         assert result[0]["email"] == "user1@example.com"
         mock_instance.user.search.assert_called_once_with("test", filters={"page": 1, "per_page": 10, "expand": True})
 
-    def test_get_current_user(self, mock_zammad_api):
+    def test_get_current_user(self, mock_zammad_api: Mock) -> None:
         """Test get_current_user method."""
         mock_instance = Mock()
         mock_instance.user.me.return_value = {
@@ -142,7 +144,7 @@ class TestZammadClientMethods:
         assert result["email"] == "current@example.com"
         mock_instance.user.me.assert_called_once()
 
-    def test_add_ticket_tag(self, mock_zammad_api):
+    def test_add_ticket_tag(self, mock_zammad_api: Mock) -> None:
         """Test add_ticket_tag method."""
         mock_instance = Mock()
         mock_instance.ticket_tag.add.return_value = {"success": True}
@@ -155,7 +157,7 @@ class TestZammadClientMethods:
         assert result["success"] is True
         mock_instance.ticket_tag.add.assert_called_once_with(1, "urgent")
 
-    def test_remove_ticket_tag(self, mock_zammad_api):
+    def test_remove_ticket_tag(self, mock_zammad_api: Mock) -> None:
         """Test remove_ticket_tag method."""
         mock_instance = Mock()
         mock_instance.ticket_tag.remove.return_value = {"success": True}
@@ -168,7 +170,7 @@ class TestZammadClientMethods:
         assert result["success"] is True
         mock_instance.ticket_tag.remove.assert_called_once_with(1, "urgent")
 
-    def test_oauth2_authentication(self, mock_zammad_api):
+    def test_oauth2_authentication(self, mock_zammad_api: Mock) -> None:
         """Test OAuth2 authentication."""
         mock_zammad_api.return_value = Mock()
 
@@ -183,7 +185,7 @@ class TestZammadClientMethods:
             oauth2_token="oauth-token",
         )
 
-    def test_username_password_authentication(self, mock_zammad_api):
+    def test_username_password_authentication(self, mock_zammad_api: Mock) -> None:
         """Test username/password authentication."""
         mock_zammad_api.return_value = Mock()
 
@@ -199,7 +201,7 @@ class TestZammadClientMethods:
             oauth2_token=None,
         )
 
-    def test_read_secret_file(self, mock_zammad_api, tmp_path):
+    def test_read_secret_file(self, mock_zammad_api: Mock, tmp_path: pathlib.Path) -> None:
         """Test reading secrets from files."""
         # Create a temporary secret file
         secret_file = tmp_path / "secret.txt"
@@ -212,7 +214,7 @@ class TestZammadClientMethods:
 
             assert client.http_token == "my-secret-token"
 
-    def test_read_secret_file_not_found(self, mock_zammad_api):
+    def test_read_secret_file_not_found(self, mock_zammad_api: Mock) -> None:
         """Test handling of missing secret file."""
         with patch.dict(
             os.environ,
@@ -229,7 +231,7 @@ class TestZammadClientMethods:
 
             assert client.http_token == "fallback-token"
 
-    def test_search_tickets_with_all_filters(self, mock_zammad_api):
+    def test_search_tickets_with_all_filters(self, mock_zammad_api: Mock) -> None:
         """Test search_tickets with all filter parameters."""
         mock_instance = Mock()
         mock_instance.ticket.search.return_value = [{"id": 1, "title": "Test Ticket"}]
@@ -254,7 +256,7 @@ class TestZammadClientMethods:
             expected_query, filters={"page": 2, "per_page": 50, "expand": True}
         )
 
-    def test_search_tickets_no_query(self, mock_zammad_api):
+    def test_search_tickets_no_query(self, mock_zammad_api: Mock) -> None:
         """Test search_tickets with no query uses ticket.all()."""
         mock_instance = Mock()
         mock_instance.ticket.all.return_value = [{"id": 1, "title": "Test Ticket"}]
@@ -267,7 +269,7 @@ class TestZammadClientMethods:
         assert len(result) == 1
         mock_instance.ticket.all.assert_called_once_with(filters={"page": 1, "per_page": 25, "expand": True})
 
-    def test_get_ticket_with_articles(self, mock_zammad_api):
+    def test_get_ticket_with_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with article pagination."""
         mock_instance = Mock()
         mock_instance.ticket.find.return_value = {"id": 1, "title": "Test Ticket"}
@@ -290,7 +292,7 @@ class TestZammadClientMethods:
         assert result["articles"][0]["body"] == "Article 2"
         assert result["articles"][1]["body"] == "Article 3"
 
-    def test_get_ticket_all_articles(self, mock_zammad_api):
+    def test_get_ticket_all_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with all articles."""
         mock_instance = Mock()
         mock_instance.ticket.find.return_value = {"id": 1, "title": "Test Ticket"}
@@ -304,7 +306,7 @@ class TestZammadClientMethods:
 
         assert len(result["articles"]) == 2
 
-    def test_create_ticket(self, mock_zammad_api):
+    def test_create_ticket(self, mock_zammad_api: Mock) -> None:
         """Test create_ticket method."""
         mock_instance = Mock()
         mock_instance.ticket.create.return_value = {"id": 1, "title": "New Ticket", "state": "new"}
@@ -335,7 +337,7 @@ class TestZammadClientMethods:
             }
         )
 
-    def test_add_article(self, mock_zammad_api):
+    def test_add_article(self, mock_zammad_api: Mock) -> None:
         """Test add_article method."""
         mock_instance = Mock()
         mock_instance.ticket_article.create.return_value = {"id": 1, "body": "Response", "type": "email"}
@@ -352,7 +354,7 @@ class TestZammadClientMethods:
             {"ticket_id": 1, "body": "Response", "type": "email", "internal": True, "sender": "Customer"}
         )
 
-    def test_get_user(self, mock_zammad_api):
+    def test_get_user(self, mock_zammad_api: Mock) -> None:
         """Test get_user method."""
         mock_instance = Mock()
         mock_instance.user.find.return_value = {
@@ -370,7 +372,7 @@ class TestZammadClientMethods:
         assert result["email"] == "user@example.com"
         mock_instance.user.find.assert_called_once_with(1)
 
-    def test_get_ticket_tags(self, mock_zammad_api):
+    def test_get_ticket_tags(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket_tags method."""
         mock_instance = Mock()
         mock_instance.ticket.tags.return_value = {"tags": ["urgent", "customer-issue", "bug"]}
@@ -384,7 +386,7 @@ class TestZammadClientMethods:
         assert "urgent" in result
         mock_instance.ticket.tags.assert_called_once_with(1)
 
-    def test_update_ticket_state_error_handling(self, mock_zammad_api):
+    def test_update_ticket_state_error_handling(self, mock_zammad_api: Mock) -> None:
         """Test update_ticket with special state handling."""
         mock_instance = Mock()
 
@@ -398,7 +400,7 @@ class TestZammadClientMethods:
         with pytest.raises(Exception, match="State error"):
             client.update_ticket(1, state="closed")
 
-    def test_update_ticket_priority_error_handling(self, mock_zammad_api):
+    def test_update_ticket_priority_error_handling(self, mock_zammad_api: Mock) -> None:
         """Test update_ticket with special priority handling."""
         mock_instance = Mock()
 
@@ -412,7 +414,7 @@ class TestZammadClientMethods:
         with pytest.raises(Exception, match="Priority error"):
             client.update_ticket(1, priority="1 low")
 
-    def test_update_ticket_group_error_handling(self, mock_zammad_api):
+    def test_update_ticket_group_error_handling(self, mock_zammad_api: Mock) -> None:
         """Test update_ticket with special group handling."""
         mock_instance = Mock()
 

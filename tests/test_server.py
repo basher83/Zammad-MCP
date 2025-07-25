@@ -1,6 +1,8 @@
 """Basic tests for Zammad MCP server."""
 
 import os
+import pathlib
+import tempfile
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -18,6 +20,7 @@ from mcp_zammad.server import (
     get_ticket_stats,
     get_user,
     initialize,
+    lifespan,
     list_groups,
     list_ticket_priorities,
     list_ticket_states,
@@ -857,13 +860,7 @@ def test_resource_handlers():
         ],
     }
 
-    # Get the resource handler function directly
-    # The resources are stored in server's namespace when decorated
-    get_ticket_resource = server.__class__._setup_resources.__code__.co_consts[1]
-
-    # Alternative approach: call the resource handler through the server
-    # Since we can't directly access the handler, we'll invoke it through get_client
-    original_get_client = server.get_client
+    # Set up the client for the server
     server.get_client = lambda: server.client
 
     # We need to test the actual resource functions, which are defined inside _setup_resources
@@ -1030,8 +1027,6 @@ async def test_initialize_with_dotenv():
     server = ZammadMCPServer()
 
     # Create a temp .env file
-    import tempfile
-
     with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
         f.write("ZAMMAD_URL=https://test.zammad.com/api/v1\n")
         f.write("ZAMMAD_HTTP_TOKEN=test-token\n")
@@ -1040,8 +1035,6 @@ async def test_initialize_with_dotenv():
     try:
         # Mock Path.cwd() to return temp directory
         with patch("mcp_zammad.server.Path.cwd") as mock_cwd:
-            import pathlib
-
             mock_cwd.return_value = pathlib.Path(temp_env_path).parent
 
             with patch("mcp_zammad.server.ZammadClient") as mock_client_class:
@@ -1063,16 +1056,12 @@ async def test_initialize_with_envrc_warning():
     """Test initialize with .envrc file but no env vars."""
     server = ZammadMCPServer()
 
-    import tempfile
-
     with tempfile.NamedTemporaryFile(mode="w", suffix=".envrc", delete=False) as f:
         f.write("export ZAMMAD_URL=https://test.zammad.com/api/v1\n")
         temp_envrc_path = f.name
 
     try:
         with patch("mcp_zammad.server.Path.cwd") as mock_cwd:
-            import pathlib
-
             # Create the .envrc file in temp directory
             temp_dir = pathlib.Path(temp_envrc_path).parent
             envrc_file = temp_dir / ".envrc"
@@ -1080,10 +1069,9 @@ async def test_initialize_with_envrc_warning():
 
             mock_cwd.return_value = temp_dir
 
-            with patch.dict(os.environ, {}, clear=True):
-                with patch("mcp_zammad.server.logger") as mock_logger:
-                    with pytest.raises(Exception):  # Will fail due to no env vars
-                        await server.initialize()
+            with patch.dict(os.environ, {}, clear=True), patch("mcp_zammad.server.logger") as mock_logger:
+                with pytest.raises(RuntimeError, match="No authentication method provided"):
+                    await server.initialize()
 
                     # Check that warning was logged
                     mock_logger.warning.assert_called_with(
@@ -1101,9 +1089,6 @@ async def test_lifespan_context_manager():
     """Test the lifespan context manager."""
     with patch("mcp_zammad.server.server") as mock_server:
         mock_server.initialize = AsyncMock()
-
-        # Import and use the lifespan context manager
-        from mcp_zammad.server import lifespan
 
         # Test the context manager
         async with lifespan(None) as result:
