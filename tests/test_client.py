@@ -61,23 +61,29 @@ def test_client_accepts_http_token(mock_api: MagicMock) -> None:
 
 def test_url_validation_no_protocol() -> None:
     """Test that URL validation rejects URLs without protocol."""
-    with patch.dict(os.environ, {"ZAMMAD_URL": "test.zammad.com", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
-        with pytest.raises(ConfigException, match="must include protocol"):
-            ZammadClient()
+    with (
+        patch.dict(os.environ, {"ZAMMAD_URL": "test.zammad.com", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True),
+        pytest.raises(ConfigException, match="must include protocol"),
+    ):
+        ZammadClient()
 
 
 def test_url_validation_invalid_protocol() -> None:
     """Test that URL validation rejects non-http/https protocols."""
-    with patch.dict(os.environ, {"ZAMMAD_URL": "ftp://test.zammad.com", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
-        with pytest.raises(ConfigException, match="must use http or https"):
-            ZammadClient()
+    with (
+        patch.dict(os.environ, {"ZAMMAD_URL": "ftp://test.zammad.com", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True),
+        pytest.raises(ConfigException, match="must use http or https"),
+    ):
+        ZammadClient()
 
 
 def test_url_validation_no_hostname() -> None:
     """Test that URL validation rejects URLs without hostname."""
-    with patch.dict(os.environ, {"ZAMMAD_URL": "https://", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
-        with pytest.raises(ConfigException, match="must include a valid hostname"):
-            ZammadClient()
+    with (
+        patch.dict(os.environ, {"ZAMMAD_URL": "https://", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True),
+        pytest.raises(ConfigException, match="must include a valid hostname"),
+    ):
+        ZammadClient()
 
 
 @patch("mcp_zammad.client.ZammadAPI")

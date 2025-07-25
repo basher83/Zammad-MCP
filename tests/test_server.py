@@ -3,6 +3,7 @@
 import os
 import pathlib
 import tempfile
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -1421,7 +1422,7 @@ class TestCachingMethods:
         # Create server instance with mocked client
         server = ZammadMCPServer()
         server.client = Mock()
-        
+
         # Mock the client to return groups
         groups_data = [
             {
@@ -1462,7 +1463,7 @@ class TestCachingMethods:
         # Create server instance with mocked client
         server = ZammadMCPServer()
         server.client = Mock()
-        
+
         states_data = [
             {
                 "id": 1,
@@ -1503,7 +1504,7 @@ class TestCachingMethods:
         # Create server instance with mocked client
         server = ZammadMCPServer()
         server.client = Mock()
-        
+
         priorities_data = [
             {
                 "id": 1,
@@ -1542,7 +1543,7 @@ class TestCachingMethods:
         # Create server instance with mocked client
         server = ZammadMCPServer()
         server.client = Mock()
-        
+
         # Set up mock data
         groups_data = [
             {
@@ -1634,7 +1635,7 @@ class TestResourceHandlers:
             "priority": {"name": "2 normal"},
             "created_at": "2024-01-01T00:00:00Z",
         }
-        server.client.get_ticket.return_value = ticket_data
+        server.client.get_ticket.return_value = ticket_data  # type: ignore[union-attr]
 
         # Import and test the resource handler function directly
 
@@ -1656,7 +1657,7 @@ class TestResourceHandlers:
 
         assert "Ticket #123 - Test Ticket" in result
         assert "State: open" in result
-        server.client.get_ticket.assert_called_once_with(123, include_articles=True, article_limit=20)
+        server.client.get_ticket.assert_called_once_with(123, include_articles=True, article_limit=20)  # type: ignore[union-attr]
 
     def test_user_resource_handler(self, server: ZammadMCPServer) -> None:
         """Test user resource handler - tests the actual function logic."""
@@ -1669,7 +1670,7 @@ class TestResourceHandlers:
             "login": "jdoe",
             "organization": {"name": "ACME Inc"},
         }
-        server.client.get_user.return_value = user_data
+        server.client.get_user.return_value = user_data  # type: ignore[union-attr]
 
         # Create a test function that mimics the resource handler
         def test_get_user_resource(user_id: str) -> str:
@@ -1689,7 +1690,7 @@ class TestResourceHandlers:
 
         assert "User: John Doe" in result
         assert "Email: john@example.com" in result
-        server.client.get_user.assert_called_once_with(456)
+        server.client.get_user.assert_called_once_with(456)  # type: ignore[union-attr]
 
     def test_organization_resource_handler(self, server: ZammadMCPServer) -> None:
         """Test organization resource handler - tests the actual function logic."""
@@ -1701,7 +1702,7 @@ class TestResourceHandlers:
             "domain": "acme.com",
             "active": True,
         }
-        server.client.get_organization.return_value = org_data
+        server.client.get_organization.return_value = org_data  # type: ignore[union-attr]
 
         # Create a test function that mimics the resource handler
         def test_get_org_resource(org_id: str) -> str:
@@ -1721,12 +1722,12 @@ class TestResourceHandlers:
 
         assert "Organization: ACME Corp" in result
         assert "Domain: acme.com" in result
-        server.client.get_organization.assert_called_once_with(789)
+        server.client.get_organization.assert_called_once_with(789)  # type: ignore[union-attr]
 
     def test_resource_handler_error(self, server: ZammadMCPServer) -> None:
         """Test resource handler error handling."""
         # Mock API error
-        server.client.get_ticket.side_effect = Exception("API Error")
+        server.client.get_ticket.side_effect = Exception("API Error")  # type: ignore[union-attr]
 
         # Create a test function that mimics the resource handler
         def test_get_ticket_resource(ticket_id: str) -> str:

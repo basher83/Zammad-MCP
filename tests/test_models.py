@@ -46,18 +46,18 @@ class TestTicketUpdate:
 
     def test_html_sanitization_in_title(self):
         """Test that HTML is escaped in title update."""
-        update = TicketUpdate(title="<i>Important</i> Update")
+        update = TicketUpdate(title="<i>Important</i> Update")  # type: ignore[call-arg]
         assert update.title == "&lt;i&gt;Important&lt;/i&gt; Update"
 
     def test_none_title_not_sanitized(self):
         """Test that None title is not processed."""
-        update = TicketUpdate(state="closed")
+        update = TicketUpdate(state="closed")  # type: ignore[call-arg]
         assert update.title is None
 
     def test_field_length_limits(self):
         """Test that field length limits are enforced."""
         with pytest.raises(ValidationError) as exc_info:
-            TicketUpdate(title="x" * 201)  # Exceeds 200 char limit
+            TicketUpdate(title="x" * 201)  # type: ignore[call-arg]  # Exceeds 200 char limit
         assert "String should have at most 200 characters" in str(exc_info.value)
 
 
@@ -86,4 +86,3 @@ class TestArticleCreate:
                 body="x" * 100001,  # Exceeds 100000 char limit
             )
         assert "String should have at most 100000 characters" in str(exc_info.value)
-

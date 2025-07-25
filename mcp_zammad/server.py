@@ -358,7 +358,7 @@ class ZammadMCPServer:
 
     def _get_cached_groups(self) -> list[Group]:
         """Get cached list of groups."""
-        if not hasattr(self, '_groups_cache'):
+        if not hasattr(self, "_groups_cache"):
             client = self.get_client()
             groups_data = client.get_groups()
             self._groups_cache = [Group(**group) for group in groups_data]
@@ -366,7 +366,7 @@ class ZammadMCPServer:
 
     def _get_cached_states(self) -> list[TicketState]:
         """Get cached list of ticket states."""
-        if not hasattr(self, '_states_cache'):
+        if not hasattr(self, "_states_cache"):
             client = self.get_client()
             states_data = client.get_ticket_states()
             self._states_cache = [TicketState(**state) for state in states_data]
@@ -374,7 +374,7 @@ class ZammadMCPServer:
 
     def _get_cached_priorities(self) -> list[TicketPriority]:
         """Get cached list of ticket priorities."""
-        if not hasattr(self, '_priorities_cache'):
+        if not hasattr(self, "_priorities_cache"):
             client = self.get_client()
             priorities_data = client.get_ticket_priorities()
             self._priorities_cache = [TicketPriority(**priority) for priority in priorities_data]
@@ -382,11 +382,11 @@ class ZammadMCPServer:
 
     def clear_caches(self) -> None:
         """Clear all cached data."""
-        if hasattr(self, '_groups_cache'):
+        if hasattr(self, "_groups_cache"):
             del self._groups_cache
-        if hasattr(self, '_states_cache'):
+        if hasattr(self, "_states_cache"):
             del self._states_cache
-        if hasattr(self, '_priorities_cache'):
+        if hasattr(self, "_priorities_cache"):
             del self._priorities_cache
 
     def _setup_system_tools(self) -> None:

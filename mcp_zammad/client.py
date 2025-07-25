@@ -69,24 +69,29 @@ class ZammadClient:
 
     def _validate_url(self, url: str) -> None:
         """Validate URL format to prevent SSRF attacks."""
+
+        def _raise_config_error(message: str) -> None:
+            """Helper to raise ConfigException."""
+            raise ConfigException(message)
+
         try:
             parsed = urlparse(url)
 
             # Ensure URL has a scheme
             if not parsed.scheme:
-                raise ConfigException("Zammad URL must include protocol (http:// or https://)")
+                _raise_config_error("Zammad URL must include protocol (http:// or https://)")
 
             # Only allow http/https
             if parsed.scheme not in ["http", "https"]:
-                raise ConfigException("Zammad URL must use http or https protocol")
+                _raise_config_error("Zammad URL must use http or https protocol")
 
             # Ensure URL has a hostname
             if not parsed.hostname:
-                raise ConfigException("Zammad URL must include a valid hostname")
+                _raise_config_error("Zammad URL must include a valid hostname")
 
             # Block local/private networks (optional - adjust based on your security requirements)
-            hostname = parsed.hostname.lower()
-            blocked_hosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"]
+            hostname = parsed.hostname.lower() if parsed.hostname else ""
+            blocked_hosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"]  # nosec B104
             if hostname in blocked_hosts:
                 logger.warning(f"Zammad URL points to local host: {hostname}")
 
