@@ -1069,14 +1069,20 @@ async def test_initialize_with_envrc_warning():
 
             mock_cwd.return_value = temp_dir
 
-            with patch.dict(os.environ, {}, clear=True), patch("mcp_zammad.server.logger") as mock_logger:
+            with (
+                patch.dict(os.environ, {}, clear=True),
+                patch("mcp_zammad.server.logger") as mock_logger,
+                patch("mcp_zammad.server.ZammadClient") as mock_client_class,
+            ):
+                # Patch ZammadClient to avoid the ConfigException
+                mock_client_class.side_effect = RuntimeError("No authentication method provided")
                 with pytest.raises(RuntimeError, match="No authentication method provided"):
                     await server.initialize()
 
-                    # Check that warning was logged
-                    mock_logger.warning.assert_called_with(
-                        "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
-                    )
+                # Check that warning was logged
+                mock_logger.warning.assert_called_with(
+                    "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
+                )
 
             # Clean up
             envrc_file.unlink()
