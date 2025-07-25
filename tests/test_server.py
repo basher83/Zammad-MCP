@@ -529,39 +529,29 @@ async def test_tag_operations(mock_zammad_client):
 async def test_update_ticket_tool(mock_zammad_client, sample_ticket_data):
     """Test update ticket tool."""
     mock_instance, _ = mock_zammad_client
-    
+
     # Mock the update response
     updated_ticket = sample_ticket_data.copy()
     updated_ticket["title"] = "Updated Title"
     updated_ticket["state_id"] = 2
     updated_ticket["priority_id"] = 3
-    
+
     mock_instance.update_ticket.return_value = updated_ticket
-    
+
     await initialize()
     server.zammad_client = mock_instance
-    
+
     # Test updating multiple fields
     result = update_ticket(
-        ticket_id=1,
-        title="Updated Title",
-        state="open",
-        priority="3 high",
-        owner="agent@example.com",
-        group="Support"
+        ticket_id=1, title="Updated Title", state="open", priority="3 high", owner="agent@example.com", group="Support"
     )
-    
+
     assert result.id == 1
     assert result.title == "Updated Title"
-    
+
     # Verify the client was called with correct parameters
     mock_instance.update_ticket.assert_called_once_with(
-        1,
-        title="Updated Title",
-        state="open",
-        priority="3 high",
-        owner="agent@example.com",
-        group="Support"
+        1, title="Updated Title", state="open", priority="3 high", owner="agent@example.com", group="Support"
     )
 
 
@@ -569,18 +559,18 @@ async def test_update_ticket_tool(mock_zammad_client, sample_ticket_data):
 async def test_get_organization_tool(mock_zammad_client, sample_organization_data):
     """Test get organization tool."""
     mock_instance, _ = mock_zammad_client
-    
+
     mock_instance.get_organization.return_value = sample_organization_data
-    
+
     await initialize()
     server.zammad_client = mock_instance
-    
+
     result = get_organization(org_id=1)
-    
+
     assert result.id == 1
     assert result.name == "Test Organization"
     assert result.domain == "test.com"
-    
+
     mock_instance.get_organization.assert_called_once_with(1)
 
 
@@ -588,58 +578,68 @@ async def test_get_organization_tool(mock_zammad_client, sample_organization_dat
 async def test_search_organizations_tool(mock_zammad_client, sample_organization_data):
     """Test search organizations tool."""
     mock_instance, _ = mock_zammad_client
-    
+
     mock_instance.search_organizations.return_value = [sample_organization_data]
-    
+
     await initialize()
     server.zammad_client = mock_instance
-    
+
     # Test basic search
     results = search_organizations(query="test")
-    
+
     assert len(results) == 1
     assert results[0].name == "Test Organization"
-    
-    mock_instance.search_organizations.assert_called_once_with(
-        query="test",
-        page=1,
-        per_page=25
-    )
-    
+
+    mock_instance.search_organizations.assert_called_once_with(query="test", page=1, per_page=25)
+
     # Test with pagination
     mock_instance.reset_mock()
     search_organizations(query="test", page=2, per_page=50)
-    
-    mock_instance.search_organizations.assert_called_once_with(
-        query="test",
-        page=2,
-        per_page=50
-    )
+
+    mock_instance.search_organizations.assert_called_once_with(query="test", page=2, per_page=50)
 
 
 @pytest.mark.asyncio
 async def test_list_groups_tool(mock_zammad_client):
     """Test list groups tool."""
     mock_instance, _ = mock_zammad_client
-    
+
     mock_groups = [
-        {"id": 1, "name": "Users", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
-        {"id": 2, "name": "Support", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
-        {"id": 3, "name": "Sales", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
+        {
+            "id": 1,
+            "name": "Users",
+            "active": True,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        },
+        {
+            "id": 2,
+            "name": "Support",
+            "active": True,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        },
+        {
+            "id": 3,
+            "name": "Sales",
+            "active": True,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        },
     ]
-    
+
     mock_instance.get_groups.return_value = mock_groups
-    
+
     await initialize()
     server.zammad_client = mock_instance
-    
+
     results = list_groups()
-    
+
     assert len(results) == 3
     assert results[0].name == "Users"
     assert results[1].name == "Support"
     assert results[2].name == "Sales"
-    
+
     mock_instance.get_groups.assert_called_once()
 
 
@@ -647,25 +647,43 @@ async def test_list_groups_tool(mock_zammad_client):
 async def test_list_ticket_states_tool(mock_zammad_client):
     """Test list ticket states tool."""
     mock_instance, _ = mock_zammad_client
-    
+
     mock_states = [
-        {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
-        {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
-        {"id": 4, "name": "closed", "state_type_id": 5, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
+        {
+            "id": 1,
+            "name": "new",
+            "state_type_id": 1,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        },
+        {
+            "id": 2,
+            "name": "open",
+            "state_type_id": 2,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        },
+        {
+            "id": 4,
+            "name": "closed",
+            "state_type_id": 5,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        },
     ]
-    
+
     mock_instance.get_ticket_states.return_value = mock_states
-    
+
     await initialize()
     server.zammad_client = mock_instance
-    
+
     results = list_ticket_states()
-    
+
     assert len(results) == 3
     assert results[0].name == "new"
     assert results[1].name == "open"
     assert results[2].name == "closed"
-    
+
     mock_instance.get_ticket_states.assert_called_once()
 
 
@@ -673,25 +691,43 @@ async def test_list_ticket_states_tool(mock_zammad_client):
 async def test_list_ticket_priorities_tool(mock_zammad_client):
     """Test list ticket priorities tool."""
     mock_instance, _ = mock_zammad_client
-    
+
     mock_priorities = [
-        {"id": 1, "name": "1 low", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
-        {"id": 2, "name": "2 normal", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
-        {"id": 3, "name": "3 high", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
+        {
+            "id": 1,
+            "name": "1 low",
+            "active": True,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        },
+        {
+            "id": 2,
+            "name": "2 normal",
+            "active": True,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        },
+        {
+            "id": 3,
+            "name": "3 high",
+            "active": True,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        },
     ]
-    
+
     mock_instance.get_ticket_priorities.return_value = mock_priorities
-    
+
     await initialize()
     server.zammad_client = mock_instance
-    
+
     results = list_ticket_priorities()
-    
+
     assert len(results) == 3
     assert results[0].name == "1 low"
     assert results[1].name == "2 normal"
     assert results[2].name == "3 high"
-    
+
     mock_instance.get_ticket_priorities.assert_called_once()
 
 
@@ -699,20 +735,20 @@ async def test_list_ticket_priorities_tool(mock_zammad_client):
 async def test_get_current_user_tool(mock_zammad_client, sample_user_data):
     """Test get current user tool."""
     mock_instance, _ = mock_zammad_client
-    
+
     # Override the default initialization response
     mock_instance.get_current_user.return_value = sample_user_data
-    
+
     await initialize()
     server.zammad_client = mock_instance
-    
+
     result = get_current_user()
-    
+
     assert result.id == 1
     assert result.email == "test@example.com"
     assert result.firstname == "Test"
     assert result.lastname == "User"
-    
+
     # get_current_user is called twice: once during init, once for the tool
     assert mock_instance.get_current_user.call_count == 2
 
@@ -721,41 +757,33 @@ async def test_get_current_user_tool(mock_zammad_client, sample_user_data):
 async def test_search_users_tool(mock_zammad_client, sample_user_data):
     """Test search users tool."""
     mock_instance, _ = mock_zammad_client
-    
+
     mock_instance.search_users.return_value = [sample_user_data]
-    
+
     await initialize()
     server.zammad_client = mock_instance
-    
+
     # Test basic search
     results = search_users(query="test@example.com")
-    
+
     assert len(results) == 1
     assert results[0].email == "test@example.com"
     assert results[0].firstname == "Test"
-    
-    mock_instance.search_users.assert_called_once_with(
-        query="test@example.com",
-        page=1,
-        per_page=25
-    )
-    
+
+    mock_instance.search_users.assert_called_once_with(query="test@example.com", page=1, per_page=25)
+
     # Test with pagination
     mock_instance.reset_mock()
     search_users(query="test", page=3, per_page=10)
-    
-    mock_instance.search_users.assert_called_once_with(
-        query="test",
-        page=3,
-        per_page=10
-    )
+
+    mock_instance.search_users.assert_called_once_with(query="test", page=3, per_page=10)
 
 
 @pytest.mark.asyncio
 async def test_get_ticket_stats_tool(mock_zammad_client):
     """Test get ticket stats tool."""
     mock_instance, _ = mock_zammad_client
-    
+
     # Create mock tickets with various states
     mock_tickets = [
         {"id": 1, "state": "new", "title": "New ticket"},
@@ -765,40 +793,40 @@ async def test_get_ticket_stats_tool(mock_zammad_client):
         {"id": 5, "state": {"name": "pending reminder", "id": 3}, "title": "Pending ticket"},
         {"id": 6, "state": "open", "first_response_escalation_at": "2024-01-01", "title": "Escalated ticket"},
     ]
-    
+
     mock_instance.search_tickets.return_value = mock_tickets
-    
+
     await initialize()
     server.zammad_client = mock_instance
-    
+
     # Test basic stats
     stats = get_ticket_stats()
-    
+
     assert stats.total_count == 6
     assert stats.open_count == 4  # new + open tickets
     assert stats.closed_count == 1
     assert stats.pending_count == 1
     assert stats.escalated_count == 1
-    
+
     mock_instance.search_tickets.assert_called_once_with(group=None, per_page=100)
-    
+
     # Test with group filter
     mock_instance.reset_mock()
     mock_instance.search_tickets.return_value = mock_tickets[:3]
-    
+
     stats = get_ticket_stats(group="Support")
-    
+
     assert stats.total_count == 3
     assert stats.open_count == 3
-    
+
     mock_instance.search_tickets.assert_called_once_with(group="Support", per_page=100)
-    
+
     # Test with date filters (should log warning but still work)
     mock_instance.reset_mock()
     mock_instance.search_tickets.return_value = mock_tickets
-    
+
     stats = get_ticket_stats(start_date="2024-01-01", end_date="2024-12-31")
-    
+
     assert stats.total_count == 6
     mock_instance.search_tickets.assert_called_once_with(group=None, per_page=100)
 
@@ -807,10 +835,10 @@ def test_resource_handlers():
     """Test resource handler registration and execution."""
     server = ZammadMCPServer()
     server.client = Mock()
-    
+
     # Setup resources
     server._setup_resources()
-    
+
     # Test ticket resource
     server.client.get_ticket.return_value = {
         "id": 1,
@@ -824,43 +852,45 @@ def test_resource_handlers():
             {
                 "created_at": "2024-01-01T00:00:00Z",
                 "created_by": {"email": "agent@example.com"},
-                "body": "Initial ticket description"
+                "body": "Initial ticket description",
             }
-        ]
+        ],
     }
-    
+
     # Get the resource handler function directly
     # The resources are stored in server's namespace when decorated
     get_ticket_resource = server.__class__._setup_resources.__code__.co_consts[1]
-    
+
     # Alternative approach: call the resource handler through the server
     # Since we can't directly access the handler, we'll invoke it through get_client
     original_get_client = server.get_client
     server.get_client = lambda: server.client
-    
+
     # We need to test the actual resource functions, which are defined inside _setup_resources
     # Let's create a new server instance and capture the resources as they're registered
     test_resources = {}
-    
+
     original_resource = server.mcp.resource
+
     def capture_resource(uri_template):
         def decorator(func):
             test_resources[uri_template] = func
             return original_resource(uri_template)(func)
+
         return decorator
-    
+
     server.mcp.resource = capture_resource
     server._setup_resources()
-    
+
     # Now test the captured resource handlers
     result = test_resources["zammad://ticket/{ticket_id}"](ticket_id="1")
-    
+
     assert "Ticket #12345 - Test Issue" in result
     assert "State: open" in result
     assert "Priority: high" in result
     assert "Customer: test@example.com" in result
     assert "Initial ticket description" in result
-    
+
     # Test user resource
     server.client.get_user.return_value = {
         "id": 1,
@@ -871,15 +901,15 @@ def test_resource_handlers():
         "organization": {"name": "Test Corp"},
         "active": True,
         "vip": False,
-        "created_at": "2024-01-01T00:00:00Z"
+        "created_at": "2024-01-01T00:00:00Z",
     }
-    
+
     result = test_resources["zammad://user/{user_id}"](user_id="1")
-    
+
     assert "User: John Doe" in result
     assert "Email: john.doe@example.com" in result
     assert "Organization: Test Corp" in result
-    
+
     # Test organization resource
     server.client.get_organization.return_value = {
         "id": 1,
@@ -887,11 +917,11 @@ def test_resource_handlers():
         "domain": "testcorp.com",
         "active": True,
         "note": "Important client",
-        "created_at": "2024-01-01T00:00:00Z"
+        "created_at": "2024-01-01T00:00:00Z",
     }
-    
+
     result = test_resources["zammad://organization/{org_id}"](org_id="1")
-    
+
     assert "Organization: Test Corporation" in result
     assert "Domain: testcorp.com" in result
     assert "Note: Important client" in result
@@ -901,36 +931,38 @@ def test_resource_error_handling():
     """Test resource error handling."""
     server = ZammadMCPServer()
     server.client = Mock()
-    
+
     # Use the same approach as test_resource_handlers
     test_resources = {}
-    
+
     original_resource = server.mcp.resource
+
     def capture_resource(uri_template):
         def decorator(func):
             test_resources[uri_template] = func
             return original_resource(uri_template)(func)
+
         return decorator
-    
+
     server.mcp.resource = capture_resource
     server.get_client = lambda: server.client
     server._setup_resources()
-    
+
     # Test ticket resource error
     server.client.get_ticket.side_effect = Exception("API Error")
-    
+
     result = test_resources["zammad://ticket/{ticket_id}"](ticket_id="999")
     assert "Error retrieving ticket 999: API Error" in result
-    
+
     # Test user resource error
     server.client.get_user.side_effect = Exception("User not found")
-    
+
     result = test_resources["zammad://user/{user_id}"](user_id="999")
     assert "Error retrieving user 999: User not found" in result
-    
+
     # Test org resource error
     server.client.get_organization.side_effect = Exception("Org not found")
-    
+
     result = test_resources["zammad://organization/{org_id}"](org_id="999")
     assert "Error retrieving organization 999: Org not found" in result
 
@@ -938,32 +970,34 @@ def test_resource_error_handling():
 def test_prompt_handlers():
     """Test prompt handlers."""
     server = ZammadMCPServer()
-    
+
     # Capture prompts as they're registered
     test_prompts = {}
-    
+
     original_prompt = server.mcp.prompt
+
     def capture_prompt(name=None):
         def decorator(func):
             test_prompts[func.__name__ if name is None else name] = func
             return original_prompt(name)(func)
+
         return decorator
-    
+
     server.mcp.prompt = capture_prompt
     server._setup_prompts()
-    
+
     # Test analyze_ticket prompt
     assert "analyze_ticket" in test_prompts
     result = test_prompts["analyze_ticket"](ticket_id=123)
     assert "analyze ticket 123" in result
     assert "get_ticket tool" in result
-    
+
     # Test draft_response prompt
     assert "draft_response" in test_prompts
     result = test_prompts["draft_response"](ticket_id=123, tone="friendly")
     assert "draft a friendly response to ticket 123" in result
     assert "add_article" in result
-    
+
     # Test escalation_summary prompt
     assert "escalation_summary" in test_prompts
     result = test_prompts["escalation_summary"](group="Support")
@@ -975,7 +1009,7 @@ def test_get_client_error():
     """Test get_client error when not initialized."""
     server = ZammadMCPServer()
     server.client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         server.get_client()
 
@@ -985,7 +1019,7 @@ def test_get_client_success():
     server = ZammadMCPServer()
     mock_client = Mock()
     server.client = mock_client
-    
+
     result = server.get_client()
     assert result is mock_client
 
@@ -994,27 +1028,29 @@ def test_get_client_success():
 async def test_initialize_with_dotenv():
     """Test initialize with .env file."""
     server = ZammadMCPServer()
-    
+
     # Create a temp .env file
     import tempfile
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
-        f.write('ZAMMAD_URL=https://test.zammad.com/api/v1\n')
-        f.write('ZAMMAD_HTTP_TOKEN=test-token\n')
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
+        f.write("ZAMMAD_URL=https://test.zammad.com/api/v1\n")
+        f.write("ZAMMAD_HTTP_TOKEN=test-token\n")
         temp_env_path = f.name
-    
+
     try:
         # Mock Path.cwd() to return temp directory
-        with patch('mcp_zammad.server.Path.cwd') as mock_cwd:
+        with patch("mcp_zammad.server.Path.cwd") as mock_cwd:
             import pathlib
+
             mock_cwd.return_value = pathlib.Path(temp_env_path).parent
-            
-            with patch('mcp_zammad.server.ZammadClient') as mock_client_class:
+
+            with patch("mcp_zammad.server.ZammadClient") as mock_client_class:
                 mock_client = MagicMock()
                 mock_client.get_current_user.return_value = {"email": "test@example.com"}
                 mock_client_class.return_value = mock_client
-                
+
                 await server.initialize()
-                
+
                 assert server.client is not None
                 mock_client.get_current_user.assert_called_once()
     finally:
@@ -1026,32 +1062,34 @@ async def test_initialize_with_dotenv():
 async def test_initialize_with_envrc_warning():
     """Test initialize with .envrc file but no env vars."""
     server = ZammadMCPServer()
-    
+
     import tempfile
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.envrc', delete=False) as f:
-        f.write('export ZAMMAD_URL=https://test.zammad.com/api/v1\n')
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".envrc", delete=False) as f:
+        f.write("export ZAMMAD_URL=https://test.zammad.com/api/v1\n")
         temp_envrc_path = f.name
-    
+
     try:
-        with patch('mcp_zammad.server.Path.cwd') as mock_cwd:
+        with patch("mcp_zammad.server.Path.cwd") as mock_cwd:
             import pathlib
+
             # Create the .envrc file in temp directory
             temp_dir = pathlib.Path(temp_envrc_path).parent
             envrc_file = temp_dir / ".envrc"
-            envrc_file.write_text('export ZAMMAD_URL=https://test.zammad.com/api/v1\n')
-            
+            envrc_file.write_text("export ZAMMAD_URL=https://test.zammad.com/api/v1\n")
+
             mock_cwd.return_value = temp_dir
-            
+
             with patch.dict(os.environ, {}, clear=True):
-                with patch('mcp_zammad.server.logger') as mock_logger:
+                with patch("mcp_zammad.server.logger") as mock_logger:
                     with pytest.raises(Exception):  # Will fail due to no env vars
                         await server.initialize()
-                    
+
                     # Check that warning was logged
                     mock_logger.warning.assert_called_with(
                         "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
                     )
-            
+
             # Clean up
             envrc_file.unlink()
     finally:
@@ -1061,12 +1099,12 @@ async def test_initialize_with_envrc_warning():
 @pytest.mark.asyncio
 async def test_lifespan_context_manager():
     """Test the lifespan context manager."""
-    with patch('mcp_zammad.server.server') as mock_server:
+    with patch("mcp_zammad.server.server") as mock_server:
         mock_server.initialize = AsyncMock()
-        
+
         # Import and use the lifespan context manager
         from mcp_zammad.server import lifespan
-        
+
         # Test the context manager
         async with lifespan(None) as result:
             # Verify initialize was called
@@ -1079,7 +1117,7 @@ def test_tool_implementations_are_called():
     """Test that tool implementations are actually executed."""
     server = ZammadMCPServer()
     server.client = Mock()
-    
+
     # Mock client methods with complete ticket data
     complete_ticket = {
         "id": 1,
@@ -1093,29 +1131,73 @@ def test_tool_implementations_are_called():
         "created_by_id": 1,
         "updated_by_id": 1,
         "created_at": "2024-01-01T00:00:00Z",
-        "updated_at": "2024-01-01T00:00:00Z"
+        "updated_at": "2024-01-01T00:00:00Z",
     }
     server.client.search_tickets.return_value = [complete_ticket]
     server.client.get_ticket.return_value = complete_ticket
     server.client.create_ticket.return_value = complete_ticket
     server.client.update_ticket.return_value = complete_ticket
-    server.client.add_article.return_value = {"id": 1, "body": "Article", "ticket_id": 1, "type": "note", "sender": "Agent", "created_by_id": 1, "updated_by_id": 1, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
-    server.client.get_user.return_value = {"id": 1, "email": "test@example.com", "firstname": "Test", "lastname": "User", "login": "test", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
-    server.client.search_users.return_value = [{"id": 1, "email": "test@example.com", "firstname": "Test", "lastname": "User", "login": "test", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}]
-    server.client.get_organization.return_value = {"id": 1, "name": "Test Org", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
-    server.client.search_organizations.return_value = [{"id": 1, "name": "Test Org", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}]
-    
+    server.client.add_article.return_value = {
+        "id": 1,
+        "body": "Article",
+        "ticket_id": 1,
+        "type": "note",
+        "sender": "Agent",
+        "created_by_id": 1,
+        "updated_by_id": 1,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+    }
+    server.client.get_user.return_value = {
+        "id": 1,
+        "email": "test@example.com",
+        "firstname": "Test",
+        "lastname": "User",
+        "login": "test",
+        "active": True,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+    }
+    server.client.search_users.return_value = [
+        {
+            "id": 1,
+            "email": "test@example.com",
+            "firstname": "Test",
+            "lastname": "User",
+            "login": "test",
+            "active": True,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        }
+    ]
+    server.client.get_organization.return_value = {
+        "id": 1,
+        "name": "Test Org",
+        "active": True,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+    }
+    server.client.search_organizations.return_value = [
+        {
+            "id": 1,
+            "name": "Test Org",
+            "active": True,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+        }
+    ]
+
     # Call tool handlers directly through the decorated functions
     # We need to actually invoke the tools to cover the implementation lines
     tool_manager = server.mcp._tool_manager
-    
+
     # Find and call search_tickets tool
     search_tickets_tool = None
     for tool in tool_manager._tools.values():
         if tool.name == "search_tickets":
             search_tickets_tool = tool.fn
             break
-    
+
     assert search_tickets_tool is not None
     result = search_tickets_tool(query="test")
     assert len(result) == 1
@@ -1126,29 +1208,31 @@ def test_get_ticket_stats_with_date_warning():
     """Test get_ticket_stats with date parameters shows warning."""
     server = ZammadMCPServer()
     server.client = Mock()
-    
+
     # Capture tools as they're registered
     test_tools = {}
-    
+
     original_tool = server.mcp.tool
+
     def capture_tool(name=None):
         def decorator(func):
             test_tools[func.__name__ if name is None else name] = func
             return original_tool(name)(func)
+
         return decorator
-    
+
     server.mcp.tool = capture_tool
     server.get_client = lambda: server.client
     server._setup_system_tools()
-    
+
     # Mock search results
     server.client.search_tickets.return_value = []
-    
-    with patch('mcp_zammad.server.logger') as mock_logger:
+
+    with patch("mcp_zammad.server.logger") as mock_logger:
         # Get the captured tool
         assert "get_ticket_stats" in test_tools
         stats = test_tools["get_ticket_stats"](start_date="2024-01-01", end_date="2024-12-31")
-        
+
         assert stats.total_count == 0
         mock_logger.warning.assert_called_with("Date filtering not yet implemented - ignoring date parameters")
 
@@ -1160,7 +1244,7 @@ def test_legacy_search_tickets_without_client():
     """Test legacy search_tickets wrapper when client not initialized."""
     # Reset the global client
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         search_tickets()
 
@@ -1168,7 +1252,7 @@ def test_legacy_search_tickets_without_client():
 def test_legacy_get_ticket_without_client():
     """Test legacy get_ticket wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         get_ticket(1)
 
@@ -1176,7 +1260,7 @@ def test_legacy_get_ticket_without_client():
 def test_legacy_create_ticket_without_client():
     """Test legacy create_ticket wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         create_ticket("Test", "Group", "customer@example.com", "Body")
 
@@ -1184,7 +1268,7 @@ def test_legacy_create_ticket_without_client():
 def test_legacy_add_article_without_client():
     """Test legacy add_article wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         add_article(1, "Body")
 
@@ -1192,7 +1276,7 @@ def test_legacy_add_article_without_client():
 def test_legacy_get_user_without_client():
     """Test legacy get_user wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         get_user(1)
 
@@ -1200,7 +1284,7 @@ def test_legacy_get_user_without_client():
 def test_legacy_add_ticket_tag_without_client():
     """Test legacy add_ticket_tag wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         add_ticket_tag(1, "tag")
 
@@ -1208,7 +1292,7 @@ def test_legacy_add_ticket_tag_without_client():
 def test_legacy_remove_ticket_tag_without_client():
     """Test legacy remove_ticket_tag wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         remove_ticket_tag(1, "tag")
 
@@ -1216,7 +1300,7 @@ def test_legacy_remove_ticket_tag_without_client():
 def test_legacy_update_ticket_without_client():
     """Test legacy update_ticket wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         update_ticket(1, title="New Title")
 
@@ -1224,7 +1308,7 @@ def test_legacy_update_ticket_without_client():
 def test_legacy_get_organization_without_client():
     """Test legacy get_organization wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         get_organization(1)
 
@@ -1232,7 +1316,7 @@ def test_legacy_get_organization_without_client():
 def test_legacy_search_organizations_without_client():
     """Test legacy search_organizations wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         search_organizations("test")
 
@@ -1240,7 +1324,7 @@ def test_legacy_search_organizations_without_client():
 def test_legacy_list_groups_without_client():
     """Test legacy list_groups wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         list_groups()
 
@@ -1248,7 +1332,7 @@ def test_legacy_list_groups_without_client():
 def test_legacy_list_ticket_states_without_client():
     """Test legacy list_ticket_states wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         list_ticket_states()
 
@@ -1256,7 +1340,7 @@ def test_legacy_list_ticket_states_without_client():
 def test_legacy_list_ticket_priorities_without_client():
     """Test legacy list_ticket_priorities wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         list_ticket_priorities()
 
@@ -1264,7 +1348,7 @@ def test_legacy_list_ticket_priorities_without_client():
 def test_legacy_get_current_user_without_client():
     """Test legacy get_current_user wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         get_current_user()
 
@@ -1272,7 +1356,7 @@ def test_legacy_get_current_user_without_client():
 def test_legacy_search_users_without_client():
     """Test legacy search_users wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         search_users("test")
 
@@ -1280,6 +1364,6 @@ def test_legacy_search_users_without_client():
 def test_legacy_get_ticket_stats_without_client():
     """Test legacy get_ticket_stats wrapper when client not initialized."""
     server.zammad_client = None
-    
+
     with pytest.raises(RuntimeError, match="Zammad client not initialized"):
         get_ticket_stats()
