@@ -59,12 +59,20 @@ target-version = "py310"
 select = ["E", "F", "I", "N", "UP", "YTT", "B", "A", "C4", "DTZ", "T10", "EM", "ISC", "ICN", "PIE", "Q", "RET", "SIM", "TID", "ARG", "ERA", "PGH", "PL", "TRY", "RUF"]
 ignore = ["E501", "PLR0913", "TRY003", "EM101", "EM102"]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004", "S101", "ARG001", "ARG002"]  # Allow magic numbers, asserts, and unused args in tests
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+check_untyped_defs = true
 
 [tool.uv]
 dev-dependencies = [

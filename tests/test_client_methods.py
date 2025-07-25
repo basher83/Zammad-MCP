@@ -9,6 +9,10 @@ import pytest
 
 from mcp_zammad.client import ZammadClient
 
+# Test constants to avoid magic numbers
+EXPECTED_TWO_RESULTS = 2
+EXPECTED_THREE_RESULTS = 3
+
 
 class TestZammadClientMethods:
     """Test ZammadClient methods."""
@@ -48,7 +52,7 @@ class TestZammadClientMethods:
 
         result = client.search_organizations("test", page=1, per_page=25)
 
-        assert len(result) == 2
+        assert len(result) == EXPECTED_TWO_RESULTS
         assert result[0]["name"] == "Org 1"
         mock_instance.organization.search.assert_called_once_with(
             "test", filters={"page": 1, "per_page": 25, "expand": True}
