@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 MAX_TICKETS_FOR_MEMORY_SCAN = 1000
+MAX_TICKETS_PER_STATE_IN_QUEUE = 10
 
 
 class ZammadMCPServer:
@@ -547,6 +548,13 @@ class ZammadMCPServer:
 
     def _setup_resources(self) -> None:
         """Register all resources with the MCP server."""
+        self._setup_ticket_resource()
+        self._setup_user_resource()
+        self._setup_organization_resource()
+        self._setup_queue_resource()
+
+    def _setup_ticket_resource(self) -> None:
+        """Register ticket resource."""
 
         @self.mcp.resource("zammad://ticket/{ticket_id}")
         def get_ticket_resource(ticket_id: str) -> str:
@@ -581,6 +589,9 @@ class ZammadMCPServer:
             except Exception as e:
                 return f"Error retrieving ticket {ticket_id}: {e!s}"
 
+    def _setup_user_resource(self) -> None:
+        """Register user resource."""
+
         @self.mcp.resource("zammad://user/{user_id}")
         def get_user_resource(user_id: str) -> str:
             """Get a user as a resource."""
@@ -602,6 +613,9 @@ class ZammadMCPServer:
             except Exception as e:
                 return f"Error retrieving user {user_id}: {e!s}"
 
+    def _setup_organization_resource(self) -> None:
+        """Register organization resource."""
+
         @self.mcp.resource("zammad://organization/{org_id}")
         def get_organization_resource(org_id: str) -> str:
             """Get an organization as a resource."""
@@ -620,6 +634,63 @@ class ZammadMCPServer:
                 return "\n".join(lines)
             except Exception as e:
                 return f"Error retrieving organization {org_id}: {e!s}"
+
+    def _setup_queue_resource(self) -> None:
+        """Register queue resource."""
+
+        @self.mcp.resource("zammad://queue/{group}")
+        def get_queue_resource(group: str) -> str:
+            """Get ticket queue for a specific group as a resource."""
+            client = self.get_client()
+            try:
+                # Search for tickets in the specified group with various states
+                tickets = client.search_tickets(group=group, per_page=50)
+
+                if not tickets:
+                    return f"Queue for group '{group}': No tickets found"
+
+                # Organize tickets by state
+                ticket_states: dict[str, list[dict[str, Any]]] = {}
+                for ticket in tickets:
+                    state = ticket.get("state")
+                    state_name = ""
+                    if isinstance(state, str):
+                        state_name = state
+                    elif isinstance(state, dict):
+                        state_name = str(state.get("name", ""))
+
+                    if state_name not in ticket_states:
+                        ticket_states[state_name] = []
+                    ticket_states[state_name].append(ticket)
+
+                lines = [
+                    f"Queue for Group: {group}",
+                    f"Total Tickets: {len(tickets)}",
+                    "",
+                ]
+
+                # Add summary by state
+                for state, state_tickets in sorted(ticket_states.items()):
+                    lines.append(f"{state.title()} ({len(state_tickets)} tickets):")
+                    for ticket in state_tickets[:MAX_TICKETS_PER_STATE_IN_QUEUE]:  # Show first N tickets per state
+                        priority = ticket.get("priority", {})
+                        priority_name = priority.get("name", "Unknown") if isinstance(priority, dict) else str(priority)
+                        customer = ticket.get("customer", {})
+                        customer_email = (
+                            customer.get("email", "Unknown") if isinstance(customer, dict) else str(customer)
+                        )
+
+                        lines.append(f"  #{ticket.get('number', 'N/A')} - {ticket.get('title', 'No title')[:50]}...")
+                        lines.append(f"    Priority: {priority_name}, Customer: {customer_email}")
+                        lines.append(f"    Created: {ticket.get('created_at', 'Unknown')}")
+
+                    if len(state_tickets) > MAX_TICKETS_PER_STATE_IN_QUEUE:
+                        lines.append(f"    ... and {len(state_tickets) - MAX_TICKETS_PER_STATE_IN_QUEUE} more tickets")
+                    lines.append("")
+
+                return "\n".join(lines)
+            except Exception as e:
+                return f"Error retrieving queue for group {group}: {e!s}"
 
     def _setup_prompts(self) -> None:
         """Register all prompts with the MCP server."""

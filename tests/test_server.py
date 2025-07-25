@@ -941,6 +941,43 @@ def test_resource_handlers():
     assert "Domain: testcorp.com" in result
     assert "Note: Important client" in result
 
+    # Test queue resource
+    server.client.search_tickets.return_value = [
+        {
+            "id": 1,
+            "number": "12345",
+            "title": "Test Issue 1",
+            "state": {"name": "open"},
+            "priority": {"name": "high"},
+            "customer": {"email": "customer1@example.com"},
+            "created_at": "2024-01-01T00:00:00Z",
+        },
+        {
+            "id": 2,
+            "number": "12346",
+            "title": "Test Issue 2",
+            "state": "closed",
+            "priority": "2 normal",
+            "customer": "customer2@example.com",
+            "created_at": "2024-01-02T00:00:00Z",
+        },
+    ]
+
+    result = test_resources["zammad://queue/{group}"](group="Support")
+
+    assert "Queue for Group: Support" in result
+    assert "Total Tickets: 2" in result
+    assert "Open (1 tickets):" in result
+    assert "Closed (1 tickets):" in result
+    assert "#12345 - Test Issue 1" in result
+    assert "#12346 - Test Issue 2" in result
+
+    # Test empty queue resource
+    server.client.search_tickets.return_value = []
+
+    result = test_resources["zammad://queue/{group}"](group="EmptyGroup")
+    assert "Queue for group 'EmptyGroup': No tickets found" in result
+
 
 def test_resource_error_handling():
     """Test resource error handling."""
@@ -980,6 +1017,12 @@ def test_resource_error_handling():
 
     result = test_resources["zammad://organization/{org_id}"](org_id="999")
     assert "Error retrieving organization 999: Org not found" in result
+
+    # Test queue resource error
+    server.client.search_tickets.side_effect = Exception("Queue not found")
+
+    result = test_resources["zammad://queue/{group}"](group="nonexistent")
+    assert "Error retrieving queue for group nonexistent: Queue not found" in result
 
 
 def test_prompt_handlers():
@@ -1214,43 +1257,56 @@ def test_tool_implementations_are_called():
 
 
 def test_get_ticket_stats_pagination():
-    """Test that get_ticket_stats uses pagination correctly."""
-    with patch("mcp_zammad.server.ZammadClient") as mock_client_class:
-        mock_instance, _ = mock_client_class.return_value, mock_client_class
+    """Test that get_ticket_stats tool uses pagination correctly."""
+    server = ZammadMCPServer()
+    server.client = Mock()
 
-        # Mock paginated responses
-        page1_tickets = [
-            {"id": 1, "state": {"name": "open"}},
-            {"id": 2, "state": {"name": "closed"}},
-        ]
-        page2_tickets = [
-            {"id": 3, "state": {"name": "pending reminder"}},
-            {"id": 4, "state": {"name": "open"}, "first_response_escalation_at": "2024-01-01"},
-        ]
-        page3_tickets: list[dict[str, Any]] = []  # Empty page to stop pagination
+    # Capture tools as they're registered
+    test_tools = {}
 
-        # Set up side_effect to return different pages
-        mock_instance.search_tickets.side_effect = [page1_tickets, page2_tickets, page3_tickets]
+    original_tool = server.mcp.tool
 
-        # Call get_ticket_stats via server's tool
-        server = ZammadMCPServer()
-        server.client = mock_instance
+    def capture_tool(name=None):
+        def decorator(func):
+            test_tools[func.__name__ if name is None else name] = func
+            return original_tool(name)(func)
 
-        # Test through the actual server method
-        result = get_ticket_stats()
+        return decorator
 
-        # Verify pagination calls
-        assert mock_instance.search_tickets.call_count == 3
-        mock_instance.search_tickets.assert_any_call(group=None, page=1, per_page=100)
-        mock_instance.search_tickets.assert_any_call(group=None, page=2, per_page=100)
-        mock_instance.search_tickets.assert_any_call(group=None, page=3, per_page=100)
+    server.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server.get_client = lambda: server.client  # type: ignore[method-assign, assignment, return-value]
+    server._setup_system_tools()
 
-        # Verify stats are correct
-        assert result.total_count == 4
-        assert result.open_count == 2
-        assert result.closed_count == 1
-        assert result.pending_count == 1
-        assert result.escalated_count == 1
+    # Mock paginated responses
+    page1_tickets = [
+        {"id": 1, "state": {"name": "open"}},
+        {"id": 2, "state": {"name": "closed"}},
+    ]
+    page2_tickets = [
+        {"id": 3, "state": {"name": "pending reminder"}},
+        {"id": 4, "state": {"name": "open"}, "first_response_escalation_at": "2024-01-01"},
+    ]
+    page3_tickets: list[dict[str, Any]] = []  # Empty page to stop pagination
+
+    # Set up side_effect to return different pages
+    server.client.search_tickets.side_effect = [page1_tickets, page2_tickets, page3_tickets]
+
+    # Get the captured tool and call it
+    assert "get_ticket_stats" in test_tools
+    result = test_tools["get_ticket_stats"]()
+
+    # Verify pagination calls
+    assert server.client.search_tickets.call_count == 3
+    server.client.search_tickets.assert_any_call(group=None, page=1, per_page=100)
+    server.client.search_tickets.assert_any_call(group=None, page=2, per_page=100)
+    server.client.search_tickets.assert_any_call(group=None, page=3, per_page=100)
+
+    # Verify stats are correct
+    assert result.total_count == 4
+    assert result.open_count == 2
+    assert result.closed_count == 1
+    assert result.pending_count == 1
+    assert result.escalated_count == 1
 
 
 def test_get_ticket_stats_with_date_warning():
@@ -1628,7 +1684,7 @@ class TestMainFunction:
 class TestResourceHandlers:
     """Test resource handler implementations."""
 
-    def test_ticket_resource_handler(self, server: ZammadMCPServer) -> None:
+    def test_ticket_resource_handler(self, server_instance: ZammadMCPServer) -> None:
         """Test ticket resource handler - tests the actual function logic."""
         # Mock ticket data
         ticket_data = {
@@ -1639,13 +1695,13 @@ class TestResourceHandlers:
             "priority": {"name": "2 normal"},
             "created_at": "2024-01-01T00:00:00Z",
         }
-        server.client.get_ticket.return_value = ticket_data  # type: ignore[union-attr]
+        server_instance.client.get_ticket.return_value = ticket_data  # type: ignore[union-attr]
 
         # Import and test the resource handler function directly
 
         # Create a test function that mimics the resource handler
         def test_get_ticket_resource(ticket_id: str) -> str:
-            client = server.get_client()
+            client = server_instance.get_client()
             try:
                 ticket = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
                 lines = [
@@ -1661,9 +1717,9 @@ class TestResourceHandlers:
 
         assert "Ticket #123 - Test Ticket" in result
         assert "State: open" in result
-        server.client.get_ticket.assert_called_once_with(123, include_articles=True, article_limit=20)  # type: ignore[union-attr]
+        server_instance.client.get_ticket.assert_called_once_with(123, include_articles=True, article_limit=20)  # type: ignore[union-attr]
 
-    def test_user_resource_handler(self, server: ZammadMCPServer) -> None:
+    def test_user_resource_handler(self, server_instance: ZammadMCPServer) -> None:
         """Test user resource handler - tests the actual function logic."""
         # Mock user data
         user_data = {
@@ -1674,11 +1730,11 @@ class TestResourceHandlers:
             "login": "jdoe",
             "organization": {"name": "ACME Inc"},
         }
-        server.client.get_user.return_value = user_data  # type: ignore[union-attr]
+        server_instance.client.get_user.return_value = user_data  # type: ignore[union-attr]
 
         # Create a test function that mimics the resource handler
         def test_get_user_resource(user_id: str) -> str:
-            client = server.get_client()
+            client = server_instance.get_client()
             try:
                 user = client.get_user(int(user_id))
                 lines = [
@@ -1694,9 +1750,9 @@ class TestResourceHandlers:
 
         assert "User: John Doe" in result
         assert "Email: john@example.com" in result
-        server.client.get_user.assert_called_once_with(456)  # type: ignore[union-attr]
+        server_instance.client.get_user.assert_called_once_with(456)  # type: ignore[union-attr]
 
-    def test_organization_resource_handler(self, server: ZammadMCPServer) -> None:
+    def test_organization_resource_handler(self, server_instance: ZammadMCPServer) -> None:
         """Test organization resource handler - tests the actual function logic."""
         # Mock organization data
         org_data = {
@@ -1706,11 +1762,11 @@ class TestResourceHandlers:
             "domain": "acme.com",
             "active": True,
         }
-        server.client.get_organization.return_value = org_data  # type: ignore[union-attr]
+        server_instance.client.get_organization.return_value = org_data  # type: ignore[union-attr]
 
         # Create a test function that mimics the resource handler
         def test_get_org_resource(org_id: str) -> str:
-            client = server.get_client()
+            client = server_instance.get_client()
             try:
                 org = client.get_organization(int(org_id))
                 lines = [
@@ -1726,16 +1782,16 @@ class TestResourceHandlers:
 
         assert "Organization: ACME Corp" in result
         assert "Domain: acme.com" in result
-        server.client.get_organization.assert_called_once_with(789)  # type: ignore[union-attr]
+        server_instance.client.get_organization.assert_called_once_with(789)  # type: ignore[union-attr]
 
-    def test_resource_handler_error(self, server: ZammadMCPServer) -> None:
+    def test_resource_handler_error(self, server_instance: ZammadMCPServer) -> None:
         """Test resource handler error handling."""
         # Mock API error
-        server.client.get_ticket.side_effect = Exception("API Error")  # type: ignore[union-attr]
+        server_instance.client.get_ticket.side_effect = Exception("API Error")  # type: ignore[union-attr]
 
         # Create a test function that mimics the resource handler
         def test_get_ticket_resource(ticket_id: str) -> str:
-            client = server.get_client()
+            client = server_instance.get_client()
             try:
                 ticket = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
                 lines = [

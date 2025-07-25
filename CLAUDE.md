@@ -51,9 +51,9 @@ This is a Model Context Protocol (MCP) server that provides integration with the
 
 1. **`mcp_zammad/server.py`**: MCP server implementation using FastMCP
    - Implements 18 tools for ticket, user, organization management, and attachments (exceeded original plan of 9)
-   - Provides 3 resources for direct data access (ticket, user, organization)
+   - Provides 4 resources for direct data access (ticket, user, organization, queue)
    - Includes 3 pre-built prompts for common support scenarios
-   - Resources follow URI pattern: `zammad://entity/id`
+   - Resources follow URI pattern: `zammad://entity/id` or `zammad://queue/group`
 
 1. **`mcp_zammad/client.py`**: Zammad API client wrapper
    - Wraps the `zammad_py` library
@@ -224,7 +224,7 @@ The server automatically loads environment variables from the `.env` file in the
 - No bulk operations (e.g., update multiple tickets)
 - No webhook/real-time update support
 - No time tracking functionality
-- Missing `zammad://queue/{group}` resource
+- ✅ ~~Missing `zammad://queue/{group}` resource~~ (Fixed: Added queue resource for group-based ticket queues)
 
 ### Security Considerations (Partially Resolved)
 

@@ -42,6 +42,7 @@ Direct access to Zammad data:
 - `zammad://ticket/{id}` - Individual ticket details
 - `zammad://user/{id}` - User profile information
 - `zammad://organization/{id}` - Organization details
+- `zammad://queue/{group}` - Ticket queue for a specific group 🆕
 
 ### Prompts
 
