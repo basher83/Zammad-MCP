@@ -861,7 +861,7 @@ def test_resource_handlers():
     }
 
     # Set up the client for the server
-    server.get_client = lambda: server.client
+    server.get_client = lambda: server.client  # type: ignore[method-assign, assignment, return-value]  # type: ignore[method-assign]
 
     # We need to test the actual resource functions, which are defined inside _setup_resources
     # Let's create a new server instance and capture the resources as they're registered
@@ -876,7 +876,7 @@ def test_resource_handlers():
 
         return decorator
 
-    server.mcp.resource = capture_resource
+    server.mcp.resource = capture_resource  # type: ignore[method-assign, assignment]
     server._setup_resources()
 
     # Now test the captured resource handlers
@@ -941,8 +941,8 @@ def test_resource_error_handling():
 
         return decorator
 
-    server.mcp.resource = capture_resource
-    server.get_client = lambda: server.client
+    server.mcp.resource = capture_resource  # type: ignore[method-assign, assignment]
+    server.get_client = lambda: server.client  # type: ignore[method-assign, assignment, return-value]
     server._setup_resources()
 
     # Test ticket resource error
@@ -980,7 +980,7 @@ def test_prompt_handlers():
 
         return decorator
 
-    server.mcp.prompt = capture_prompt
+    server.mcp.prompt = capture_prompt  # type: ignore[method-assign, assignment]
     server._setup_prompts()
 
     # Test analyze_ticket prompt
@@ -1097,7 +1097,7 @@ async def test_lifespan_context_manager():
         mock_server.initialize = AsyncMock()
 
         # Test the context manager
-        async with lifespan(None) as result:
+        async with lifespan(None) as result:  # type: ignore[arg-type]
             # Verify initialize was called
             mock_server.initialize.assert_called_once()
             # The yield should return None
@@ -1212,8 +1212,8 @@ def test_get_ticket_stats_with_date_warning():
 
         return decorator
 
-    server.mcp.tool = capture_tool
-    server.get_client = lambda: server.client
+    server.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server.get_client = lambda: server.client  # type: ignore[method-assign, assignment, return-value]
     server._setup_system_tools()
 
     # Mock search results
