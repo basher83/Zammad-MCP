@@ -170,6 +170,16 @@ class TicketSearchParams(BaseModel):
     per_page: int = Field(default=25, description="Results per page")
 
 
+class Attachment(BaseModel):
+    """Ticket article attachment information."""
+
+    id: int
+    filename: str
+    size: int | None = None
+    content_type: str | None = None
+    created_at: datetime | None = None
+
+
 class ArticleCreate(BaseModel):
     """Create article request."""
 

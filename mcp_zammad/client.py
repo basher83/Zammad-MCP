@@ -313,3 +313,15 @@ class ZammadClient:
     def remove_ticket_tag(self, ticket_id: int, tag: str) -> dict[str, Any]:
         """Remove a tag from a ticket."""
         return dict(self.api.ticket_tag.remove(ticket_id, tag))
+
+    def download_attachment(self, ticket_id: int, article_id: int, attachment_id: int) -> bytes:
+        """Download an attachment from a ticket article."""
+        result = self.api.ticket_article_attachment.download(attachment_id, article_id, ticket_id)
+        return bytes(result)
+
+    def get_article_attachments(self, _ticket_id: int, article_id: int) -> list[dict[str, Any]]:
+        """Get list of attachments for a ticket article."""
+        # Get the article with attachments
+        article = self.api.ticket_article.find(article_id)
+        attachments = article.get("attachments", [])
+        return list(attachments)

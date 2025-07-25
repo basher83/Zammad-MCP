@@ -2,7 +2,7 @@
 
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/basher83/Zammad-MCP?utm_source=oss&utm_medium=github&utm_campaign=basher83%2FZammad-MCP&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9cc0ebac926a4d56b0bdf2271d46bbf7)](https://app.codacy.com/gh/basher83/Zammad-MCP/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
-![Coverage](https://img.shields.io/badge/coverage-91.7%25-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-90.08%25-brightgreen)
 
 A Model Context Protocol (MCP) server for Zammad integration, enabling AI assistants to interact with tickets, users, organizations, and more through a standardized interface.
 
@@ -20,16 +20,20 @@ A Model Context Protocol (MCP) server for Zammad integration, enabling AI assist
   - `add_article` - Add comments/notes to tickets
   - `add_ticket_tag` / `remove_ticket_tag` - Manage ticket tags
 
+- **Attachment Support** 🆕
+  - `get_article_attachments` - List all attachments for a ticket article
+  - `download_attachment` - Download attachment content as base64-encoded data
+
 - **User & Organization Management**
   - `get_user` / `search_users` - User information and search
   - `get_organization` / `search_organizations` - Organization data
   - `get_current_user` - Get authenticated user info
 
 - **System Information**
-  - `list_groups` - Get all available groups
-  - `list_ticket_states` - Get all ticket states
-  - `list_ticket_priorities` - Get all priority levels
-  - `get_ticket_stats` - Get ticket statistics
+  - `list_groups` - Get all available groups (cached for performance)
+  - `list_ticket_states` - Get all ticket states (cached for performance)
+  - `list_ticket_priorities` - Get all priority levels (cached for performance)
+  - `get_ticket_stats` - Get ticket statistics (optimized with pagination)
 
 ### Resources
 
@@ -139,7 +143,7 @@ The server requires Zammad API credentials. The recommended approach is to use a
    cp .env.example .env
    ```
 
-2. Edit `.env` with your Zammad credentials:
+1. Edit `.env` with your Zammad credentials:
 
    ```env
    # Required: Zammad instance URL (include /api/v1)
@@ -157,7 +161,7 @@ The server requires Zammad API credentials. The recommended approach is to use a
    # ZAMMAD_PASSWORD=your-password
    ```
 
-3. The server will automatically load the `.env` file on startup.
+1. The server will automatically load the `.env` file on startup.
 
 **Important**: Never commit your `.env` file to version control. It's already included in `.gitignore`.
 
@@ -355,12 +359,12 @@ uv run mypy mcp_zammad
 To generate an API token in Zammad:
 
 1. Log into your Zammad instance
-2. Click on your avatar → Profile
-3. Navigate to "Token Access"
-4. Click "Create"
-5. Name your token (e.g., "MCP Server")
-6. Select appropriate permissions
-7. Copy the generated token
+1. Click on your avatar → Profile
+1. Navigate to "Token Access"
+1. Click "Create"
+1. Name your token (e.g., "MCP Server")
+1. Select appropriate permissions
+1. Copy the generated token
 
 ## Troubleshooting
 
@@ -411,6 +415,29 @@ This project uses the same license as the [Zammad project](https://github.com/za
 - [GitHub Issues:](https://github.com/basher83/Zammad-MCP/issues)
 - [Zammad Documentation:](https://docs.zammad.org/)
 - [MCP Documentation:](https://modelcontextprotocol.io/)
+
+## Recent Updates
+
+### Latest Features (v0.1.3)
+
+🎉 **New Attachment Support**: Full implementation for managing ticket article attachments
+- List attachments with complete metadata (filename, size, content type)
+- Download attachments as base64-encoded content for safe transmission
+- Comprehensive error handling and security validation
+
+🚀 **Performance Improvements**: 
+- Intelligent caching for frequently accessed data (groups, states, priorities)
+- Optimized ticket statistics with pagination instead of loading all data into memory
+- Reduced memory footprint for large datasets
+
+🔒 **Enhanced Security**:
+- URL validation with SSRF attack protection
+- HTML sanitization prevents XSS attacks
+- Enhanced authentication with Docker secrets support
+
+🧪 **Quality Assurance**: 90.08% test coverage with comprehensive test suite including attachment functionality
+
+See [CLAUDE.md](CLAUDE.md) for complete technical details and implementation notes.
 
 ## Trademark Notice
 

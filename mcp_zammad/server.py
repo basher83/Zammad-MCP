@@ -1,5 +1,6 @@
 """Zammad MCP Server implementation."""
 
+import base64
 import logging
 import os
 from collections.abc import AsyncIterator
@@ -13,6 +14,7 @@ from mcp.server.fastmcp import FastMCP
 from .client import ZammadClient
 from .models import (
     Article,
+    Attachment,
     Group,
     Organization,
     Ticket,
@@ -253,6 +255,41 @@ class ZammadMCPServer:
             )
 
             return Article(**article_data)
+
+        @self.mcp.tool()
+        def get_article_attachments(ticket_id: int, article_id: int) -> list[Attachment]:
+            """Get list of attachments for a ticket article.
+
+            Args:
+                ticket_id: The ticket ID
+                article_id: The article ID
+
+            Returns:
+                List of attachment information
+            """
+            client = self.get_client()
+            attachments_data = client.get_article_attachments(ticket_id, article_id)
+            return [Attachment(**attachment) for attachment in attachments_data]
+
+        @self.mcp.tool()
+        def download_attachment(ticket_id: int, article_id: int, attachment_id: int) -> str:
+            """Download an attachment from a ticket article.
+
+            Args:
+                ticket_id: The ticket ID
+                article_id: The article ID
+                attachment_id: The attachment ID
+
+            Returns:
+                Base64-encoded attachment content or error message
+            """
+            client = self.get_client()
+            try:
+                attachment_data = client.download_attachment(ticket_id, article_id, attachment_id)
+                # Convert bytes to base64 string for transmission
+                return base64.b64encode(attachment_data).decode("utf-8")
+            except Exception as e:
+                return f"Error downloading attachment: {e!s}"
 
         @self.mcp.tool()
         def add_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
@@ -742,6 +779,26 @@ def add_article(
         sender=sender,
     )
     return Article(**article_data)
+
+
+def get_article_attachments(ticket_id: int, article_id: int) -> list[Attachment]:
+    """Get list of attachments for a ticket article (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    attachments_data = zammad_client.get_article_attachments(ticket_id, article_id)
+    return [Attachment(**attachment) for attachment in attachments_data]
+
+
+def download_attachment(ticket_id: int, article_id: int, attachment_id: int) -> str:
+    """Download an attachment from a ticket article (legacy wrapper for test compatibility)."""
+    if zammad_client is None:
+        raise RuntimeError("Zammad client not initialized")
+    try:
+        attachment_data = zammad_client.download_attachment(ticket_id, article_id, attachment_id)
+        # Convert bytes to base64 string for transmission
+        return base64.b64encode(attachment_data).decode("utf-8")
+    except Exception as e:
+        return f"Error downloading attachment: {e!s}"
 
 
 def get_user(user_id: int) -> User:

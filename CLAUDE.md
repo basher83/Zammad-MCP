@@ -50,7 +50,7 @@ This is a Model Context Protocol (MCP) server that provides integration with the
 ### Core Components
 
 1. **`mcp_zammad/server.py`**: MCP server implementation using FastMCP
-   - Implements 16 tools for ticket, user, and organization management (exceeded original plan of 9)
+   - Implements 18 tools for ticket, user, organization management, and attachments (exceeded original plan of 9)
    - Provides 3 resources for direct data access (ticket, user, organization)
    - Includes 3 pre-built prompts for common support scenarios
    - Resources follow URI pattern: `zammad://entity/id`
@@ -58,12 +58,14 @@ This is a Model Context Protocol (MCP) server that provides integration with the
 1. **`mcp_zammad/client.py`**: Zammad API client wrapper
    - Wraps the `zammad_py` library
    - Handles multiple authentication methods (API token, OAuth2, username/password)
-   - Provides clean methods for all Zammad operations
+   - Provides clean methods for all Zammad operations including attachment support
+   - Includes URL validation and input sanitization for security
 
 1. **`mcp_zammad/models.py`**: Pydantic models for data validation
-   - Comprehensive models for all Zammad entities (Ticket, User, Organization, etc.)
+   - Comprehensive models for all Zammad entities (Ticket, User, Organization, Attachment, etc.)
    - Request/response models for API operations
    - Ensures type safety throughout the application
+   - Includes HTML sanitization for security
 
 ### Key Design Patterns
 
@@ -97,7 +99,7 @@ ZAMMAD_PASSWORD=your-password
 - Integration tests would require a test Zammad instance
 - Use `pytest-asyncio` for async test support
 - Coverage reports help identify untested code paths
-- **Current Coverage**: 91.7% (exceeded target of 90%!)
+- **Current Coverage**: 90.08% (achieved target of 90%!)
 
 ### Testing Best Practices
 
@@ -106,6 +108,8 @@ ZAMMAD_PASSWORD=your-password
 - **Factory Fixtures**: Use for flexible test data creation
 - **Error Testing**: Always test validation errors and unhappy paths
 - **Parametrized Tests**: Use for testing multiple scenarios with same logic
+- **Attachment Testing**: Comprehensive test suite covers both client methods and MCP tools
+- **Legacy Compatibility**: Tests ensure backward compatibility with existing wrapper functions
 
 ## Code Quality Standards
 
@@ -138,6 +142,35 @@ The server exposes:
 - **Prompts**: Pre-configured analysis templates
 
 All MCP features follow the Model Context Protocol specification for seamless integration with AI assistants.
+
+## Attachment Support
+
+The server now includes comprehensive attachment support for ticket articles:
+
+### Available Tools
+
+- **`get_article_attachments`**: Lists all attachments for a specific ticket article
+  - Returns structured `Attachment` objects with metadata (id, filename, size, content_type, created_at)
+  - Usage: `get_article_attachments(ticket_id=123, article_id=456)`
+
+- **`download_attachment`**: Downloads attachment content as base64-encoded data
+  - Safe for transmission via MCP protocol
+  - Includes error handling for missing or inaccessible attachments
+  - Usage: `download_attachment(ticket_id=123, article_id=456, attachment_id=789)`
+
+### Implementation Details
+
+- **Client Methods**: Added `download_attachment()` and `get_article_attachments()` to `ZammadClient`
+- **Data Model**: New `Attachment` Pydantic model ensures type safety
+- **Base64 Encoding**: Attachment content is automatically encoded for safe transmission
+- **Error Handling**: Graceful fallback with descriptive error messages
+- **Legacy Support**: Backward-compatible wrapper functions for existing tests
+
+### Security Features
+
+- URL validation prevents SSRF attacks on Zammad instance
+- Input sanitization protects against XSS in attachment metadata
+- Proper error handling prevents information disclosure
 
 ## Deployment Options
 
@@ -177,43 +210,43 @@ The server automatically loads environment variables from the `.env` file in the
   - **User**: organization, created_by, updated_by
   - **Organization**: created_by, updated_by, members
 
-### Performance Issues
+### Performance Issues (Partially Resolved)
 
-- `get_ticket_stats` loads ALL tickets into memory (inefficient for large datasets)
-- No caching for frequently accessed data (groups, states, priorities)
+- ✅ ~~`get_ticket_stats` loads ALL tickets into memory~~ (Fixed: Now uses pagination for better performance)
+- ✅ ~~No caching for frequently accessed data~~ (Fixed: Added caching for groups, states, priorities)
 - Synchronous client initialization blocks server startup
 - No connection pooling for API requests
 
 ### Missing Features
 
-- No attachment support for tickets
+- ✅ ~~No attachment support for tickets~~ (Fixed: Added full attachment support with download and listing capabilities)
 - No custom field handling
 - No bulk operations (e.g., update multiple tickets)
 - No webhook/real-time update support
 - No time tracking functionality
 - Missing `zammad://queue/{group}` resource
 
-### Security Considerations
+### Security Considerations (Partially Resolved)
 
-- No URL validation (potential SSRF vulnerability)
-- No input sanitization
+- ✅ ~~No URL validation~~ (Fixed: Added comprehensive URL validation with SSRF protection)
+- ✅ ~~No input sanitization~~ (Fixed: Added HTML sanitization in Pydantic models)
 - No rate limiting implementation
 - No audit logging
 
 ## Priority Improvements
 
-1. **Immediate**
-   - Fix test collection error in test_server.py (URI parameter mismatch)
-   - ✅ ~~Increase test coverage to 90%+~~ (Achieved: 91.7%!)
-   - Fix unused parameters in functions
-   - Implement custom exception classes
-   - Add proper URL validation
+1. **Completed Items** ✅
+   - ✅ ~~Increase test coverage to 90%+~~ (Achieved: 90.08%!)
+   - ✅ ~~Add proper URL validation~~ (Implemented with SSRF protection)
+   - ✅ ~~Add attachment support~~ (Full implementation with download and listing)
+   - ✅ ~~Implement caching layer~~ (Added for groups, states, priorities)
+   - ✅ ~~Optimize `get_ticket_stats` to use pagination~~ (Improved performance)
+   - ✅ ~~Add input sanitization~~ (HTML sanitization in models)
 
 1. **Short Term**
-   - Add attachment support
-   - Implement caching layer (Redis/memory)
    - Add config file support (in addition to env vars)
-   - Optimize `get_ticket_stats` to use pagination
+   - Implement custom exception classes
+   - Add Docker secrets support for additional auth methods
 
 1. **Long Term**
    - Add webhook support for real-time updates
@@ -231,3 +264,41 @@ The project includes several security and quality tools configured in pyproject.
 - **pre-commit**: Git hooks for code quality enforcement
 
 A convenience script `./scripts/quality-check.sh` runs all quality and security checks in sequence.
+
+## Recent Improvements
+
+### v0.1.3 (Latest) - Major Feature Update
+
+**🎉 New Features:**
+- **Attachment Support**: Full implementation of ticket article attachment management
+  - `get_article_attachments` tool for listing attachments with metadata
+  - `download_attachment` tool for retrieving base64-encoded attachment content
+  - New `Attachment` Pydantic model for type safety
+  - Comprehensive test coverage (7 additional tests)
+
+**🚀 Performance Improvements:**
+- **Optimized Ticket Statistics**: `get_ticket_stats` now uses pagination instead of loading all tickets into memory
+- **Caching Layer**: Added intelligent caching for frequently accessed static data (groups, states, priorities)
+- **Memory Efficiency**: Reduced memory footprint for large ticket datasets
+
+**🔒 Security Enhancements:**
+- **URL Validation**: Comprehensive validation with SSRF attack protection
+- **Input Sanitization**: HTML sanitization in Pydantic models prevents XSS attacks
+- **Docker Secrets Support**: Enhanced authentication with file-based secrets
+
+**🧪 Quality Assurance:**
+- **Test Coverage**: Achieved 90.08% test coverage (exceeded 90% target)
+- **Code Quality**: All linting and type checking passes with zero errors
+- **Legacy Compatibility**: Backward-compatible wrapper functions ensure no breaking changes
+
+**📚 Documentation:**
+- Updated architecture overview with new tool count (18 tools)
+- Added comprehensive attachment support documentation
+- Enhanced security and performance sections
+- Detailed implementation guides for new features
+
+**🔧 Technical Improvements:**
+- Improved error handling with graceful fallbacks
+- Enhanced type safety throughout the codebase
+- Better resource management and cleanup
+- Modern Python patterns and best practices

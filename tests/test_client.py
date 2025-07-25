@@ -100,3 +100,43 @@ def test_url_validation_private_network_warning(mock_api: MagicMock, caplog) -> 
     with patch.dict(os.environ, {"ZAMMAD_URL": "http://192.168.1.100", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
         ZammadClient()
         assert "points to private network" in caplog.text
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_download_attachment(mock_api: MagicMock) -> None:
+    """Test downloading an attachment."""
+    mock_instance = mock_api.return_value
+    mock_instance.ticket_article_attachment.download.return_value = b"file content"
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        result = client.download_attachment(123, 456, 789)
+
+    assert result == b"file content"
+    mock_instance.ticket_article_attachment.download.assert_called_once_with(789, 456, 123)
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_get_article_attachments(mock_api: MagicMock) -> None:
+    """Test getting article attachments."""
+    mock_instance = mock_api.return_value
+    mock_instance.ticket_article.find.return_value = {
+        "id": 456,
+        "attachments": [
+            {"id": 1, "filename": "test.pdf", "size": 1024},
+            {"id": 2, "filename": "image.png", "size": 2048},
+        ],
+    }
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        result = client.get_article_attachments(123, 456)
+
+    assert len(result) == 2
+    assert result[0]["filename"] == "test.pdf"
+    assert result[1]["filename"] == "image.png"
+    mock_instance.ticket_article.find.assert_called_once_with(456)
