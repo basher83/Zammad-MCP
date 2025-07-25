@@ -14,7 +14,15 @@
       "Bash(gh pr diff:*)",
       "Bash(gh pr status:*)",
       "Bash(gh pr checks:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "mcp__github__get_issue",
+      "Bash(docker run:*)",
+      "mcp__github__list_code_scanning_alerts",
+      "mcp__github__list_dependabot_alerts",
+      "mcp__github__list_secret_scanning_alerts",
+      "mcp__github__list_tags",
+      "mcp__github__get_tag",
+      "mcp__github__get_commit"
     ],
     "deny": []
   },
