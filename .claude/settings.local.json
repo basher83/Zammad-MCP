@@ -22,7 +22,8 @@
       "mcp__github__list_secret_scanning_alerts",
       "mcp__github__list_tags",
       "mcp__github__get_tag",
-      "mcp__github__get_commit"
+      "mcp__github__get_commit",
+      "Bash(ls:*)"
     ],
     "deny": []
   },

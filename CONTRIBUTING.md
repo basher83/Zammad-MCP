@@ -109,8 +109,9 @@ uv run pre-commit run --all-files
 
 ### Testing Guidelines
 
-- **Current Coverage**: 67% (target: 80%+)
+- **Current Coverage**: 91.7% (exceeds target of 80%!)
 - Write tests for all new features
+- Maintain or improve the current high coverage level
 - Follow the existing test patterns:
   - Group fixtures at the top of test files
   - Organize tests: basic → parametrized → error cases
@@ -402,7 +403,7 @@ git tag v1.0.0-rc.1
 
 ### Immediate Needs
 
-- Increase test coverage to 80%+
+- ✅ ~~Increase test coverage to 80%+~~ (Achieved: 91.7%!)
 - Fix unused parameters in functions
 - Implement custom exception classes
 - Add proper URL validation

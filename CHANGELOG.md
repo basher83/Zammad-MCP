@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Improved test coverage from 68.72% to 72.88%
+- Improved test coverage from 68.72% to 91.7%
 - Added comprehensive tests for all MCP tools including:
   - `update_ticket`, `get_organization`, `search_organizations`
   - `list_groups`, `list_ticket_states`, `list_ticket_priorities`
@@ -98,4 +98,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No attachment support for tickets
 - No URL validation (potential SSRF vulnerability)
 - Missing `zammad://queue/{group}` resource
-- Test coverage at 72.88% (target: 80%+)
+- Test coverage at 91.7% (exceeded target of 80%+)

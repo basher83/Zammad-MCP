@@ -1,12 +1,14 @@
 """Basic tests for Zammad MCP server."""
 
-from unittest.mock import Mock, patch
+import os
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
 from mcp_zammad import server
 from mcp_zammad.server import (
     _UNINITIALIZED,
+    ZammadMCPServer,
     add_article,
     add_ticket_tag,
     create_ticket,
@@ -799,3 +801,485 @@ async def test_get_ticket_stats_tool(mock_zammad_client):
     
     assert stats.total_count == 6
     mock_instance.search_tickets.assert_called_once_with(group=None, per_page=100)
+
+
+def test_resource_handlers():
+    """Test resource handler registration and execution."""
+    server = ZammadMCPServer()
+    server.client = Mock()
+    
+    # Setup resources
+    server._setup_resources()
+    
+    # Test ticket resource
+    server.client.get_ticket.return_value = {
+        "id": 1,
+        "number": "12345",
+        "title": "Test Issue",
+        "state": {"name": "open"},
+        "priority": {"name": "high"},
+        "customer": {"email": "test@example.com"},
+        "created_at": "2024-01-01T00:00:00Z",
+        "articles": [
+            {
+                "created_at": "2024-01-01T00:00:00Z",
+                "created_by": {"email": "agent@example.com"},
+                "body": "Initial ticket description"
+            }
+        ]
+    }
+    
+    # Get the resource handler function directly
+    # The resources are stored in server's namespace when decorated
+    get_ticket_resource = server.__class__._setup_resources.__code__.co_consts[1]
+    
+    # Alternative approach: call the resource handler through the server
+    # Since we can't directly access the handler, we'll invoke it through get_client
+    original_get_client = server.get_client
+    server.get_client = lambda: server.client
+    
+    # We need to test the actual resource functions, which are defined inside _setup_resources
+    # Let's create a new server instance and capture the resources as they're registered
+    test_resources = {}
+    
+    original_resource = server.mcp.resource
+    def capture_resource(uri_template):
+        def decorator(func):
+            test_resources[uri_template] = func
+            return original_resource(uri_template)(func)
+        return decorator
+    
+    server.mcp.resource = capture_resource
+    server._setup_resources()
+    
+    # Now test the captured resource handlers
+    result = test_resources["zammad://ticket/{ticket_id}"](ticket_id="1")
+    
+    assert "Ticket #12345 - Test Issue" in result
+    assert "State: open" in result
+    assert "Priority: high" in result
+    assert "Customer: test@example.com" in result
+    assert "Initial ticket description" in result
+    
+    # Test user resource
+    server.client.get_user.return_value = {
+        "id": 1,
+        "firstname": "John",
+        "lastname": "Doe",
+        "email": "john.doe@example.com",
+        "login": "jdoe",
+        "organization": {"name": "Test Corp"},
+        "active": True,
+        "vip": False,
+        "created_at": "2024-01-01T00:00:00Z"
+    }
+    
+    result = test_resources["zammad://user/{user_id}"](user_id="1")
+    
+    assert "User: John Doe" in result
+    assert "Email: john.doe@example.com" in result
+    assert "Organization: Test Corp" in result
+    
+    # Test organization resource
+    server.client.get_organization.return_value = {
+        "id": 1,
+        "name": "Test Corporation",
+        "domain": "testcorp.com",
+        "active": True,
+        "note": "Important client",
+        "created_at": "2024-01-01T00:00:00Z"
+    }
+    
+    result = test_resources["zammad://organization/{org_id}"](org_id="1")
+    
+    assert "Organization: Test Corporation" in result
+    assert "Domain: testcorp.com" in result
+    assert "Note: Important client" in result
+
+
+def test_resource_error_handling():
+    """Test resource error handling."""
+    server = ZammadMCPServer()
+    server.client = Mock()
+    
+    # Use the same approach as test_resource_handlers
+    test_resources = {}
+    
+    original_resource = server.mcp.resource
+    def capture_resource(uri_template):
+        def decorator(func):
+            test_resources[uri_template] = func
+            return original_resource(uri_template)(func)
+        return decorator
+    
+    server.mcp.resource = capture_resource
+    server.get_client = lambda: server.client
+    server._setup_resources()
+    
+    # Test ticket resource error
+    server.client.get_ticket.side_effect = Exception("API Error")
+    
+    result = test_resources["zammad://ticket/{ticket_id}"](ticket_id="999")
+    assert "Error retrieving ticket 999: API Error" in result
+    
+    # Test user resource error
+    server.client.get_user.side_effect = Exception("User not found")
+    
+    result = test_resources["zammad://user/{user_id}"](user_id="999")
+    assert "Error retrieving user 999: User not found" in result
+    
+    # Test org resource error
+    server.client.get_organization.side_effect = Exception("Org not found")
+    
+    result = test_resources["zammad://organization/{org_id}"](org_id="999")
+    assert "Error retrieving organization 999: Org not found" in result
+
+
+def test_prompt_handlers():
+    """Test prompt handlers."""
+    server = ZammadMCPServer()
+    
+    # Capture prompts as they're registered
+    test_prompts = {}
+    
+    original_prompt = server.mcp.prompt
+    def capture_prompt(name=None):
+        def decorator(func):
+            test_prompts[func.__name__ if name is None else name] = func
+            return original_prompt(name)(func)
+        return decorator
+    
+    server.mcp.prompt = capture_prompt
+    server._setup_prompts()
+    
+    # Test analyze_ticket prompt
+    assert "analyze_ticket" in test_prompts
+    result = test_prompts["analyze_ticket"](ticket_id=123)
+    assert "analyze ticket 123" in result
+    assert "get_ticket tool" in result
+    
+    # Test draft_response prompt
+    assert "draft_response" in test_prompts
+    result = test_prompts["draft_response"](ticket_id=123, tone="friendly")
+    assert "draft a friendly response to ticket 123" in result
+    assert "add_article" in result
+    
+    # Test escalation_summary prompt
+    assert "escalation_summary" in test_prompts
+    result = test_prompts["escalation_summary"](group="Support")
+    assert "escalated tickets for group 'Support'" in result
+    assert "search_tickets" in result
+
+
+def test_get_client_error():
+    """Test get_client error when not initialized."""
+    server = ZammadMCPServer()
+    server.client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        server.get_client()
+
+
+def test_get_client_success():
+    """Test get_client returns client when initialized."""
+    server = ZammadMCPServer()
+    mock_client = Mock()
+    server.client = mock_client
+    
+    result = server.get_client()
+    assert result is mock_client
+
+
+@pytest.mark.asyncio
+async def test_initialize_with_dotenv():
+    """Test initialize with .env file."""
+    server = ZammadMCPServer()
+    
+    # Create a temp .env file
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
+        f.write('ZAMMAD_URL=https://test.zammad.com/api/v1\n')
+        f.write('ZAMMAD_HTTP_TOKEN=test-token\n')
+        temp_env_path = f.name
+    
+    try:
+        # Mock Path.cwd() to return temp directory
+        with patch('mcp_zammad.server.Path.cwd') as mock_cwd:
+            import pathlib
+            mock_cwd.return_value = pathlib.Path(temp_env_path).parent
+            
+            with patch('mcp_zammad.server.ZammadClient') as mock_client_class:
+                mock_client = MagicMock()
+                mock_client.get_current_user.return_value = {"email": "test@example.com"}
+                mock_client_class.return_value = mock_client
+                
+                await server.initialize()
+                
+                assert server.client is not None
+                mock_client.get_current_user.assert_called_once()
+    finally:
+        # Clean up
+        os.unlink(temp_env_path)
+
+
+@pytest.mark.asyncio
+async def test_initialize_with_envrc_warning():
+    """Test initialize with .envrc file but no env vars."""
+    server = ZammadMCPServer()
+    
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.envrc', delete=False) as f:
+        f.write('export ZAMMAD_URL=https://test.zammad.com/api/v1\n')
+        temp_envrc_path = f.name
+    
+    try:
+        with patch('mcp_zammad.server.Path.cwd') as mock_cwd:
+            import pathlib
+            # Create the .envrc file in temp directory
+            temp_dir = pathlib.Path(temp_envrc_path).parent
+            envrc_file = temp_dir / ".envrc"
+            envrc_file.write_text('export ZAMMAD_URL=https://test.zammad.com/api/v1\n')
+            
+            mock_cwd.return_value = temp_dir
+            
+            with patch.dict(os.environ, {}, clear=True):
+                with patch('mcp_zammad.server.logger') as mock_logger:
+                    with pytest.raises(Exception):  # Will fail due to no env vars
+                        await server.initialize()
+                    
+                    # Check that warning was logged
+                    mock_logger.warning.assert_called_with(
+                        "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
+                    )
+            
+            # Clean up
+            envrc_file.unlink()
+    finally:
+        os.unlink(temp_envrc_path)
+
+
+@pytest.mark.asyncio
+async def test_lifespan_context_manager():
+    """Test the lifespan context manager."""
+    with patch('mcp_zammad.server.server') as mock_server:
+        mock_server.initialize = AsyncMock()
+        
+        # Import and use the lifespan context manager
+        from mcp_zammad.server import lifespan
+        
+        # Test the context manager
+        async with lifespan(None) as result:
+            # Verify initialize was called
+            mock_server.initialize.assert_called_once()
+            # The yield should return None
+            assert result is None
+
+
+def test_tool_implementations_are_called():
+    """Test that tool implementations are actually executed."""
+    server = ZammadMCPServer()
+    server.client = Mock()
+    
+    # Mock client methods with complete ticket data
+    complete_ticket = {
+        "id": 1,
+        "number": "12345",
+        "title": "Test",
+        "state": "open",
+        "group_id": 1,
+        "state_id": 1,
+        "priority_id": 2,
+        "customer_id": 1,
+        "created_by_id": 1,
+        "updated_by_id": 1,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+    }
+    server.client.search_tickets.return_value = [complete_ticket]
+    server.client.get_ticket.return_value = complete_ticket
+    server.client.create_ticket.return_value = complete_ticket
+    server.client.update_ticket.return_value = complete_ticket
+    server.client.add_article.return_value = {"id": 1, "body": "Article", "ticket_id": 1, "type": "note", "sender": "Agent", "created_by_id": 1, "updated_by_id": 1, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
+    server.client.get_user.return_value = {"id": 1, "email": "test@example.com", "firstname": "Test", "lastname": "User", "login": "test", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
+    server.client.search_users.return_value = [{"id": 1, "email": "test@example.com", "firstname": "Test", "lastname": "User", "login": "test", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}]
+    server.client.get_organization.return_value = {"id": 1, "name": "Test Org", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
+    server.client.search_organizations.return_value = [{"id": 1, "name": "Test Org", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}]
+    
+    # Call tool handlers directly through the decorated functions
+    # We need to actually invoke the tools to cover the implementation lines
+    tool_manager = server.mcp._tool_manager
+    
+    # Find and call search_tickets tool
+    search_tickets_tool = None
+    for tool in tool_manager._tools.values():
+        if tool.name == "search_tickets":
+            search_tickets_tool = tool.fn
+            break
+    
+    assert search_tickets_tool is not None
+    result = search_tickets_tool(query="test")
+    assert len(result) == 1
+    server.client.search_tickets.assert_called_once()
+
+
+def test_get_ticket_stats_with_date_warning():
+    """Test get_ticket_stats with date parameters shows warning."""
+    server = ZammadMCPServer()
+    server.client = Mock()
+    
+    # Capture tools as they're registered
+    test_tools = {}
+    
+    original_tool = server.mcp.tool
+    def capture_tool(name=None):
+        def decorator(func):
+            test_tools[func.__name__ if name is None else name] = func
+            return original_tool(name)(func)
+        return decorator
+    
+    server.mcp.tool = capture_tool
+    server.get_client = lambda: server.client
+    server._setup_system_tools()
+    
+    # Mock search results
+    server.client.search_tickets.return_value = []
+    
+    with patch('mcp_zammad.server.logger') as mock_logger:
+        # Get the captured tool
+        assert "get_ticket_stats" in test_tools
+        stats = test_tools["get_ticket_stats"](start_date="2024-01-01", end_date="2024-12-31")
+        
+        assert stats.total_count == 0
+        mock_logger.warning.assert_called_with("Date filtering not yet implemented - ignoring date parameters")
+
+
+# ==================== LEGACY WRAPPER TESTS ====================
+
+
+def test_legacy_search_tickets_without_client():
+    """Test legacy search_tickets wrapper when client not initialized."""
+    # Reset the global client
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        search_tickets()
+
+
+def test_legacy_get_ticket_without_client():
+    """Test legacy get_ticket wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        get_ticket(1)
+
+
+def test_legacy_create_ticket_without_client():
+    """Test legacy create_ticket wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        create_ticket("Test", "Group", "customer@example.com", "Body")
+
+
+def test_legacy_add_article_without_client():
+    """Test legacy add_article wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        add_article(1, "Body")
+
+
+def test_legacy_get_user_without_client():
+    """Test legacy get_user wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        get_user(1)
+
+
+def test_legacy_add_ticket_tag_without_client():
+    """Test legacy add_ticket_tag wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        add_ticket_tag(1, "tag")
+
+
+def test_legacy_remove_ticket_tag_without_client():
+    """Test legacy remove_ticket_tag wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        remove_ticket_tag(1, "tag")
+
+
+def test_legacy_update_ticket_without_client():
+    """Test legacy update_ticket wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        update_ticket(1, title="New Title")
+
+
+def test_legacy_get_organization_without_client():
+    """Test legacy get_organization wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        get_organization(1)
+
+
+def test_legacy_search_organizations_without_client():
+    """Test legacy search_organizations wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        search_organizations("test")
+
+
+def test_legacy_list_groups_without_client():
+    """Test legacy list_groups wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        list_groups()
+
+
+def test_legacy_list_ticket_states_without_client():
+    """Test legacy list_ticket_states wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        list_ticket_states()
+
+
+def test_legacy_list_ticket_priorities_without_client():
+    """Test legacy list_ticket_priorities wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        list_ticket_priorities()
+
+
+def test_legacy_get_current_user_without_client():
+    """Test legacy get_current_user wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        get_current_user()
+
+
+def test_legacy_search_users_without_client():
+    """Test legacy search_users wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        search_users("test")
+
+
+def test_legacy_get_ticket_stats_without_client():
+    """Test legacy get_ticket_stats wrapper when client not initialized."""
+    server.zammad_client = None
+    
+    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+        get_ticket_stats()
