@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-08-06
+
 ### Fixed
 
 - Fixed "Zammad client not initialized" error when running with uvx (#39)
@@ -26,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Improved test coverage from 68.72% to 91.7%
+- Improved test coverage from 68.72% to 92.65%
 - Added comprehensive tests for all MCP tools including:
   - `update_ticket`, `get_organization`, `search_organizations`
   - `list_groups`, `list_ticket_states`, `list_ticket_priorities`
