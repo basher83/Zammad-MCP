@@ -44,15 +44,21 @@ class ZammadMCPServer:
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
-    
+
     def _create_lifespan(self) -> Any:
         """Create the lifespan context manager for the server."""
+
         @asynccontextmanager
         async def lifespan(_app: FastMCP) -> AsyncIterator[None]:
-            """Initialize resources on startup."""
+            """Initialize resources on startup and cleanup on shutdown."""
             await self.initialize()
-            yield
-        
+            try:
+                yield
+            finally:
+                if self.client is not None:
+                    self.client = None
+                    logger.info("Zammad client cleaned up")
+
         return lifespan
 
     def get_client(self) -> ZammadClient:
