@@ -174,6 +174,7 @@ class TestZammadClientMethods:
         assert result["success"] is True
         mock_instance.ticket_tag.remove.assert_called_once_with(1, "urgent")
 
+    @patch.dict(os.environ, {}, clear=True)
     def test_oauth2_authentication(self, mock_zammad_api: Mock) -> None:
         """Test OAuth2 authentication."""
         mock_zammad_api.return_value = Mock()
@@ -189,6 +190,7 @@ class TestZammadClientMethods:
             oauth2_token="oauth-token",
         )
 
+    @patch.dict(os.environ, {}, clear=True)
     def test_username_password_authentication(self, mock_zammad_api: Mock) -> None:
         """Test username/password authentication."""
         mock_zammad_api.return_value = Mock()

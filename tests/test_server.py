@@ -1156,10 +1156,10 @@ async def test_lifespan_context_manager():
     # Create a server instance
     test_server = ZammadMCPServer()
     test_server.initialize = AsyncMock()
-    
+
     # Get the lifespan context manager
     lifespan_cm = test_server._create_lifespan()
-    
+
     # Test the context manager
     async with lifespan_cm(test_server.mcp) as result:
         # Verify initialize was called
