@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed "Zammad client not initialized" error when running with uvx (#39)
+  - Moved lifespan configuration to FastMCP constructor for proper initialization
+  - Ensures client initialization regardless of how the server is started
+
+### Added
+
+- Added proper shutdown cleanup to lifespan context manager
+  - Client reference is now properly cleaned up on server shutdown
+  - Added logging for cleanup visibility
+
 ### Security
 
 - Pinned all third-party GitHub Actions to commit SHAs to prevent supply chain attacks
@@ -21,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `get_current_user`, `search_users`, `get_ticket_stats`
 - Added tests for client methods to improve coverage
 - Added legacy wrapper functions in server.py for test compatibility
+
+### Documentation
+
+- Added development setup guide with Tailscale configuration for Codespaces
+- Added comprehensive GitHub MCP server documentation with Docker and Claude Code setup instructions
 
 ## [0.1.2] - 2025-07-24
 
