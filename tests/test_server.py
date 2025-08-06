@@ -25,7 +25,6 @@ from mcp_zammad.server import (
     get_ticket_stats,
     get_user,
     initialize,
-    lifespan,
     list_groups,
     list_ticket_priorities,
     list_ticket_states,
@@ -1154,15 +1153,19 @@ async def test_initialize_with_envrc_warning():
 @pytest.mark.asyncio
 async def test_lifespan_context_manager():
     """Test the lifespan context manager."""
-    with patch("mcp_zammad.server.server") as mock_server:
-        mock_server.initialize = AsyncMock()
-
-        # Test the context manager
-        async with lifespan(None) as result:  # type: ignore[arg-type]
-            # Verify initialize was called
-            mock_server.initialize.assert_called_once()
-            # The yield should return None
-            assert result is None
+    # Create a server instance
+    test_server = ZammadMCPServer()
+    test_server.initialize = AsyncMock()
+    
+    # Get the lifespan context manager
+    lifespan_cm = test_server._create_lifespan()
+    
+    # Test the context manager
+    async with lifespan_cm(test_server.mcp) as result:
+        # Verify initialize was called
+        test_server.initialize.assert_called_once()
+        # The yield should return None
+        assert result is None
 
 
 def test_tool_implementations_are_called():

@@ -39,10 +39,21 @@ class ZammadMCPServer:
     def __init__(self) -> None:
         """Initialize the server."""
         self.client: ZammadClient | None = None
-        self.mcp = FastMCP("Zammad MCP Server")
+        # Create FastMCP with lifespan configured
+        self.mcp = FastMCP("Zammad MCP Server", lifespan=self._create_lifespan())
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
+    
+    def _create_lifespan(self) -> Any:
+        """Create the lifespan context manager for the server."""
+        @asynccontextmanager
+        async def lifespan(_app: FastMCP) -> AsyncIterator[None]:
+            """Initialize resources on startup."""
+            await self.initialize()
+            yield
+        
+        return lifespan
 
     def get_client(self) -> ZammadClient:
         """Get the Zammad client, ensuring it's initialized."""
@@ -739,18 +750,6 @@ Organize the results by urgency and provide actionable recommendations."""
 
 # Create the server instance
 server = ZammadMCPServer()
-
-
-# Lifespan context manager
-@asynccontextmanager
-async def lifespan(_app: FastMCP) -> AsyncIterator[None]:
-    """Initialize resources on startup."""
-    await server.initialize()
-    yield
-
-
-# Apply lifespan to the MCP instance
-server.mcp.lifespan = lifespan  # type: ignore[attr-defined]
 
 # Export the MCP server instance
 mcp = server.mcp
