@@ -27,12 +27,25 @@
       "mcp__github__get_workflow_run",
       "mcp__github__list_workflow_runs",
       "mcp__github__list_commits",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "mcp__github__enable_toolset",
+      "mcp__github__get_toolset_tools",
+      "mcp__github__list_available_toolsets",
+      "Bash(find:*)",
+      "mcp__zammad__get_current_user",
+      "mcp__zammad__search_users",
+      "mcp__zammad__list_groups",
+      "mcp__zammad__create_ticket",
+      "mcp__zammad__search_tickets",
+      "mcp__zammad__update_ticket"
     ],
     "deny": []
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
+    "deepwiki",
+    "grep",
+    "github",
     "zammad"
   ]
 }
