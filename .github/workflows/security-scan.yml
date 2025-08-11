@@ -57,7 +57,7 @@ jobs:
           category: bandit
 
       - name: Run safety scan
-        uses: pyupio/safety-action@fbbe8e66c6ae9f3eb5e68faf60b12ce63c8b7c81 # v1.0.2
+        uses: pyupio/safety-action@fbbe8e66c6ae9f3eb5e68faf60b12ce63c8b7c81  # v1.0.2
         continue-on-error: true
         with:
           api-key: ${{ secrets.SAFETY_API_KEY }}
