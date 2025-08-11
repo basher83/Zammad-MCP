@@ -48,7 +48,8 @@ reviews:
     - label: "🏷️ auto-labeled"
       instructions: "Apply to all PRs to indicate CodeRabbit has reviewed and labeled"
   path_filters:
-    - "**/.claude/**"
+    - "**/*"              # Include all files by default
+    - "!**/.claude/**"    # Exclude .claude directory
   path_instructions:
     - path: "mcp_zammad/server.py"
       instructions: |
