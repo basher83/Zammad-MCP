@@ -1,6 +1,8 @@
 name: Sync Labels via Central Definition
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 
 on:
   workflow_dispatch:
