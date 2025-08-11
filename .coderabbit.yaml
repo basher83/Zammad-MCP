@@ -131,13 +131,13 @@ pipeline_remediation:
   enabled: true
   auto_suggest: true
   auto_apply: false  # Start with manual review
-  
+
   analysis:
     confidence_threshold: 90
     include_performance_suggestions: true
     include_security_fixes: true
     create_issues_for_complex_failures: true
-  
+
   platforms:
     github_actions:
       enabled: true
@@ -153,7 +153,7 @@ pipeline_remediation:
       enabled: true
       analyze_dependency_conflicts: true
       suggest_version_updates: true
-  
+
   error_types:
     - build_failures
     - dependency_conflicts
@@ -164,7 +164,7 @@ pipeline_remediation:
     - security_vulnerabilities
     - performance_issues
     - coverage_threshold_failures
-  
+
   # Custom patterns for Python/MCP project
   custom_patterns:
     - name: "uv_sync_failure"
@@ -175,22 +175,22 @@ pipeline_remediation:
         2. Verify Python version matches project requirements
         3. Check for conflicting dependencies
       remediation_priority: "high"
-    
+
     - name: "pytest_failure"
       pattern: "FAILED.*test_|pytest.*failed|AssertionError"
       remediation_priority: "high"
       auto_analyze_traceback: true
-    
+
     - name: "mypy_error"
       pattern: "error:.*\\[.*\\]|Function is missing a return type annotation"
       remediation_template: "Add proper type annotations"
       remediation_priority: "medium"
-    
+
     - name: "ruff_violations"
       pattern: "Found \\d+ error|ruff.*failed"
       remediation_priority: "medium"
       auto_fix_command: "uv run ruff format . && uv run ruff check --fix ."
-    
+
     - name: "coverage_threshold"
       pattern: "Coverage.*below required.*%"
       remediation_template: |
@@ -199,17 +199,17 @@ pipeline_remediation:
         2. Review threshold requirements
         3. Check coverage report for specific gaps
       remediation_priority: "high"
-    
+
     - name: "docker_build_failure"
       pattern: "ERROR: failed to solve|docker build.*failed"
       remediation_priority: "critical"
       analyze_dockerfile: true
-    
+
     - name: "security_scan_failure"
       pattern: "found vulnerabilities|security.*failed|bandit.*failed"
       remediation_priority: "critical"
       create_security_issue: true
-    
+
     - name: "pip_audit_vulnerability"
       pattern: "pip-audit found vulnerabilities|vulnerability.*found"
       remediation_template: |
@@ -219,12 +219,12 @@ pipeline_remediation:
         3. Check for breaking changes
       remediation_priority: "critical"
       auto_create_issue: true
-    
+
     - name: "github_action_deprecated"
       pattern: "Node.js 12 actions are deprecated|set-output.*deprecated"
       remediation_template: "Update to latest action version with SHA pinning"
       remediation_priority: "medium"
-  
+
   # Auto-apply rules for safe fixes
   auto_apply_rules:
     - error_type: "linting_errors"
@@ -232,12 +232,12 @@ pipeline_remediation:
       max_changes: 10
       file_patterns: ["*.py"]
       exclude_paths: ["tests/"]
-    
+
     - error_type: "formatting_errors"
       confidence_min: 99
       file_patterns: ["*.py", "*.yaml", "*.yml", "*.md"]
       auto_fix_command: "uv run ruff format ."
-  
+
   # Security settings
   security:
     exclude_branches: ["main", "master", "production"]
@@ -247,12 +247,12 @@ pipeline_remediation:
       - production_configs
     auto_apply_security_fixes: false
     create_security_issues: true
-  
+
   # Notification settings
   notifications:
     create_github_issues: true
     issue_labels: ["ci/cd", "automated"]
-    
+
   # Performance monitoring
   performance:
     track_build_times: true
@@ -297,7 +297,7 @@ tools:
     enabled: false
   flake8:
     enabled: false
-  
+
   # Security tools - ENABLED
   gitleaks:
     enabled: true
@@ -305,7 +305,7 @@ tools:
     enabled: true
   checkov:
     enabled: true
-  
+
   # Documentation and config tools - ENABLED
   markdownlint:
     enabled: true
@@ -319,14 +319,14 @@ tools:
     enabled: true
   shellcheck:
     enabled: true
-  
+
   # GitHub integration - ENHANCED
   github-checks:
     enabled: true
     timeout_ms: 180000  # Increased for complex pipelines
     wait_for_completion: true
     analyze_failures: true
-  
+
   # GitHub Actions analysis
   github-actions:
     enabled: true
@@ -335,13 +335,13 @@ tools:
     detect_deprecated_actions: true
     check_permissions: true
     validate_secrets: true
-  
+
   # Language/documentation tools
   languagetool:
     enabled: true
     disabled_rules: ["WHITESPACE_RULE", "EN_QUOTES"]
     level: default
-  
+
   # Tools for OTHER languages - DISABLED
   biome:
     enabled: false
