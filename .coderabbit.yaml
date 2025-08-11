@@ -47,7 +47,8 @@ reviews:
       instructions: "Apply when PR introduces breaking changes to the MCP server API or tool signatures"
     - label: "🏷️ auto-labeled"
       instructions: "Apply to all PRs to indicate CodeRabbit has reviewed and labeled"
-  path_filters: []
+  path_filters:
+    - "**/.claude/**"
   path_instructions:
     - path: "mcp_zammad/server.py"
       instructions: |
@@ -228,8 +229,6 @@ knowledge_base:
     enabled: true
   code_guidelines:
     enabled: true
-    filePatterns:
-      - "**/.serena/memories"
   learnings:
     scope: auto
   issues:
