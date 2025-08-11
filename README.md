@@ -398,6 +398,7 @@ Security is a top priority for the Zammad MCP Server. We employ multiple layers 
 **⚠️ IMPORTANT**: Please do NOT create public GitHub issues for security vulnerabilities.
 
 Report security issues via:
+
 - [GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/security/advisories/new) (Preferred)
 - See our [Security Policy](SECURITY.md) for detailed reporting guidelines
 
@@ -408,7 +409,7 @@ Report security issues via:
 - ✅ **XSS Prevention**: HTML sanitization in all text fields
 - ✅ **Secure Authentication**: API tokens preferred over passwords
 - ✅ **Dependency Scanning**: Automated vulnerability detection with Dependabot
-- ✅ **Security Testing**: Multiple scanners (Bandit, Semgrep, pip-audit)
+- ✅ **Security Testing**: Multiple scanners (Bandit, pip-audit)
 
 For complete security documentation, see [SECURITY.md](SECURITY.md).
 

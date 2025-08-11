@@ -33,11 +33,11 @@ When reporting a vulnerability, please provide:
 - **Vulnerability Type**: (e.g., SSRF, XSS, SQL Injection, Authentication Bypass)
 - **Affected Components**: Full paths of source files and functions
 - **Description**: Clear explanation of the vulnerability
-- **Steps to Reproduce**: 
+- **Steps to Reproduce**:
   1. Detailed step-by-step instructions
   2. Include code samples or scripts if applicable
   3. Expected vs actual behavior
-- **Impact Assessment**: 
+- **Impact Assessment**:
   - Severity (Critical/High/Medium/Low)
   - Potential attack scenarios
   - Affected users or data
@@ -56,8 +56,8 @@ We commit to the following response times:
   - High (CVSS 7.0-8.9): Within 30 days
   - Medium (CVSS 4.0-6.9): Within 60 days
   - Low (CVSS 0.1-3.9): Within 90 days
-- **Patch Release**: Within 24 hours of fix completion
-- **Disclosure**: 
+- **Patch Release**: Within 24 hours of fix completion (best-effort)
+- **Disclosure**:
   - Coordinated disclosure with reporter
   - Default: 90 days from initial report
   - May be expedited for actively exploited vulnerabilities
@@ -207,17 +207,20 @@ Avoid granting admin permissions unless absolutely necessary.
 This project employs multiple layers of security scanning:
 
 #### Static Analysis
+
 - **Bandit**: Identifies common security issues in Python code
-- **Semgrep**: Pattern-based vulnerability detection
 - **CodeQL**: GitHub's semantic code analysis
+- **Semgrep**: Pattern-based vulnerability detection (integration pending)
 
 #### Dependency Scanning
+
 - **Dependabot**: Automated dependency updates
 - **pip-audit**: Python package vulnerability detection
 - **Safety**: Known vulnerability database checks
 - **Renovate**: Automated dependency management
 
 #### Container Security
+
 - **Trivy**: Container image vulnerability scanning
 - **Docker Scout**: Supply chain security analysis
 - **Hadolint**: Dockerfile best practices
@@ -231,8 +234,8 @@ This project employs multiple layers of security scanning:
 # Individual security scans
 uv run pip-audit               # Check for vulnerable packages
 uv run bandit -r mcp_zammad    # Static security analysis
-uv run semgrep --config=auto . # Pattern-based scanning
-uv run safety scan             # Vulnerability database check
+# uv run semgrep --config=auto .  # Pattern-based scanning (pending setup)
+uv run safety check --output json  # Vulnerability database check
 
 # Docker image scanning
 docker scout cves ghcr.io/basher83/zammad-mcp:latest
@@ -254,6 +257,7 @@ For the security scanning workflow to function properly, configure the following
 ### Security Workflow
 
 The repository includes automated security scanning that runs on:
+
 - Every push to main branch
 - All pull requests
 - Weekly scheduled scans (Mondays at 09:00 UTC)
@@ -313,6 +317,7 @@ Security researchers who have helped improve our security will be acknowledged h
 ### Bounty Program
 
 While we don't currently offer monetary rewards, we provide:
+
 - Public acknowledgment (with permission)
 - CVE credit for qualifying vulnerabilities
 - Contribution recognition in release notes
