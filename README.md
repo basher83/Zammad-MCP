@@ -404,12 +404,12 @@ Report security issues via:
 
 ### Security Features
 
-- ✅ **Input Validation**: All user inputs validated and sanitized
-- ✅ **SSRF Protection**: URL validation prevents server-side request forgery
-- ✅ **XSS Prevention**: HTML sanitization in all text fields
-- ✅ **Secure Authentication**: API tokens preferred over passwords
+- ✅ **Input Validation**: All user inputs validated and sanitized ([models.py](mcp_zammad/models.py))
+- ✅ **SSRF Protection**: URL validation prevents server-side request forgery ([client.py](mcp_zammad/client.py#L46-L58))
+- ✅ **XSS Prevention**: HTML sanitization in all text fields ([models.py](mcp_zammad/models.py#L27-L31))
+- ✅ **Secure Authentication**: API tokens preferred over passwords ([client.py](mcp_zammad/client.py#L60-L92))
 - ✅ **Dependency Scanning**: Automated vulnerability detection with Dependabot
-- ✅ **Security Testing**: Multiple scanners (Bandit, pip-audit)
+- ✅ **Security Testing**: Multiple scanners (Bandit, Safety, pip-audit) in CI ([security-scan.yml](.github/workflows/security-scan.yml))
 
 For complete security documentation, see [SECURITY.md](SECURITY.md).
 
@@ -451,6 +451,8 @@ This project uses the same license as the [Zammad project](https://github.com/za
 - List attachments with complete metadata (filename, size, content type)
 - Download attachments as base64-encoded content for safe transmission
 - Comprehensive error handling and security validation
+
+> **Security Note**: Attachment downloads are base64-encoded for safe transmission via MCP protocol. All attachment metadata is sanitized to prevent XSS attacks. Downloaded content should be validated before processing in client applications.
 
 🚀 **Performance Improvements**:
 
