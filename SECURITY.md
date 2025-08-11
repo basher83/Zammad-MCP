@@ -223,6 +223,7 @@ This project employs multiple layers of security scanning:
 #### Static Analysis
 
 - ✅ **Bandit**: Identifies common security issues in Python code (active in CI)
+- ✅ **CodeQL**: GitHub's automatic security analysis (enabled by default)
 - ✅ **Codacy**: Comprehensive static analysis and code quality (active in CI)
 - ⏳ **Semgrep**: Pattern-based vulnerability detection (integration pending)
 
