@@ -7,6 +7,7 @@
 #   "matplotlib>=3.5.0",
 #   "click>=8.0.0",
 #   "lxml>=4.9.0",
+#   "defusedxml>=0.7.1",
 # ]
 # requires-python = ">=3.10"
 # ///
