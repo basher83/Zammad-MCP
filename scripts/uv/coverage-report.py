@@ -30,12 +30,12 @@ Usage:
 
 import json
 import sys
-import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 
 import click
+import defusedxml.ElementTree as ET
 import matplotlib.pyplot as plt
 from jinja2 import Template
 from rich.console import Console
