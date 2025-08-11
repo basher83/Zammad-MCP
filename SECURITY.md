@@ -67,6 +67,7 @@ We commit to the following response times:
 ### For Users
 
 #### API Token Security
+
 - **Use API tokens instead of username/password** when possible
 - **Store tokens securely** using environment variables or secure credential storage
 - **Rotate tokens regularly** (recommended: every 90 days)
@@ -74,6 +75,7 @@ We commit to the following response times:
 - **Never commit tokens** to version control
 
 #### Environment Configuration
+
 ```bash
 # ✅ Good: Use environment variables
 export ZAMMAD_HTTP_TOKEN="your-token-here"
@@ -83,6 +85,7 @@ ZAMMAD_HTTP_TOKEN=abc123token
 ```
 
 #### Claude Desktop Configuration
+
 ```json
 {
   "mcpServers": {
@@ -99,11 +102,13 @@ ZAMMAD_HTTP_TOKEN=abc123token
 ```
 
 **Security Notes:**
+
 - Ensure Claude Desktop configuration files have restricted permissions
 - Use different tokens for different environments (dev/staging/prod)
 - Monitor token usage in Zammad's admin interface
 
 #### Network Security
+
 - **Use HTTPS only** - ensure your Zammad URL uses `https://`
 - **Verify SSL certificates** - don't disable SSL verification
 - **Network isolation** - run in isolated environments when possible
@@ -112,12 +117,14 @@ ZAMMAD_HTTP_TOKEN=abc123token
 ### For Developers
 
 #### Secure Development
+
 - **Input validation** - validate all user inputs and API responses
 - **Error handling** - don't expose sensitive information in error messages
 - **Logging** - sanitize logs to prevent credential leakage
 - **Dependencies** - keep dependencies updated and scan for vulnerabilities
 
 #### Code Security Guidelines
+
 ```python
 # ✅ Good: Sanitized logging
 logger.info(f"Request to {url.split('?')[0]}")  # Remove query parameters
@@ -127,6 +134,7 @@ logger.debug(f"Full request: {url}")  # May contain tokens in URL
 ```
 
 #### Testing Security
+
 - Test with minimal permissions
 - Use separate test instances
 - Never use production credentials in tests
@@ -135,12 +143,14 @@ logger.debug(f"Full request: {url}")  # May contain tokens in URL
 ## Data Handling
 
 ### Customer Data Protection
+
 - **Data minimization** - only access necessary ticket/user data
 - **Temporary storage** - avoid storing customer data locally
 - **Memory management** - clear sensitive data from memory when possible
 - **Compliance** - follow GDPR, CCPA, and other applicable regulations
 
 ### API Response Handling
+
 ```python
 # ✅ Good: Clear sensitive data
 response_data = api_call()
@@ -155,6 +165,7 @@ filtered_data = {k: v for k, v in data.items()
 ## Zammad Instance Security
 
 ### Instance Configuration
+
 - Keep Zammad updated to the latest version
 - Use strong authentication methods
 - Enable audit logging
@@ -162,6 +173,7 @@ filtered_data = {k: v for k, v in data.items()
 - Regular security audits
 
 ### API Token Management
+
 - Create dedicated tokens for MCP integration
 - Use descriptive token names (e.g., "MCP-Server-Production")
 - Regularly review and rotate tokens
@@ -169,7 +181,9 @@ filtered_data = {k: v for k, v in data.items()
 - Revoke unused or compromised tokens immediately
 
 ### Permission Guidelines
+
 Recommended minimum permissions for MCP tokens:
+
 - `ticket.agent` - For ticket operations
 - `user.agent` - For user lookups (if needed)
 - `organization.agent` - For organization data (if needed)
@@ -248,7 +262,7 @@ docker scout cves ghcr.io/basher83/zammad-mcp:latest
 For the security scanning workflow to function properly, configure the following secrets in your repository:
 
 - **`SAFETY_API_KEY`**: Required for the Safety vulnerability scanner
-  - Sign up at https://safetycli.com/resources/plans
+  - Sign up at <https://safetycli.com/resources/plans>
   - Add the key to Settings → Secrets → Actions
 - **`CODACY_PROJECT_TOKEN`**: For Codacy security analysis (optional)
   - Available from your Codacy project settings
@@ -325,6 +339,7 @@ While we don't currently offer monetary rewards, we provide:
 ## Updates to This Policy
 
 This security policy may be updated periodically. Major changes will be announced through:
+
 - GitHub Releases
 - Repository announcements
 - Security advisories (if applicable)
