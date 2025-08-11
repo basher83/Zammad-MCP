@@ -43,6 +43,15 @@
       "env": {
         "GITHUB_PAT": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
       }
+    },
+    "codacy": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@codacy/codacy-mcp"
+      ],
+      "env": {}
     }
   }
 }
