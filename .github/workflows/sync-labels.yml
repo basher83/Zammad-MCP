@@ -1,6 +1,8 @@
 name: Use Sync Labels Workflow
 
 on:
+  schedule:
+   - cron: '0 0 * * 1' # 00:00 on Monday
   workflow_dispatch: # Allows manual triggering
   # You could also add 'schedule', 'push', etc. triggers if needed
 
