@@ -389,6 +389,29 @@ The server respects Zammad's rate limits. If you encounter rate limit errors:
 - Use pagination for large result sets
 - Consider caching frequently accessed data
 
+## Security
+
+Security is a top priority for the Zammad MCP Server. We employ multiple layers of protection and follow industry best practices.
+
+### Reporting Security Issues
+
+**⚠️ IMPORTANT**: Please do NOT create public GitHub issues for security vulnerabilities.
+
+Report security issues via:
+- [GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/security/advisories/new) (Preferred)
+- See our [Security Policy](SECURITY.md) for detailed reporting guidelines
+
+### Security Features
+
+- ✅ **Input Validation**: All user inputs validated and sanitized
+- ✅ **SSRF Protection**: URL validation prevents server-side request forgery
+- ✅ **XSS Prevention**: HTML sanitization in all text fields
+- ✅ **Secure Authentication**: API tokens preferred over passwords
+- ✅ **Dependency Scanning**: Automated vulnerability detection with Dependabot
+- ✅ **Security Testing**: Multiple scanners (Bandit, Semgrep, pip-audit)
+
+For complete security documentation, see [SECURITY.md](SECURITY.md).
+
 ## Contributing
 
 See [CONTRIBUTING](CONTRIBUTING.md) for detailed guidelines on:
@@ -408,6 +431,7 @@ This project uses the same license as the [Zammad project](https://github.com/za
 ## Documentation
 
 - [Architecture](ARCHITECTURE.md) - Technical architecture and design decisions
+- [Security](SECURITY.md) - Security policy and vulnerability reporting
 - [Contributing](CONTRIBUTING.md) - Development guidelines and contribution process
 - [Changelog](CHANGELOG.md) - Version history and changes
 
@@ -422,16 +446,19 @@ This project uses the same license as the [Zammad project](https://github.com/za
 ### Latest Features (v0.1.3)
 
 🎉 **New Attachment Support**: Full implementation for managing ticket article attachments
+
 - List attachments with complete metadata (filename, size, content type)
 - Download attachments as base64-encoded content for safe transmission
 - Comprehensive error handling and security validation
 
-🚀 **Performance Improvements**: 
+🚀 **Performance Improvements**:
+
 - Intelligent caching for frequently accessed data (groups, states, priorities)
 - Optimized ticket statistics with pagination instead of loading all data into memory
 - Reduced memory footprint for large datasets
 
 🔒 **Enhanced Security**:
+
 - URL validation with SSRF attack protection
 - HTML sanitization prevents XSS attacks
 - Enhanced authentication with Docker secrets support

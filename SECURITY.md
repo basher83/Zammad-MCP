@@ -4,10 +4,13 @@
 
 We actively support the following versions of Zammad MCP Server with security updates:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| main    | :white_check_mark: |
-| 0.x.x   | :white_check_mark: |
+| Version | Supported          | Security Updates | End of Life |
+| ------- | ------------------ | ---------------- | ----------- |
+| 0.1.x   | :white_check_mark: | Active           | TBD         |
+| 0.0.x   | :x:                | None             | 2024-12-31  |
+| main    | :white_check_mark: | Development      | N/A         |
+
+**Note**: We recommend always using the latest stable release for production environments.
 
 ## Reporting a Vulnerability
 
@@ -19,28 +22,45 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 
 Instead, please use one of these methods:
 
-- **GitHub Security Advisories** (Preferred): Use the "Report a vulnerability" button in the Security tab of this repository
-- **Email**: Send details to the repository maintainer at [contact email - update this]
+- **GitHub Security Advisories** (Preferred): [Report a vulnerability](https://github.com/basher83/Zammad-MCP/security/advisories/new) via GitHub's private vulnerability reporting
+- **Email**: security-zammad-mcp@[maintainer-domain] (Note: Update with actual security email)
 - **Encrypted Email**: For sensitive reports, use GPG encryption (key available on request)
 
 ### 2. What to Include
 
 When reporting a vulnerability, please provide:
 
-- A clear description of the vulnerability
-- Steps to reproduce the issue
-- Potential impact assessment
-- Any suggested fixes or mitigations
-- Your contact information for follow-up
+- **Vulnerability Type**: (e.g., SSRF, XSS, SQL Injection, Authentication Bypass)
+- **Affected Components**: Full paths of source files and functions
+- **Description**: Clear explanation of the vulnerability
+- **Steps to Reproduce**: 
+  1. Detailed step-by-step instructions
+  2. Include code samples or scripts if applicable
+  3. Expected vs actual behavior
+- **Impact Assessment**: 
+  - Severity (Critical/High/Medium/Low)
+  - Potential attack scenarios
+  - Affected users or data
+- **Proof of Concept**: Include PoC code if available
+- **Suggested Fix**: Your recommended mitigation (optional)
+- **Contact Information**: For coordinated disclosure
 
 ### 3. Response Timeline
 
 We commit to the following response times:
 
-- **Initial Response**: Within 48 hours of report
-- **Assessment**: Within 7 days
-- **Fix Development**: Within 30 days for critical issues, 90 days for others
-- **Disclosure**: Coordinated disclosure after fix is available
+- **Initial Response**: Within 48 hours of report (acknowledgment)
+- **Initial Assessment**: Within 7 days (severity determination)
+- **Fix Development Timeline**:
+  - Critical (CVSS 9.0-10.0): Within 14 days
+  - High (CVSS 7.0-8.9): Within 30 days
+  - Medium (CVSS 4.0-6.9): Within 60 days
+  - Low (CVSS 0.1-3.9): Within 90 days
+- **Patch Release**: Within 24 hours of fix completion
+- **Disclosure**: 
+  - Coordinated disclosure with reporter
+  - Default: 90 days from initial report
+  - May be expedited for actively exploited vulnerabilities
 
 ## Security Best Practices
 
@@ -180,6 +200,44 @@ Avoid granting admin permissions unless absolutely necessary.
    - Update credentials and tokens
    - Monitor for continued suspicious activity
 
+## Vulnerability Management
+
+### Security Scanning Tools
+
+This project employs multiple layers of security scanning:
+
+#### Static Analysis
+- **Bandit**: Identifies common security issues in Python code
+- **Semgrep**: Pattern-based vulnerability detection
+- **CodeQL**: GitHub's semantic code analysis
+
+#### Dependency Scanning
+- **Dependabot**: Automated dependency updates
+- **pip-audit**: Python package vulnerability detection
+- **Safety**: Known vulnerability database checks
+- **Renovate**: Automated dependency management
+
+#### Container Security
+- **Trivy**: Container image vulnerability scanning
+- **Docker Scout**: Supply chain security analysis
+- **Hadolint**: Dockerfile best practices
+
+### Running Security Scans Locally
+
+```bash
+# Run all security checks
+./scripts/quality-check.sh
+
+# Individual security scans
+uv run pip-audit               # Check for vulnerable packages
+uv run bandit -r mcp_zammad    # Static security analysis
+uv run semgrep --config=auto . # Pattern-based scanning
+uv run safety scan             # Vulnerability database check
+
+# Docker image scanning
+docker scout cves ghcr.io/basher83/zammad-mcp:latest
+```
+
 ## GitHub Actions Security
 
 ### Required Secrets
@@ -191,6 +249,7 @@ For the security scanning workflow to function properly, configure the following
   - Add the key to Settings → Secrets → Actions
 - **`CODACY_PROJECT_TOKEN`**: For Codacy security analysis (optional)
   - Available from your Codacy project settings
+- **`GITHUB_TOKEN`**: Automatically provided by GitHub Actions
 
 ### Security Workflow
 
@@ -198,19 +257,49 @@ The repository includes automated security scanning that runs on:
 - Every push to main branch
 - All pull requests
 - Weekly scheduled scans (Mondays at 09:00 UTC)
+- Manual workflow dispatch
 
-The workflow includes:
-- **Bandit**: Static security analysis for Python code
-- **Safety**: Dependency vulnerability scanning
-- **pip-audit**: Additional dependency security checks
-- **Codacy Trivy**: Container and dependency scanning
+### Pre-commit Hooks
+
+Install pre-commit hooks for local security checks:
+
+```bash
+# Install pre-commit
+uv pip install pre-commit
+
+# Install hooks
+pre-commit install
+
+# Run manually
+pre-commit run --all-files
+```
+
+## CVE Process
+
+### CVE Assignment
+
+For qualifying vulnerabilities, we will:
+
+1. Request CVE assignment through GitHub Security Advisories
+2. Coordinate with reporter on CVE details
+3. Include CVE in release notes and advisories
+4. Update this document with CVE references
+
+### Severity Scoring
+
+We use CVSS v3.1 for vulnerability scoring:
+
+- **Critical** (9.0-10.0): Remote code execution, authentication bypass
+- **High** (7.0-8.9): Privilege escalation, data exposure
+- **Medium** (4.0-6.9): Cross-site scripting, denial of service
+- **Low** (0.1-3.9): Information disclosure, minor issues
 
 ## Security Contact
 
 For security-related questions or concerns:
 
-- **Security Issues**: Use GitHub Security Advisories
-- **General Security Questions**: Create a GitHub Discussion
+- **Security Issues**: [Report via GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/security/advisories/new)
+- **General Security Questions**: [Create a GitHub Discussion](https://github.com/basher83/Zammad-MCP/discussions)
 - **Urgent Security Matters**: Contact repository maintainers directly
 
 ## Acknowledgments
@@ -221,6 +310,13 @@ We appreciate security researchers and users who help keep this project secure. 
 
 Security researchers who have helped improve our security will be acknowledged here (with their permission).
 
+### Bounty Program
+
+While we don't currently offer monetary rewards, we provide:
+- Public acknowledgment (with permission)
+- CVE credit for qualifying vulnerabilities
+- Contribution recognition in release notes
+
 ## Updates to This Policy
 
 This security policy may be updated periodically. Major changes will be announced through:
@@ -230,5 +326,10 @@ This security policy may be updated periodically. Major changes will be announce
 
 ---
 
-**Last Updated**: 2025-07-08
-**Version**: 1.0
+**Last Updated**: 2025-08-11  
+**Version**: 1.1.0  
+
+**Changelog**:
+
+- v1.1.0 (2025-08-11): Enhanced vulnerability reporting, added CVE process, expanded security tools documentation
+- v1.0.0 (2025-07-08): Initial security policy
