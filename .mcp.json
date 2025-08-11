@@ -33,6 +33,16 @@
         "mcp_zammad"
       ],
       "env": {}
+    },
+    "coderabbitai": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "coderabbitai-mcp@latest"
+      ],
+      "env": {
+        "GITHUB_PAT": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
     }
   }
 }
