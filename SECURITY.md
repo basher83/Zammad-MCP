@@ -23,7 +23,7 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 Instead, please use one of these methods:
 
 - **GitHub Security Advisories** (Preferred): [Report a vulnerability](https://github.com/basher83/Zammad-MCP/security/advisories/new) via GitHub's private vulnerability reporting
-- **Email**: security-zammad-mcp@[maintainer-domain] (Note: Update with actual security email)
+- **Email**: For urgent security matters, contact repository maintainers directly
 - **Encrypted Email**: For sensitive reports, use GPG encryption (key available on request)
 
 ### 2. What to Include
@@ -158,7 +158,7 @@ process_data(response_data)
 del response_data  # Clear from memory
 
 # ✅ Good: Limit data exposure
-filtered_data = {k: v for k, v in data.items() 
+filtered_data = {k: v for k, v in data.items()
                 if k not in ['password', 'token', 'secret']}
 ```
 
@@ -222,22 +222,22 @@ This project employs multiple layers of security scanning:
 
 #### Static Analysis
 
-- **Bandit**: Identifies common security issues in Python code
-- **CodeQL**: GitHub's semantic code analysis
-- **Semgrep**: Pattern-based vulnerability detection (integration pending)
+- ✅ **Bandit**: Identifies common security issues in Python code (active in CI)
+- ✅ **CodeQL**: GitHub's semantic code analysis (active in CI)
+- ⏳ **Semgrep**: Pattern-based vulnerability detection (integration pending)
 
 #### Dependency Scanning
 
-- **Dependabot**: Automated dependency updates
-- **pip-audit**: Python package vulnerability detection
-- **Safety**: Known vulnerability database checks
-- **Renovate**: Automated dependency management
+- ✅ **Dependabot**: Automated dependency updates (active)
+- ✅ **pip-audit**: Python package vulnerability detection (active in CI)
+- ✅ **Safety**: Known vulnerability database checks (active in CI)
+- ⏳ **Renovate**: Automated dependency management (integration pending)
 
 #### Container Security
 
-- **Trivy**: Container image vulnerability scanning
-- **Docker Scout**: Supply chain security analysis
-- **Hadolint**: Dockerfile best practices
+- ⏳ **Trivy**: Container image vulnerability scanning (integration pending)
+- ⏳ **Docker Scout**: Supply chain security analysis (integration pending)
+- ⏳ **Hadolint**: Dockerfile best practices (integration pending)
 
 ### Running Security Scans Locally
 
@@ -291,6 +291,31 @@ pre-commit install
 # Run manually
 pre-commit run --all-files
 ```
+
+The repository includes a comprehensive `.pre-commit-config.yaml` with security-focused hooks:
+
+```yaml
+repos:
+  - repo: https://github.com/PyCQA/bandit
+    hooks:
+      - id: bandit
+        args: ["-f", "json"]
+        exclude: ^tests/
+
+  - repo: https://github.com/semgrep/semgrep
+    hooks:
+      - id: semgrep
+        args: ["--config=auto", "--error"]
+
+  - repo: local
+    hooks:
+      - id: pip-audit
+        name: pip-audit
+        entry: uv
+        args: ["run", "pip-audit", "--format=json"]
+```
+
+This configuration ensures security checks run automatically on every commit.
 
 ## CVE Process
 
@@ -346,8 +371,8 @@ This security policy may be updated periodically. Major changes will be announce
 
 ---
 
-**Last Updated**: 2025-08-11  
-**Version**: 1.1.0  
+**Last Updated**: 2025-08-11
+**Version**: 1.1.0
 
 **Changelog**:
 
