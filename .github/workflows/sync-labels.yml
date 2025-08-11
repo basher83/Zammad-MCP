@@ -1,4 +1,6 @@
 name: Sync Labels via Central Definition
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
