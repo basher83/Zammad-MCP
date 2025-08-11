@@ -1,0 +1,250 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+tone_instructions: "Be professional and focus on security, performance, and Python best practices."
+early_access: true
+enable_free_tier: true
+reviews:
+  profile: assertive  # Changed to assertive for comprehensive code quality checks
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  high_level_summary_in_walkthrough: false
+  auto_title_placeholder: "@coderabbitai"
+  auto_title_instructions: "Include ticket number if referenced in PR"
+  review_status: true
+  commit_status: true
+  fail_commit_status: false
+  collapse_walkthrough: false
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: true
+  auto_apply_labels: true
+  suggested_reviewers: true
+  auto_assign_reviewers: true
+  poem: false  # Disabled for professional context
+  labeling_instructions:
+    - label: "⚡ api"
+      instructions: "Apply when PR modifies mcp_zammad/server.py, client.py, or any MCP/Zammad API integration"
+    - label: "👨‍🚀 crew-backend"
+      instructions: "Apply when PR modifies backend Python code in mcp_zammad/ directory"
+    - label: "💾 database"
+      instructions: "Apply when PR modifies mcp_zammad/models.py or data models"
+    - label: "⚡ performance"
+      instructions: "Apply when PR includes caching, pagination, or optimization improvements"
+    - label: "📚 documentation"
+      instructions: "Apply when PR updates README.md, ARCHITECTURE.md, CHANGELOG.md, or other docs"
+    - label: "📝 crew-docs"
+      instructions: "Apply when PR significantly updates documentation or adds new docs"
+    - label: "🐛 bug"
+      instructions: "Apply when PR fixes bugs or resolves issues"
+    - label: "✨ enhancement"
+      instructions: "Apply when PR adds new features, tools, or capabilities"
+    - label: "💎 breaking-change"
+      instructions: "Apply when PR introduces breaking changes to the MCP server API or tool signatures"
+    - label: "🏷️ auto-labeled"
+      instructions: "Apply to all PRs to indicate CodeRabbit has reviewed and labeled"
+  path_filters:
+    - "**/*"              # Include all files by default
+    - "!**/.claude/**"    # Exclude .claude directory
+  path_instructions:
+    - path: "mcp_zammad/server.py"
+      instructions: |
+        Review for MCP protocol compliance and FastMCP best practices.
+        Ensure proper async/await usage and lifespan management.
+        Check that new tools follow the established decorator pattern.
+        Verify proper error handling with MCP-specific error responses.
+    - path: "mcp_zammad/client.py"
+      instructions: |
+        Review Zammad API integration for correct endpoint usage.
+        Ensure proper authentication handling for all three auth methods.
+        Check for URL validation to prevent SSRF attacks.
+        Verify proper pagination handling for large result sets.
+    - path: "mcp_zammad/models.py"
+      instructions: |
+        Review Pydantic models for proper validation and type annotations.
+        Ensure union types handle both expanded and non-expanded Zammad responses.
+        Check that all fields have appropriate defaults and constraints.
+        Verify HTML sanitization is applied where needed.
+    - path: "tests/**/*.py"
+      instructions: |
+        Ensure tests use proper mocking of ZammadClient.
+        Check for comprehensive test coverage including error cases.
+        Verify use of pytest fixtures and parametrization where appropriate.
+        Ensure async tests use pytest-asyncio correctly.
+    - path: "**/*.py"
+      instructions: |
+        Review against PEP 8 and modern Python 3.10+ conventions.
+        Check for proper type hints using Python 3.10+ syntax (list[str] not List[str]).
+        Ensure no parameter shadowing (use article_type not type).
+        Verify proper use of sentinel pattern where applicable.
+    - path: "scripts/**/*.sh"
+      instructions: |
+        Review shell scripts for POSIX compliance and security.
+        Ensure proper error handling with set -e or equivalent.
+        Check for proper quoting of variables.
+    - path: ".github/workflows/*.yml"
+      instructions: |
+        Review GitHub Actions for security best practices.
+        Ensure all third-party actions are pinned to commit SHAs.
+        Check for proper secret handling and permissions.
+    - path: "Dockerfile"
+      instructions: |
+        Review for Docker security best practices.
+        Ensure multi-stage build is used properly.
+        Check for minimal final image size and attack surface.
+        Verify proper handling of secrets and environment variables.
+  abort_on_close: true
+  disable_cache: false
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    ignore_title_keywords: ["WIP", "draft", "DO NOT MERGE"]
+    labels: []
+    drafts: false
+    base_branches: ["main"]
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+  pre_merge_checks:
+    docstrings:
+      mode: warning
+      threshold: 80
+    title:
+      mode: warning
+      requirements: "Should be descriptive and follow conventional commit format when possible"
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+  tools:
+    # Python-specific tools - ENABLED
+    ruff:
+      enabled: true  # Primary Python linter/formatter
+    pylint:
+      enabled: false  # Disabled - using ruff instead
+    flake8:
+      enabled: false  # Disabled - using ruff instead
+    
+    # Security tools - ENABLED
+    gitleaks:
+      enabled: true  # Detect secrets in code
+    semgrep:
+      enabled: true  # Security patterns detection
+    checkov:
+      enabled: true  # Infrastructure as code security
+    
+    # Documentation and config tools - ENABLED
+    markdownlint:
+      enabled: true  # Markdown documentation
+    yamllint:
+      enabled: true  # YAML configuration files
+    hadolint:
+      enabled: true  # Dockerfile linting
+    actionlint:
+      enabled: true  # GitHub Actions linting
+    dotenvLint:
+      enabled: true  # .env file validation
+    shellcheck:
+      enabled: true  # Shell script validation
+    
+    # GitHub integration - ENABLED
+    github-checks:
+      enabled: true
+      timeout_ms: 90000
+    
+    # Language/documentation tools - ENABLED with caution
+    languagetool:
+      enabled: true
+      disabled_rules: ["WHITESPACE_RULE", "EN_QUOTES"]  # Too strict for code comments
+      level: default
+    
+    # Tools for OTHER languages - DISABLED
+    biome:
+      enabled: false  # JavaScript/TypeScript
+    swiftlint:
+      enabled: false  # Swift
+    phpstan:
+      enabled: false  # PHP
+      level: default
+    phpmd:
+      enabled: false  # PHP
+    phpcs:
+      enabled: false  # PHP
+    golangci-lint:
+      enabled: false  # Go
+    detekt:
+      enabled: false  # Kotlin
+    eslint:
+      enabled: false  # JavaScript/TypeScript
+    rubocop:
+      enabled: false  # Ruby
+    buf:
+      enabled: false  # Protocol Buffers
+    regal:
+      enabled: false  # Rego
+    pmd:
+      enabled: false  # Java
+    cppcheck:
+      enabled: false  # C/C++
+    clippy:
+      enabled: false  # Rust
+    sqlfluff:
+      enabled: false  # SQL (not used in this project)
+    prismaLint:
+      enabled: false  # Prisma ORM
+    oxc:
+      enabled: false  # JavaScript/TypeScript
+    shopifyThemeCheck:
+      enabled: false  # Shopify themes
+    luacheck:
+      enabled: false  # Lua
+    brakeman:
+      enabled: false  # Ruby on Rails
+    htmlhint:
+      enabled: false  # HTML
+    checkmake:
+      enabled: false  # Makefile (not used)
+    circleci:
+      enabled: false  # CircleCI config (using GitHub Actions)
+    ast-grep:
+      rule_dirs: []
+      util_dirs: []
+      essential_rules: true
+      packages: []
+chat:
+  auto_reply: true
+  integrations:
+    jira:
+      usage: auto
+    linear:
+      usage: auto
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  jira:
+    usage: auto
+    project_keys: []
+  linear:
+    usage: auto
+    team_keys: []
+  pull_requests:
+    scope: auto
+code_generation:
+  docstrings:
+    language: en-US
+    path_instructions: []
+  unit_tests:
+    path_instructions: []
