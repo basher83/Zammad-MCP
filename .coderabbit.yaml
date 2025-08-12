@@ -55,27 +55,30 @@ reviews:
       instructions: "Apply when PR addresses security vulnerabilities or improves security"
 
   path_filters:
-    - "**/*"              # Include all files by default
-    - "!**/.claude/**"    # Exclude .claude directory
-    - "!**/htmlcov/**"    # Exclude HTML coverage reports
-    - "!**/.venv/**"      # Exclude virtual environment
-    - "!**/dist/**"       # Exclude distribution/build artifacts
-    - "!**/build/**"      # Exclude build directories
-    - "!**/.pytest_cache/**"  # Exclude pytest cache
-    - "!**/__pycache__/**"    # Exclude Python bytecode cache
-    - "!**/*.pyc"         # Exclude compiled Python files
-    - "!**/.coverage"     # Exclude coverage data files
-    - "!**/coverage.xml"  # Exclude coverage XML reports
-    - "!**/.mypy_cache/**"    # Exclude mypy type checking cache
-    - "!**/.ruff_cache/**"    # Exclude ruff linter cache
-    - "!**/node_modules/**"   # Exclude npm dependencies (if any)
-    - "!**/.eggs/**"      # Exclude Python egg files
-    - "!**/*.egg-info/**"  # Exclude Python package info
-    - "!**/wheelhouse/**"  # Exclude wheel build directory
-    - "!**/.tox/**"       # Exclude tox test environments
-    - "!**/.nox/**"       # Exclude nox test environments
-    - "!**/.hypothesis/**"    # Exclude hypothesis test data
-
+    - "**/*"                   # Include all files by default
+    - "!**/.claude/**"         # Exclude .claude directory
+    - "!**/venv/**"            # Exclude non-dotted virtualenvs
+    - "!**/htmlcov/**"         # Exclude HTML coverage reports
+    - "!**/.venv/**"           # Exclude virtual environment
+    - "!**/dist/**"            # Exclude distribution/build artifacts
+    - "!**/build/**"           # Exclude build directories
+    - "!**/.pytest_cache/**"   # Exclude pytest cache
+    - "!**/.cache/**"          # Exclude generic cache dirs
+    - "!**/__pycache__/**"     # Exclude Python bytecode cache
+    - "!**/*.pyc"              # Exclude compiled Python files
+    - "!**/.coverage"          # Exclude coverage data files
+    - "!**/.coverage.*"        # Exclude sharded coverage data files
+    - "!**/coverage.xml"       # Exclude coverage XML reports
+    - "!**/coverage-*/**"      # Exclude additional coverage artifacts
+    - "!**/.mypy_cache/**"     # Exclude mypy type checking cache
+    - "!**/.ruff_cache/**"     # Exclude ruff linter cache
+    - "!**/node_modules/**"    # Exclude npm dependencies (if any)
+    - "!**/.eggs/**"           # Exclude Python egg files
+    - "!**/*.egg-info/**"      # Exclude Python package info
+    - "!**/wheelhouse/**"      # Exclude wheel build directory
+    - "!**/.tox/**"            # Exclude tox test environments
+    - "!**/.nox/**"            # Exclude nox test environments
+    - "!**/.hypothesis/**"     # Exclude hypothesis test data
   path_instructions:
     - path: "mcp_zammad/server.py"
       instructions: |
