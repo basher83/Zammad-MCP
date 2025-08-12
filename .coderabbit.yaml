@@ -3,8 +3,9 @@ language: en-US
 tone_instructions: "Be professional and focus on security, performance, and Python best practices."
 early_access: true
 enable_free_tier: true
+
 reviews:
-  profile: assertive  # Changed to assertive for comprehensive code quality checks
+  profile: assertive  # Comprehensive code quality checks
   request_changes_workflow: false
   high_level_summary: true
   high_level_summary_placeholder: "@coderabbitai summary"
@@ -25,7 +26,8 @@ reviews:
   auto_apply_labels: true
   suggested_reviewers: true
   auto_assign_reviewers: true
-  poem: false  # Disabled for professional context
+  poem: false
+
   labeling_instructions:
     - label: "⚡ api"
       instructions: "Apply when PR modifies mcp_zammad/server.py, client.py, or any MCP/Zammad API integration"
@@ -47,8 +49,36 @@ reviews:
       instructions: "Apply when PR introduces breaking changes to the MCP server API or tool signatures"
     - label: "🏷️ auto-labeled"
       instructions: "Apply to all PRs to indicate CodeRabbit has reviewed and labeled"
+    - label: "🔧 ci/cd"
+      instructions: "Apply when PR modifies CI/CD workflows or pipeline configuration"
+    - label: "🔒 security"
+      instructions: "Apply when PR addresses security vulnerabilities or improves security"
+
   path_filters:
-    - "**/.claude/**"
+    - "**/*"                   # Include all files by default
+    - "!**/.claude/**"         # Exclude .claude directory
+    - "!**/venv/**"            # Exclude non-dotted virtualenvs
+    - "!**/htmlcov/**"         # Exclude HTML coverage reports
+    - "!**/.venv/**"           # Exclude virtual environment
+    - "!**/dist/**"            # Exclude distribution/build artifacts
+    - "!**/build/**"           # Exclude build directories
+    - "!**/.pytest_cache/**"   # Exclude pytest cache
+    - "!**/.cache/**"          # Exclude generic cache dirs
+    - "!**/__pycache__/**"     # Exclude Python bytecode cache
+    - "!**/*.pyc"              # Exclude compiled Python files
+    - "!**/.coverage"          # Exclude coverage data files
+    - "!**/.coverage.*"        # Exclude sharded coverage data files
+    - "!**/coverage.xml"       # Exclude coverage XML reports
+    - "!**/coverage-*/**"      # Exclude additional coverage artifacts
+    - "!**/.mypy_cache/**"     # Exclude mypy type checking cache
+    - "!**/.ruff_cache/**"     # Exclude ruff linter cache
+    - "!**/node_modules/**"    # Exclude npm dependencies (if any)
+    - "!**/.eggs/**"           # Exclude Python egg files
+    - "!**/*.egg-info/**"      # Exclude Python package info
+    - "!**/wheelhouse/**"      # Exclude wheel build directory
+    - "!**/.tox/**"            # Exclude tox test environments
+    - "!**/.nox/**"            # Exclude nox test environments
+    - "!**/.hypothesis/**"     # Exclude hypothesis test data
   path_instructions:
     - path: "mcp_zammad/server.py"
       instructions: |
@@ -90,14 +120,18 @@ reviews:
         Review GitHub Actions for security best practices.
         Ensure all third-party actions are pinned to commit SHAs.
         Check for proper secret handling and permissions.
+        Verify job dependencies and conditional execution.
+        Check for efficient caching strategies.
     - path: "Dockerfile"
       instructions: |
         Review for Docker security best practices.
         Ensure multi-stage build is used properly.
         Check for minimal final image size and attack surface.
         Verify proper handling of secrets and environment variables.
+
   abort_on_close: true
   disable_cache: false
+
   auto_review:
     enabled: true
     auto_incremental_review: true
@@ -105,11 +139,13 @@ reviews:
     labels: []
     drafts: false
     base_branches: ["main"]
+
   finishing_touches:
     docstrings:
       enabled: true
     unit_tests:
       enabled: true
+
   pre_merge_checks:
     docstrings:
       mode: warning
@@ -121,101 +157,237 @@ reviews:
       mode: warning
     issue_assessment:
       mode: warning
+
   tools:
     # Python-specific tools - ENABLED
     ruff:
-      enabled: true  # Primary Python linter/formatter
+      enabled: true
     pylint:
-      enabled: false  # Disabled - using ruff instead
+      enabled: false
     flake8:
-      enabled: false  # Disabled - using ruff instead
-    
+      enabled: false
+
     # Security tools - ENABLED
     gitleaks:
-      enabled: true  # Detect secrets in code
+      enabled: true
     semgrep:
-      enabled: true  # Security patterns detection
+      enabled: true
     checkov:
-      enabled: true  # Infrastructure as code security
-    
+      enabled: true
+
     # Documentation and config tools - ENABLED
     markdownlint:
-      enabled: true  # Markdown documentation
+      enabled: true
     yamllint:
-      enabled: true  # YAML configuration files
+      enabled: true
     hadolint:
-      enabled: true  # Dockerfile linting
+      enabled: true
     actionlint:
-      enabled: true  # GitHub Actions linting
+      enabled: true
     dotenvLint:
-      enabled: true  # .env file validation
+      enabled: true
     shellcheck:
-      enabled: true  # Shell script validation
-    
-    # GitHub integration - ENABLED
+      enabled: true
+
+    # GitHub integration - ENHANCED
     github-checks:
       enabled: true
-      timeout_ms: 90000
-    
-    # Language/documentation tools - ENABLED with caution
+      timeout_ms: 180000  # Increased for complex pipelines
+
+    # Language/documentation tools
     languagetool:
       enabled: true
-      disabled_rules: ["WHITESPACE_RULE", "EN_QUOTES"]  # Too strict for code comments
+      disabled_rules: ["WHITESPACE_RULE", "EN_QUOTES"]
       level: default
-    
+
     # Tools for OTHER languages - DISABLED
     biome:
-      enabled: false  # JavaScript/TypeScript
+      enabled: false
     swiftlint:
-      enabled: false  # Swift
+      enabled: false
     phpstan:
-      enabled: false  # PHP
+      enabled: false
       level: default
     phpmd:
-      enabled: false  # PHP
+      enabled: false
     phpcs:
-      enabled: false  # PHP
+      enabled: false
     golangci-lint:
-      enabled: false  # Go
+      enabled: false
     detekt:
-      enabled: false  # Kotlin
+      enabled: false
     eslint:
-      enabled: false  # JavaScript/TypeScript
+      enabled: false
     rubocop:
-      enabled: false  # Ruby
+      enabled: false
     buf:
-      enabled: false  # Protocol Buffers
+      enabled: false
     regal:
-      enabled: false  # Rego
+      enabled: false
     pmd:
-      enabled: false  # Java
+      enabled: false
     cppcheck:
-      enabled: false  # C/C++
+      enabled: false
     clippy:
-      enabled: false  # Rust
+      enabled: false
     sqlfluff:
-      enabled: false  # SQL (not used in this project)
+      enabled: false
     prismaLint:
-      enabled: false  # Prisma ORM
+      enabled: false
     oxc:
-      enabled: false  # JavaScript/TypeScript
+      enabled: false
     shopifyThemeCheck:
-      enabled: false  # Shopify themes
+      enabled: false
     luacheck:
-      enabled: false  # Lua
+      enabled: false
     brakeman:
-      enabled: false  # Ruby on Rails
+      enabled: false
     htmlhint:
-      enabled: false  # HTML
+      enabled: false
     checkmake:
-      enabled: false  # Makefile (not used)
+      enabled: false
     circleci:
-      enabled: false  # CircleCI config (using GitHub Actions)
+      enabled: false
     ast-grep:
       rule_dirs: []
       util_dirs: []
       essential_rules: true
       packages: []
+
+# Pipeline Failure Remediation Configuration
+pipeline_remediation:
+  enabled: true
+  auto_suggest: true
+  auto_apply: false  # Start with manual review
+
+  analysis:
+    confidence_threshold: 90
+    include_performance_suggestions: true
+    include_security_fixes: true
+    create_issues_for_complex_failures: true
+
+  platforms:
+    github_actions:
+      enabled: true
+      monitor_workflows: ["tests", "security-scan", "docker-publish", "codacy"]
+      analyze_workflow_syntax: true
+      suggest_caching_improvements: true
+      detect_deprecated_actions: true
+    docker:
+      enabled: true
+      analyze_multistage_builds: true
+      suggest_layer_optimizations: true
+    python:
+      enabled: true
+      analyze_dependency_conflicts: true
+      suggest_version_updates: true
+
+  error_types:
+    - build_failures
+    - dependency_conflicts
+    - test_failures
+    - linting_errors
+    - docker_issues
+    - timeout_errors
+    - security_vulnerabilities
+    - performance_issues
+    - coverage_threshold_failures
+
+  # Custom patterns for Python/MCP project
+  custom_patterns:
+    - name: "uv_sync_failure"
+      pattern: "uv sync.*failed|Failed to sync|uv.*error"
+      remediation_template: |
+        Check uv.lock file and Python version compatibility:
+        1. Run 'uv lock --update' to refresh lock file
+        2. Verify Python version matches project requirements
+        3. Check for conflicting dependencies
+      remediation_priority: "high"
+
+    - name: "pytest_failure"
+      pattern: "FAILED.*test_|pytest.*failed|AssertionError"
+      remediation_priority: "high"
+      auto_analyze_traceback: true
+
+    - name: "mypy_error"
+      pattern: "error:.*\\[.*\\]|Function is missing a return type annotation"
+      remediation_template: "Add proper type annotations"
+      remediation_priority: "medium"
+
+    - name: "ruff_violations"
+      pattern: "Found \\d+ error|ruff.*failed"
+      remediation_priority: "medium"
+      auto_fix_command: "uv run ruff format . && uv run ruff check --fix ."
+
+    - name: "coverage_threshold"
+      pattern: "Coverage.*below required.*%"
+      remediation_template: |
+        Coverage is below threshold. Options:
+        1. Add tests for uncovered code
+        2. Review threshold requirements
+        3. Check coverage report for specific gaps
+      remediation_priority: "high"
+
+    - name: "docker_build_failure"
+      pattern: "ERROR: failed to solve|docker build.*failed"
+      remediation_priority: "critical"
+      analyze_dockerfile: true
+
+    - name: "security_scan_failure"
+      pattern: "found vulnerabilities|security.*failed|bandit.*failed"
+      remediation_priority: "critical"
+      create_security_issue: true
+
+    - name: "pip_audit_vulnerability"
+      pattern: "pip-audit found vulnerabilities|vulnerability.*found"
+      remediation_template: |
+        Security vulnerabilities detected:
+        1. Review pip-audit report
+        2. Update affected packages
+        3. Check for breaking changes
+      remediation_priority: "critical"
+      auto_create_issue: true
+
+    - name: "github_action_deprecated"
+      pattern: "Node.js 12 actions are deprecated|set-output.*deprecated"
+      remediation_template: "Update to latest action version with SHA pinning"
+      remediation_priority: "medium"
+
+  # Auto-apply rules for safe fixes
+  auto_apply_rules:
+    - error_type: "linting_errors"
+      confidence_min: 98
+      max_changes: 10
+      file_patterns: ["*.py"]
+      exclude_paths: ["tests/"]
+
+    - error_type: "formatting_errors"
+      confidence_min: 99
+      file_patterns: ["*.py", "*.yaml", "*.yml", "*.md"]
+      auto_fix_command: "uv run ruff format ."
+
+  # Security settings
+  security:
+    exclude_branches: ["main", "master", "production"]
+    require_approval_for:
+      - security_vulnerabilities
+      - dependency_updates
+      - production_configs
+    auto_apply_security_fixes: false
+    create_security_issues: true
+
+  # Notification settings
+  notifications:
+    create_github_issues: true
+    issue_labels: ["ci/cd", "automated"]
+
+  # Performance monitoring
+  performance:
+    track_build_times: true
+    suggest_optimizations: true
+    cache_recommendations: true
+    parallel_execution_hints: true
+
 chat:
   auto_reply: true
   integrations:
@@ -223,6 +395,7 @@ chat:
       usage: auto
     linear:
       usage: auto
+
 knowledge_base:
   opt_out: false
   web_search:
@@ -241,6 +414,7 @@ knowledge_base:
     team_keys: []
   pull_requests:
     scope: auto
+
 code_generation:
   docstrings:
     language: en-US

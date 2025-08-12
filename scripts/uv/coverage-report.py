@@ -7,6 +7,7 @@
 #   "matplotlib>=3.5.0",
 #   "click>=8.0.0",
 #   "lxml>=4.9.0",
+#   "defusedxml>=0.7.1",
 # ]
 # requires-python = ">=3.10"
 # ///
@@ -30,12 +31,12 @@ Usage:
 
 import json
 import sys
-import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 
 import click
+import defusedxml.ElementTree as ET  # noqa: N817
 import matplotlib.pyplot as plt
 from jinja2 import Template
 from rich.console import Console
