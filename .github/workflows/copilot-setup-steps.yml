@@ -45,6 +45,6 @@ jobs:
         run: uv pip install -e .
 
       - name: Run Safety security check
-        uses: pyupio/safety-action@2591cf2f3e67ba68b923f4c92f0d36e281c65023 # v1.0.1
+        uses: pyupio/safety-action@2591cf2f3e67ba68b923f4c92f0d36e281c65023 # v1.0.1 tag target commit
         with:
           api-key: ${{ secrets.SAFETY_API_KEY }}
