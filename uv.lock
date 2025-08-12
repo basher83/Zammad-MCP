@@ -829,6 +829,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "bandit", extra = ["sarif"] },
+    { name = "defusedxml" },
     { name = "mypy" },
     { name = "pip-audit" },
     { name = "pre-commit" },
@@ -843,6 +844,7 @@ dev = [
 [package.dev-dependencies]
 dev = [
     { name = "bandit", extra = ["sarif"] },
+    { name = "defusedxml" },
     { name = "mypy" },
     { name = "pip-audit" },
     { name = "pre-commit" },
@@ -857,6 +859,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "bandit", extras = ["sarif"], marker = "extra == 'dev'", specifier = ">=1.8.6" },
+    { name = "defusedxml", marker = "extra == 'dev'", specifier = ">=0.7.1" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "mcp", specifier = ">=1.12.2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
@@ -877,6 +880,7 @@ provides-extras = ["dev"]
 [package.metadata.requires-dev]
 dev = [
     { name = "bandit", extras = ["sarif"], specifier = ">=1.8.6" },
+    { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "mypy", specifier = ">=1.0.0" },
     { name = "pip-audit", specifier = ">=2.6.0" },
     { name = "pre-commit", specifier = ">=3.0.0" },
