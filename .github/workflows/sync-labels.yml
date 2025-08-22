@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   sync-labels:
+    if: github.repository == 'basher83/Zammad-MCP'
     uses: basher83/.github/.github/workflows/sync-labels.yml@main
    # with:
    #   label_definitions_url: "https://raw.githubusercontent.com/basher83/docs/main/mission-control/github-configs/label-definitions.yml" # optional, can omit for default
