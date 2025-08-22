@@ -10,6 +10,7 @@ on:
 jobs:
   test-and-coverage:
     runs-on: ubuntu-latest
+    if: github.repository == 'basher83/Zammad-MCP'
     permissions:
       contents: read
       
