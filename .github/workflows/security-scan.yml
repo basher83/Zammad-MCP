@@ -61,7 +61,7 @@ jobs:
         uses: pyupio/safety-action@2591cf2f3e67ba68b923f4c92f0d36e281c65023  # v1.0.1 tag target commit
         continue-on-error: true
         with:
-          api-key: ${{ secrets.SAFETY_API_KEY }}
+          api-key: ${{ github.repository == 'basher83/Zammad-MCP' && secrets.SAFETY_API_KEY || '' }}
 
       - name: Run pip-audit
         continue-on-error: true

@@ -58,7 +58,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699  # v1.3.0
         with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          project-token: ${{ github.repository == 'basher83/Zammad-MCP' && secrets.CODACY_PROJECT_TOKEN || '' }}
           coverage-reports: coverage.xml
           language: python
 

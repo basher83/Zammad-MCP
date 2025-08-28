@@ -48,4 +48,4 @@ jobs:
       - name: Run Safety security check
         uses: pyupio/safety-action@c14ed93c5cacd34d2ac287fe5d0622f697d6a5f4 # pinned to specific commit (not the v1.0.1 tag)
         with:
-          api-key: ${{ secrets.SAFETY_API_KEY }}
+          api-key: ${{ github.repository == 'basher83/Zammad-MCP' && secrets.SAFETY_API_KEY || '' }}
