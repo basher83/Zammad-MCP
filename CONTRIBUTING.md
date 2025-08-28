@@ -171,6 +171,7 @@ The repository includes several GitHub Actions workflows that run automatically 
   - Uploads coverage results as artifacts
   - Comments coverage on PRs (if configured)
 - **Failure conditions**: Tests fail or coverage drops below threshold
+- **Fork Compatibility**: Workflow automatically handles missing secrets in forked repositories without failing
 
 #### 2. Security Scan (`security-scan.yml`)
 
@@ -181,6 +182,7 @@ The repository includes several GitHub Actions workflows that run automatically 
   - **pip-audit**: Additional dependency security checks
 - **Reports**: Uploads security reports as artifacts and to GitHub Security tab
 - **Configuration**: Set `SAFETY_API_KEY` in repository secrets (get from <https://safetycli.com>)
+- **Fork Compatibility**: Workflow automatically handles missing secrets in forked repositories without failing
 
 #### 3. Codacy Security Scan (`codacy.yml`)
 
@@ -193,6 +195,7 @@ The repository includes several GitHub Actions workflows that run automatically 
   - Set `CODACY_PROJECT_TOKEN` in repository secrets
   - Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` to avoid Docker Hub rate limits
   - Note: Without Docker Hub authentication, the workflow may fail due to rate limits when pulling analysis images
+- **Fork Compatibility**: Workflow automatically handles missing secrets in forked repositories without failing
 
 #### 4. Build and Publish Docker (`docker-publish.yml`)
 
