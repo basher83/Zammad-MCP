@@ -42,7 +42,7 @@ jobs:
       # Login to Docker Hub to avoid rate limits
       - name: Login to Docker Hub
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: github.repository == 'basher83/Zammad-MCP' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -54,7 +54,7 @@ jobs:
         with:
           # Check https://github.com/codacy/codacy-analysis-cli#project-token to get your project token from your Codacy repository
           # You can also omit the token and run the tools that support default configurations
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          project-token: ${{ github.repository == 'basher83/Zammad-MCP' && secrets.CODACY_PROJECT_TOKEN || '' }}
           verbose: true
           output: results.sarif
           format: sarif
