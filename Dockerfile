@@ -2,7 +2,7 @@
 # Build stage
 # Pin to specific digest for reproducibility and security
 # python:3.13-slim as of 2025-01-09
-FROM python:3.13-slim@sha256:1bca0202e953784ac2a1daf36ebbc9cbebed48afcfba12d1225aaab3793eca33 AS builder
+FROM python:3.13-slim@sha256:58c30f5bfaa718b5803a53393190b9c68bd517c44c6c94c1b6c8c172bcfad040 AS builder
 
 WORKDIR /app
 
@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
   uv pip install --python /app/.venv/bin/python -e .
 
 # Production stage
-FROM python:3.13-slim@sha256:1bca0202e953784ac2a1daf36ebbc9cbebed48afcfba12d1225aaab3793eca33 AS production
+FROM python:3.13-slim@sha256:58c30f5bfaa718b5803a53393190b9c68bd517c44c6c94c1b6c8c172bcfad040 AS production
 
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
