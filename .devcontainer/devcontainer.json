@@ -1,0 +1,28 @@
+{
+	"image": "mcr.microsoft.com/devcontainers/universal:4",
+	"runArgs": [
+		"--device=/dev/net/tun"
+	],
+	"features": {
+		"ghcr.io/tailscale/codespace/tailscale": {},
+		"ghcr.io/skriptfabrik/devcontainer-features/infisical-cli:1": {}
+	},
+	"postCreateCommand": ".devcontainer/setup-mise.sh",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"hverlin.mise-vscode",
+				"DavidAnson.vscode-markdownlint",
+				"tamasfe.even-better-toml",
+				"GitHub.copilot",
+				"GitHub.copilot-chat",
+				"HashiCorp.HCL",
+				"samuelcolvin.jinjahtml",
+				"SanjulaGanepola.github-local-actions"
+			]
+		}
+	},
+	"mounts": [
+		"source=mise-data-volume,target=/mnt/mise-data,type=volume"
+	]
+}
