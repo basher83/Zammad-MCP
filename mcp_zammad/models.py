@@ -320,3 +320,10 @@ class TicketStats(BaseModel):
     escalated_count: int = Field(description="Number of escalated tickets")
     avg_first_response_time: float | None = Field(None, description="Average first response time in minutes")
     avg_resolution_time: float | None = Field(None, description="Average resolution time in minutes")
+
+
+class TagOperationResult(BaseModel):
+    """Result of a tag operation (add/remove)."""
+
+    success: bool = Field(description="Whether the operation was successful")
+    message: str | None = Field(None, description="Optional message about the operation")

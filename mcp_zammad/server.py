@@ -18,6 +18,7 @@ from .models import (
     Attachment,
     Group,
     Organization,
+    TagOperationResult,
     Ticket,
     TicketPriority,
     TicketState,
@@ -26,11 +27,10 @@ from .models import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
-MAX_TICKETS_FOR_MEMORY_SCAN = 1000
+MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
 
 
@@ -300,18 +300,18 @@ class ZammadMCPServer:
                 attachment_id: The attachment ID
 
             Returns:
-                Base64-encoded attachment content or error message
+                Base64-encoded attachment content
+
+            Raises:
+                Exception: If attachment download fails (propagated to MCP framework)
             """
             client = self.get_client()
-            try:
-                attachment_data = client.download_attachment(ticket_id, article_id, attachment_id)
-                # Convert bytes to base64 string for transmission
-                return base64.b64encode(attachment_data).decode("utf-8")
-            except Exception as e:
-                return f"Error downloading attachment: {e!s}"
+            attachment_data = client.download_attachment(ticket_id, article_id, attachment_id)
+            # Convert bytes to base64 string for transmission
+            return base64.b64encode(attachment_data).decode("utf-8")
 
         @self.mcp.tool()
-        def add_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
+        def add_ticket_tag(ticket_id: int, tag: str) -> TagOperationResult:
             """Add a tag to a ticket.
 
             Args:
@@ -319,13 +319,14 @@ class ZammadMCPServer:
                 tag: The tag to add
 
             Returns:
-                Operation result
+                Operation result with success status
             """
             client = self.get_client()
-            return client.add_ticket_tag(ticket_id, tag)
+            result = client.add_ticket_tag(ticket_id, tag)
+            return TagOperationResult(**result)
 
         @self.mcp.tool()
-        def remove_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
+        def remove_ticket_tag(ticket_id: int, tag: str) -> TagOperationResult:
             """Remove a tag from a ticket.
 
             Args:
@@ -333,10 +334,11 @@ class ZammadMCPServer:
                 tag: The tag to remove
 
             Returns:
-                Operation result
+                Operation result with success status
             """
             client = self.get_client()
-            return client.remove_ticket_tag(ticket_id, tag)
+            result = client.remove_ticket_tag(ticket_id, tag)
+            return TagOperationResult(**result)
 
     def _setup_user_org_tools(self) -> None:
         """Register user and organization tools."""
@@ -528,9 +530,9 @@ class ZammadMCPServer:
                 page += 1
 
                 # Safety check to prevent infinite loops
-                if page > MAX_TICKETS_FOR_MEMORY_SCAN:  # Safety limit to prevent infinite loops
+                if page > MAX_PAGES_FOR_TICKET_SCAN:  # Safety limit to prevent infinite loops
                     logger.warning(
-                        f"Reached maximum page limit ({MAX_TICKETS_FOR_MEMORY_SCAN} pages), "
+                        f"Reached maximum page limit ({MAX_PAGES_FOR_TICKET_SCAN} pages), "
                         f"processed {total_count} tickets - some tickets may not be counted"
                     )
                     break
@@ -597,12 +599,30 @@ class ZammadMCPServer:
                 # Use a reasonable limit for resources to avoid huge responses
                 ticket = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
 
+                # Normalize possibly-expanded fields
+                state = ticket.get("state")
+                state_name = (
+                    state.get("name", "Unknown") if isinstance(state, dict) else (str(state) if state else "Unknown")
+                )
+                priority = ticket.get("priority")
+                priority_name = (
+                    priority.get("name", "Unknown")
+                    if isinstance(priority, dict)
+                    else (str(priority) if priority else "Unknown")
+                )
+                customer = ticket.get("customer")
+                customer_email = (
+                    customer.get("email", "Unknown")
+                    if isinstance(customer, dict)
+                    else (str(customer) if customer else "Unknown")
+                )
+
                 # Format ticket data as readable text
                 lines = [
-                    f"Ticket #{ticket['number']} - {ticket['title']}",
-                    f"State: {ticket.get('state', {}).get('name', 'Unknown')}",
-                    f"Priority: {ticket.get('priority', {}).get('name', 'Unknown')}",
-                    f"Customer: {ticket.get('customer', {}).get('email', 'Unknown')}",
+                    f"Ticket #{ticket.get('number', 'N/A')} - {ticket.get('title', 'No title')}",
+                    f"State: {state_name}",
+                    f"Priority: {priority_name}",
+                    f"Customer: {customer_email}",
                     f"Created: {ticket.get('created_at', 'Unknown')}",
                     "",
                     "Articles:",
@@ -779,4 +799,5 @@ mcp = server.mcp
 
 def main() -> None:
     """Main entry point for the server."""
+    logging.basicConfig(level=logging.INFO)
     mcp.run()
