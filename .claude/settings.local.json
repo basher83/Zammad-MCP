@@ -49,6 +49,8 @@
     "deepwiki",
     "grep",
     "github",
-    "zammad"
+    "zammad",
+    "coderabbitai",
+    "codacy"
   ]
 }

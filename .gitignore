@@ -231,6 +231,7 @@ temp/
 tmp/
 .env.local
 .env.*.local
+.mcp.json
 
 # MCP/Zammad specific
 zammad_cache/
