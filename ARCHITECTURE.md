@@ -252,7 +252,7 @@ MCP errors include:
 1. **Pagination for Statistics**
    - `get_ticket_stats` uses pagination to process tickets in batches
    - Avoids loading entire dataset into memory
-   - Configurable safety limit (MAX_TICKETS_FOR_MEMORY_SCAN)
+   - Configurable safety limit (MAX_PAGES_FOR_TICKET_SCAN)
    - Performance metrics logging (tickets processed, time elapsed, pages fetched)
 
 ### Remaining Optimization Opportunities
