@@ -91,3 +91,17 @@ run = "uv lock --upgrade"
 [tasks.python-install]
 description = "Install Python dependencies"
 run = "uv sync"
+
+# === Hooks tasks ===
+[tasks.hooks-install]
+description = "Install pre-commit and infisical hooks"
+run = "pre-commit install && infisical scan install --pre-commit-hook"
+
+[tasks.hooks-run]
+description = "Run pre-commit hooks"
+run = "pre-commit run --all-files"
+
+# === Infisical tasks ===
+[tasks.infisical-scan]
+description = "Scan repository for secrets and sensitive data"
+run = "infisical scan"
