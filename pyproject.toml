@@ -147,6 +147,13 @@ show_missing = true
 [tool.coverage.html]
 directory = "htmlcov"
 
+[tool.uv]
+# Force authlib to secure version to fix vulnerabilities in safety dependency
+# GHSA-9ggr-2464-2j32, GHSA-pq5p-34cr-23v9, GHSA-g7f3-828f-7h7m
+override-dependencies = [
+    "authlib>=1.6.5",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
