@@ -42,7 +42,9 @@
       "mcp__deepwiki__ask_question",
       "mcp__coderabbitai__get_review_comments",
       "Bash(git-cliff:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(coderabbit auth:*)",
+      "Bash(coderabbit:*)"
     ],
     "deny": []
   },

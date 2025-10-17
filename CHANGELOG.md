@@ -20,7 +20,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Tests migrated to use `ZammadMCPServer` class directly
   - Removed ~320 lines of duplicated code
   - If you were importing functions like `initialize()`, `search_tickets()`, etc. from `mcp_zammad.server`, you must now use the `ZammadMCPServer` class
-  - See migration examples in git history at docs/MIGRATION_GUIDE.md (removed in v1.0.0)
+  - Migration example:
+
+    ```python
+    # Before (legacy pattern):
+    from mcp_zammad.server import initialize, search_tickets
+    await initialize()
+    tickets = search_tickets(state="open")
+
+    # After (new pattern):
+    from mcp_zammad.server import ZammadMCPServer
+    server = ZammadMCPServer()
+    await server.initialize()
+    client = server.get_client()
+    tickets_data = client.search_tickets(state="open")
+    tickets = [Ticket(**t) for t in tickets_data]
+    ```
+
+  - For more migration patterns, see docs/PHASE3_MIGRATION_PLAN.md or git history before v1.0.0
 
 ### Dependencies
 
