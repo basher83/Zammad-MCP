@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **claude**: Introduce agent framework and modernize config
 - **devex**: Add mise tool configuration for development environment
 
+### Changed
+
+- **BREAKING**: Removed legacy wrapper functions from `mcp_zammad.server` module (v1.0.0)
+  - All 19 legacy wrapper functions have been removed
+  - Tests migrated to use `ZammadMCPServer` class directly
+  - Removed ~320 lines of duplicated code
+  - If you were importing functions like `initialize()`, `search_tickets()`, etc. from `mcp_zammad.server`, you must now use the `ZammadMCPServer` class
+  - See migration examples in git history at docs/MIGRATION_GUIDE.md (removed in v1.0.0)
+
 ### Dependencies
 
 - **deps**: Update python:3.13-slim Docker digest to 6f79e7a
