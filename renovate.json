@@ -13,6 +13,11 @@
   "assignees": [
     "basher83"
   ],
+  "pip_requirements": {
+    "fileMatch": [
+      "(^|/)requirements(-.*)?\\.(txt|in)$"
+    ]
+  },
   "packageRules": [
     {
       "description": "Automerge non-major updates for dev dependencies",
@@ -95,21 +100,22 @@
       ],
       "commitMessagePrefix": "chore(dev-deps):"
     },
+    /* ---- Split the Python rule into two compatible rules ---- */
     {
+      "description": "Cap Python to <= 3.13",
+      "matchPackageNames": [
+        "python"
+      ],
+      "allowedVersions": "<=3.13"
+    },
+    {
+      "description": "Only minor updates for Python",
       "matchPackageNames": [
         "python"
       ],
       "matchUpdateTypes": [
         "minor"
-      ],
-      "allowedVersions": "&lt;=3.13"
-    },
-    {
-      "pip_requirements": {
-        "managerFilePatterns": [
-          "/(^|/)requirements(-.*)?\\.(txt|in)$/"
-        ]
-      }
+      ]
     }
   ],
   "prConcurrentLimit": 3,
