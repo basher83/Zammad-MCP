@@ -1,1 +1,115 @@
-{\n  "$schema": "https://docs.renovatebot.com/renovate-schema.json",\n  "extends": [\n    "config:recommended",\n    ":semanticCommits",\n    ":preserveSemverRanges",\n    "helpers:pinGitHubActionDigests"\n  ],\n  "labels": [\n    "dependencies",\n    "renovate"\n  ],\n  "assignees": [\n    "basher83"\n  ],\n  "packageRules": [\n    {\n      "description": "Automerge non-major updates for dev dependencies",\n      "matchDepTypes": [\n        "devDependencies"\n      ],\n      "matchUpdateTypes": [\n        "minor",\n        "patch"\n      ],\n      "automerge": true\n    },\n    {\n      "description": "Group Python test dependencies",\n      "groupName": "Python test dependencies",\n      "matchDepTypes": [\n        "devDependencies"\n      ],\n      "matchPackageNames": [\n        "/^pytest/"\n      ]\n    },\n    {\n      "description": "Group Python linting tools",\n      "groupName": "Python linters",\n      "matchPackageNames": [\n        "black",\n        "ruff",\n        "mypy"\n      ],\n      "matchDepTypes": [\n        "devDependencies"\n      ]\n    },\n    {\n      "description": "Require approval for major MCP updates",\n      "matchPackageNames": [\n        "mcp"\n      ],\n      "matchUpdateTypes": [\n        "major"\n      ],\n      "dependencyDashboardApproval": true\n    },\n    {\n      "description": "Require approval for major Zammad API updates",\n      "matchPackageNames": [\n        "zammad-py"\n      ],\n      "matchUpdateTypes": [\n        "major"\n      ],\n      "dependencyDashboardApproval": true\n    },\n    {\n      "description": "Pin Python version for Actions",\n      "matchManagers": [\n        "github-actions"\n      ],\n      "matchPackageNames": [\n        "actions/setup-python"\n      ],\n      "rangeStrategy": "pin"\n    },\n    {\n      "description": "Auto-update GitHub Actions digests",\n      "matchManagers": [\n        "github-actions"\n      ],\n      "digest": {\n        "automerge": true\n      },\n      "commitMessageTopic": "{{depName}} digest to {{newDigestShort}}",\n      "commitMessageExtra": "({{currentValue}})"\n    },\n    {\n      "description": "Use different commit prefix for dev dependencies",\n      "matchDepTypes": [\n        "devDependencies"\n      ],\n      "commitMessagePrefix": "chore(dev-deps):"\n    },\n    {\n      "matchPackageNames": ["python"],\n      "matchUpdateTypes": ["minor"],\n      "allowedVersions": "<=3.13"\n    }\n  ],\n  "pip_requirements": {\n    "managerFilePatterns": [\n      "/(^|/)requirements(-.*)?\.(txt|in)$/"\n    ]\n  },\n  "prConcurrentLimit": 3,\n  "prCreation": "not-pending",\n  "prHourlyLimit": 2,\n  "rebaseWhen": "behind-base-branch",\n  "semanticCommits": "enabled",\n  "commitMessagePrefix": "chore(deps):"\n}
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":preserveSemverRanges",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+  "assignees": [
+    "basher83"
+  ],
+  "packageRules": [
+    {
+      "description": "Automerge non-major updates for dev dependencies",
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Group Python test dependencies",
+      "groupName": "Python test dependencies",
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchPackageNames": [
+        "/^pytest/"
+      ]
+    },
+    {
+      "description": "Group Python linting tools",
+      "groupName": "Python linters",
+      "matchPackageNames": [
+        "black",
+        "ruff",
+        "mypy"
+      ],
+      "matchDepTypes": [
+        "devDependencies"
+      ]
+    },
+    {
+      "description": "Require approval for major MCP updates",
+      "matchPackageNames": [
+        "mcp"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Require approval for major Zammad API updates",
+      "matchPackageNames": [
+        "zammad-py"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Pin Python version for Actions",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "actions/setup-python"
+      ],
+      "rangeStrategy": "pin"
+    },
+    {
+      "description": "Auto-update GitHub Actions digests",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "digest": {
+        "automerge": true
+      },
+      "commitMessageTopic": "{{depName}} digest to {{newDigestShort}}",
+      "commitMessageExtra": "({{currentValue}})"
+    },
+    {
+      "description": "Use different commit prefix for dev dependencies",
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "commitMessagePrefix": "chore(dev-deps):"
+    },
+    {
+      "matchPackageNames": ["python"],
+      "matchUpdateTypes": ["minor"],
+      "allowedVersions": "&lt;=3.13"
+    }
+  ],
+  "pip_requirements": {
+    "managerFilePatterns": [
+      "/(^|/)requirements(-.*)?\.(txt|in)$/"
+    ]
+  },
+  "prConcurrentLimit": 3,
+  "prCreation": "not-pending",
+  "prHourlyLimit": 2,
+  "rebaseWhen": "behind-base-branch",
+  "semanticCommits": "enabled",
+  "commitMessagePrefix": "chore(deps):"
+}
