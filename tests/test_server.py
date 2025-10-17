@@ -801,20 +801,23 @@ async def test_search_users_tool(mock_zammad_client, sample_user_data):
 
 @pytest.mark.asyncio
 async def test_get_ticket_stats_tool(mock_zammad_client):
-    """Test get ticket stats tool."""
+    """Test get ticket stats tool with pagination."""
     mock_instance, _ = mock_zammad_client
 
-    # Create mock tickets with various states
-    mock_tickets = [
+    # Create mock tickets with various states - split across pages
+    page1_tickets = [
         {"id": 1, "state": "new", "title": "New ticket"},
         {"id": 2, "state": "open", "title": "Open ticket"},
         {"id": 3, "state": {"name": "open", "id": 2}, "title": "Open ticket 2"},
+    ]
+    page2_tickets = [
         {"id": 4, "state": "closed", "title": "Closed ticket"},
         {"id": 5, "state": {"name": "pending reminder", "id": 3}, "title": "Pending ticket"},
         {"id": 6, "state": "open", "first_response_escalation_at": "2024-01-01", "title": "Escalated ticket"},
     ]
 
-    mock_instance.search_tickets.return_value = mock_tickets
+    # Set up paginated responses - page 1, page 2, then empty page
+    mock_instance.search_tickets.side_effect = [page1_tickets, page2_tickets, []]
 
     await initialize()
     server.zammad_client = mock_instance
@@ -828,27 +831,34 @@ async def test_get_ticket_stats_tool(mock_zammad_client):
     assert stats.pending_count == 1
     assert stats.escalated_count == 1
 
-    mock_instance.search_tickets.assert_called_once_with(group=None, per_page=100)
+    # Verify pagination was used
+    assert mock_instance.search_tickets.call_count == 3
+    mock_instance.search_tickets.assert_any_call(group=None, page=1, per_page=100)
+    mock_instance.search_tickets.assert_any_call(group=None, page=2, per_page=100)
+    mock_instance.search_tickets.assert_any_call(group=None, page=3, per_page=100)
 
     # Test with group filter
     mock_instance.reset_mock()
-    mock_instance.search_tickets.return_value = mock_tickets[:3]
+    mock_instance.search_tickets.side_effect = [page1_tickets, []]  # One page then empty
 
     stats = get_ticket_stats(group="Support")
 
     assert stats.total_count == 3
     assert stats.open_count == 3
 
-    mock_instance.search_tickets.assert_called_once_with(group="Support", per_page=100)
+    assert mock_instance.search_tickets.call_count == 2
+    mock_instance.search_tickets.assert_any_call(group="Support", page=1, per_page=100)
+    mock_instance.search_tickets.assert_any_call(group="Support", page=2, per_page=100)
 
     # Test with date filters (should log warning but still work)
     mock_instance.reset_mock()
-    mock_instance.search_tickets.return_value = mock_tickets
+    mock_instance.search_tickets.side_effect = [page1_tickets + page2_tickets, []]
 
     stats = get_ticket_stats(start_date="2024-01-01", end_date="2024-12-31")
 
     assert stats.total_count == 6
-    mock_instance.search_tickets.assert_called_once_with(group=None, per_page=100)
+    assert mock_instance.search_tickets.call_count == 2
+    mock_instance.search_tickets.assert_any_call(group=None, page=1, per_page=100)
 
 
 def test_resource_handlers():
@@ -1153,19 +1163,19 @@ async def test_initialize_with_envrc_warning():
 @pytest.mark.asyncio
 async def test_lifespan_context_manager():
     """Test the lifespan context manager."""
-    # Create a server instance
+    # Create a server instance and mock its initialize method
     test_server = ZammadMCPServer()
-    test_server.initialize = AsyncMock()
 
-    # Get the lifespan context manager
-    lifespan_cm = test_server._create_lifespan()
+    with patch.object(test_server, "initialize", new=AsyncMock()) as mock_initialize:
+        # Get the lifespan context manager
+        lifespan_cm = test_server._create_lifespan()
 
-    # Test the context manager
-    async with lifespan_cm(test_server.mcp) as result:
-        # Verify initialize was called
-        test_server.initialize.assert_called_once()
-        # The yield should return None
-        assert result is None
+        # Test the context manager
+        async with lifespan_cm(test_server.mcp) as result:
+            # Verify initialize was called
+            mock_initialize.assert_called_once()
+            # The yield should return None
+            assert result is None
 
 
 def test_tool_implementations_are_called():

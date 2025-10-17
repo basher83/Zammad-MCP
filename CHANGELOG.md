@@ -51,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **performance**: Optimize `get_ticket_stats` to use pagination instead of loading all tickets into memory (closes #12)
+  - Both MCP tool and legacy wrapper now process tickets in batches of 100
+  - Added performance metrics logging (tickets processed, pages fetched, elapsed time)
+  - Configurable safety limit prevents infinite loops
+  - Fixes performance bottleneck for large datasets (>100 tickets)
+  - Updated tests to verify pagination behavior
+  - Updated ARCHITECTURE.md to document optimization
 - Update Codacy action reference from commit hash to tag version
 - Add correct tag
 - **renovate**: Update renovate configuration to proper format

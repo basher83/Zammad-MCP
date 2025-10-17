@@ -239,17 +239,28 @@ MCP errors include:
 
 ### Current Limitations
 
-1. **Memory Usage**: `get_ticket_stats` loads all tickets
 1. **Blocking I/O**: Synchronous HTTP calls
-1. **No Caching**: Repeated API calls for static data
 1. **No Pooling**: New connections for each request
 
-### Optimization Opportunities
+### Optimizations Implemented
 
-1. **Implement Caching**
+1. **Intelligent Caching**
+   - In-memory caching for groups, states, and priorities
+   - Reduces repeated API calls for static data
+   - Cache invalidation via `clear_caches()` method
+
+1. **Pagination for Statistics**
+   - `get_ticket_stats` uses pagination to process tickets in batches
+   - Avoids loading entire dataset into memory
+   - Configurable safety limit (MAX_TICKETS_FOR_MEMORY_SCAN)
+   - Performance metrics logging (tickets processed, time elapsed, pages fetched)
+
+### Remaining Optimization Opportunities
+
+1. **Enhanced Caching**
    - Redis for distributed cache
-   - In-memory for development
-   - TTL for different data types
+   - TTL-based expiration for different data types
+   - Cache warming strategies
 
 1. **Connection Pooling**
 
@@ -362,3 +373,44 @@ Enable extensions for:
 - Distributed caching with Redis
 - Message queue for async operations
 - Database for audit logs
+
+## Legacy Code Deprecation
+
+### Current State
+
+The codebase contains 19 legacy wrapper functions (`server.py:763-1098`) created during the FastMCP migration to maintain backward compatibility with the test suite. These functions duplicate functionality from the `ZammadMCPServer` class and are slated for removal.
+
+### Deprecation Strategy
+
+**Phase 1 (Completed)**: Fix correctness issues and add performance optimizations
+- ✅ Issue #12: Optimized `get_ticket_stats` with pagination
+- ✅ Added performance metrics and logging
+- ✅ Updated documentation
+
+**Phase 2 (v0.2.0)**: Add deprecation warnings
+- Add `DeprecationWarning` to all 19 legacy wrapper functions
+- Create comprehensive migration guide
+- Update documentation with deprecation notices
+- Suppress warnings in existing tests
+
+**Phase 3 (v1.0.0)**: Remove legacy wrappers
+- Migrate all tests to `ZammadMCPServer` class
+- Remove legacy functions (~335 lines)
+- Update documentation
+- Major version bump for breaking change
+
+### Benefits of Removal
+
+- **Reduced Code Duplication**: Eliminates ~335 lines of duplicated code
+- **Simpler Architecture**: Single, consistent pattern (class-based)
+- **Easier Maintenance**: Changes only need to be made once
+- **Better Type Safety**: No mixing of module-level and instance patterns
+
+### Detailed Plan
+
+See [`docs/LEGACY_WRAPPER_DEPRECATION.md`](docs/LEGACY_WRAPPER_DEPRECATION.md) for:
+- Complete function inventory
+- Detailed timeline and milestones
+- Migration examples
+- Risk assessment
+- Action items for each phase

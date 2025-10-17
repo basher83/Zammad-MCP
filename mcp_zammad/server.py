@@ -466,10 +466,17 @@ class ZammadMCPServer:
             Note: This implementation uses pagination to avoid loading all tickets
             into memory at once, improving performance for large datasets.
             """
+            import time
+
+            start_time = time.time()
             client = self.get_client()
+
             # TODO: Implement date filtering when the API supports it
             if start_date or end_date:
                 logger.warning("Date filtering not yet implemented - ignoring date parameters")
+
+            group_filter_msg = f" for group '{group}'" if group else ""
+            logger.info(f"Starting ticket statistics calculation{group_filter_msg}")
 
             # Initialize counters
             total_count = 0
@@ -523,8 +530,18 @@ class ZammadMCPServer:
 
                 # Safety check to prevent infinite loops
                 if page > MAX_TICKETS_FOR_MEMORY_SCAN:  # Safety limit to prevent infinite loops
-                    logger.warning("Reached maximum page limit, some tickets may not be counted")
+                    logger.warning(
+                        f"Reached maximum page limit ({MAX_TICKETS_FOR_MEMORY_SCAN} pages), "
+                        f"processed {total_count} tickets - some tickets may not be counted"
+                    )
                     break
+
+            elapsed_time = time.time() - start_time
+            logger.info(
+                f"Ticket statistics complete: processed {total_count} tickets "
+                f"across {page-1} pages in {elapsed_time:.2f}s "
+                f"(open={open_count}, closed={closed_count}, pending={pending_count}, escalated={escalated_count})"
+            )
 
             return TicketStats(
                 total_count=total_count,
@@ -990,40 +1007,94 @@ def get_ticket_stats(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> TicketStats:
-    """Get ticket statistics (legacy wrapper for test compatibility)."""
+    """Get ticket statistics using pagination for better performance (legacy wrapper for test compatibility)."""
+    import time
+
     if zammad_client is None:
         raise RuntimeError("Zammad client not initialized")
 
-    # This implementation matches the tool implementation
+    start_time = time.time()
+
+    # This implementation now matches the optimized tool implementation with pagination
     if start_date or end_date:
         logger.warning("Date filtering not yet implemented - ignoring date parameters")
 
-    all_tickets = zammad_client.search_tickets(group=group, per_page=100)
+    group_filter_msg = f" for group '{group}'" if group else ""
+    logger.info(f"Starting ticket statistics calculation{group_filter_msg}")
 
-    def get_state_name(ticket: dict[str, Any]) -> str:
-        state = ticket.get("state")
-        if isinstance(state, str):
-            return state
-        if isinstance(state, dict):
-            name = state.get("name", "")
-            return str(name) if name else ""
-        return ""
+    # Initialize counters
+    total_count = 0
+    open_count = 0
+    closed_count = 0
+    pending_count = 0
+    escalated_count = 0
 
-    open_count = sum(1 for t in all_tickets if get_state_name(t) in ["new", "open"])
-    closed_count = sum(1 for t in all_tickets if get_state_name(t) == "closed")
-    pending_count = sum(1 for t in all_tickets if "pending" in get_state_name(t))
-    escalated_count = sum(
-        1
-        for t in all_tickets
-        if (t.get("first_response_escalation_at") or t.get("close_escalation_at") or t.get("update_escalation_at"))
+    # Process tickets in batches
+    page = 1
+    per_page = 100
+
+    while True:
+        # Get a batch of tickets
+        tickets = zammad_client.search_tickets(group=group, page=page, per_page=per_page)
+
+        if not tickets:
+            # No more tickets
+            break
+
+        # Process this batch
+        for ticket in tickets:
+            total_count += 1
+
+            # Handle both expanded (string) and non-expanded (object) state formats
+            state = ticket.get("state")
+            state_name = ""
+            if isinstance(state, str):
+                state_name = state
+            elif isinstance(state, dict):
+                state_name = str(state.get("name", ""))
+
+            # Count by state
+            if state_name in ["new", "open"]:
+                open_count += 1
+            elif state_name == "closed":
+                closed_count += 1
+            elif "pending" in state_name:
+                pending_count += 1
+
+            # Check for escalation
+            if (
+                ticket.get("first_response_escalation_at")
+                or ticket.get("close_escalation_at")
+                or ticket.get("update_escalation_at")
+            ):
+                escalated_count += 1
+
+        # Move to next page
+        page += 1
+
+        # Safety check to prevent infinite loops
+        if page > MAX_TICKETS_FOR_MEMORY_SCAN:  # Safety limit to prevent infinite loops
+            logger.warning(
+                f"Reached maximum page limit ({MAX_TICKETS_FOR_MEMORY_SCAN} pages), "
+                f"processed {total_count} tickets - some tickets may not be counted"
+            )
+            break
+
+    elapsed_time = time.time() - start_time
+    logger.info(
+        f"Ticket statistics complete: processed {total_count} tickets "
+        f"across {page-1} pages in {elapsed_time:.2f}s "
+        f"(open={open_count}, closed={closed_count}, pending={pending_count}, escalated={escalated_count})"
     )
 
     return TicketStats(
-        total_count=len(all_tickets),
+        total_count=total_count,
         open_count=open_count,
         closed_count=closed_count,
         pending_count=pending_count,
         escalated_count=escalated_count,
+        avg_first_response_time=None,  # TODO: Calculate from ticket data
+        avg_resolution_time=None,  # TODO: Calculate from ticket data
     )
 
 
