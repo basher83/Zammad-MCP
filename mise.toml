@@ -39,8 +39,42 @@ echo "✅ Development environment ready!"
 
 # === Changelog tasks ===
 [tasks.changelog]
-description = "Update changelog using git-cliff"
-run = "git-cliff -o CHANGELOG.md"
+description = "Update unreleased section of CHANGELOG.md"
+run = """
+echo "📝 Updating CHANGELOG.md with unreleased changes..."
+# Extract existing content after the first release heading
+sed -n '/^## \\[0\\.1\\.3\\]/,$p' CHANGELOG.md > /tmp/changelog_releases.txt
+# Generate new unreleased section
+git-cliff --unreleased --strip header > /tmp/changelog_unreleased.txt
+# Combine: header + unreleased + existing releases
+head -7 CHANGELOG.md > CHANGELOG.md.new
+cat /tmp/changelog_unreleased.txt >> CHANGELOG.md.new
+echo "" >> CHANGELOG.md.new
+cat /tmp/changelog_releases.txt >> CHANGELOG.md.new
+mv CHANGELOG.md.new CHANGELOG.md
+rm /tmp/changelog_unreleased.txt /tmp/changelog_releases.txt
+echo "✅ CHANGELOG.md updated!"
+"""
+
+[tasks.changelog-bump]
+description = "Bump version and update changelog for a release"
+run = """
+if [ -z "$1" ]; then
+  echo "Usage: mise run changelog-bump <version>"
+  echo "Example: mise run changelog-bump 0.1.4"
+  exit 1
+fi
+VERSION="$1"
+echo "📝 Creating release $VERSION..."
+git-cliff --tag "v$VERSION" -o CHANGELOG.md
+echo "✅ CHANGELOG.md updated for v$VERSION!"
+echo "Next steps:"
+echo "  1. Review CHANGELOG.md"
+echo "  2. Update version in pyproject.toml"
+echo "  3. Commit changes: git add CHANGELOG.md pyproject.toml && git commit -m 'chore: release v$VERSION'"
+echo "  4. Tag release: git tag -a v$VERSION -m 'Release v$VERSION'"
+echo "  5. Push: git push && git push --tags"
+"""
 
 # === Python tasks ===
 [tasks.python-clean]

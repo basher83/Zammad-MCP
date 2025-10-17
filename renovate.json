@@ -100,22 +100,39 @@
       ],
       "commitMessagePrefix": "chore(dev-deps):"
     },
-    /* ---- Split the Python rule into two compatible rules ---- */
+    /* ---- Python version pinning (3.14 not yet compatible) ---- */
     {
-      "description": "Cap Python to <= 3.13",
+      "description": "Cap Python to 3.13.x (3.14 compatibility tracked in issue)",
       "matchPackageNames": [
         "python"
+      ],
+      "matchDatasources": [
+        "docker",
+        "github-tags"
       ],
       "allowedVersions": "<=3.13"
     },
     {
-      "description": "Only minor updates for Python",
-      "matchPackageNames": [
-        "python"
+      "description": "Pin actions/setup-python to 3.13.x maximum",
+      "matchManagers": [
+        "github-actions"
       ],
-      "matchUpdateTypes": [
-        "minor"
-      ]
+      "matchPackageNames": [
+        "actions/setup-python"
+      ],
+      "matchFileNames": [
+        ".github/workflows/**"
+      ],
+      "allowedVersions": "3.13.x"
+    },
+    {
+      "description": "Block Python 3.14+ updates until compatibility confirmed",
+      "matchPackageNames": [
+        "python",
+        "actions/setup-python"
+      ],
+      "matchCurrentVersion": ">=3.14.0",
+      "enabled": false
     }
   ],
   "prConcurrentLimit": 3,
