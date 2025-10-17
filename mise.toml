@@ -1,0 +1,59 @@
+# Mise configuration for terraform-homelab
+min_version = "2024.9.5"
+
+[settings]
+auto_install = true
+not_found_auto_install = true
+task_run_auto_install = true
+
+[settings.status]
+show_tools = true
+show_env = false
+truncate = true
+
+[tools]
+python = "3.13"
+eza = "0.23.0"
+fd = "10.2.0"
+pre-commit = "4.3.0"
+rg = "14.1.1"
+git-cliff = "2.10.1"
+shellcheck = "0.11.0"
+markdownlint-cli2 = "0.18.1"
+uv = "0.9.2"
+
+[env]
+_.python.venv = { path = ".venv", create = true } # create the venv if it doesn't exist
+
+# === Setup tasks ===
+[tasks.setup]
+description = "Set up complete development environment"
+run = """
+echo "📦 Installing Python dependencies..."
+uv sync
+echo "🪝 Installing pre-commit hooks..."
+pre-commit install
+infisical scan install --pre-commit-hook || echo "⚠️  Infisical not available, skipping..."
+echo "✅ Development environment ready!"
+"""
+
+# === Changelog tasks ===
+[tasks.changelog]
+description = "Update changelog using git-cliff"
+run = "git-cliff -o CHANGELOG.md"
+
+# === Python tasks ===
+[tasks.python-clean]
+description = "Clean development environment"
+run = """
+rm -rf .venv
+rm -rf requirements.lock
+"""
+
+[tasks.python-upgrade]
+description = "Upgrade Python dependencies"
+run = "uv lock --upgrade"
+
+[tasks.python-install]
+description = "Install Python dependencies"
+run = "uv sync"
