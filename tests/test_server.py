@@ -4,6 +4,7 @@ import base64
 import os
 import pathlib
 import tempfile
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -794,8 +795,8 @@ def test_get_ticket_stats_tool(mock_zammad_client):
     test_tools = {}
     original_tool = server_inst.mcp.tool
 
-    def capture_tool(name=None):
-        def decorator(func):
+    def capture_tool(name: str | None = None) -> Callable[[Callable[..., Any]], Any]:
+        def decorator(func: Callable[..., Any]) -> Any:
             test_tools[func.__name__ if name is None else name] = func
             return original_tool(name)(func)
 
@@ -1265,8 +1266,8 @@ def test_get_ticket_stats_pagination():
 
     original_tool = server.mcp.tool
 
-    def capture_tool(name=None):
-        def decorator(func):
+    def capture_tool(name: str | None = None) -> Callable[[Callable[..., Any]], Any]:
+        def decorator(func: Callable[..., Any]) -> Any:
             test_tools[func.__name__ if name is None else name] = func
             return original_tool(name)(func)
 
@@ -1318,8 +1319,8 @@ def test_get_ticket_stats_with_date_warning():
 
     original_tool = server.mcp.tool
 
-    def capture_tool(name=None):
-        def decorator(func):
+    def capture_tool(name: str | None = None) -> Callable[[Callable[..., Any]], Any]:
+        def decorator(func: Callable[..., Any]) -> Any:
             test_tools[func.__name__ if name is None else name] = func
             return original_tool(name)(func)
 
