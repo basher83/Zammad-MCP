@@ -44,7 +44,8 @@
       "Bash(git-cliff:*)",
       "Bash(python3:*)",
       "Bash(coderabbit auth:*)",
-      "Bash(coderabbit:*)"
+      "Bash(coderabbit:*)",
+      "Bash(mise run:*)"
     ],
     "deny": []
   },
@@ -56,5 +57,18 @@
     "zammad",
     "coderabbitai",
     "codacy"
-  ]
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$CLAUDE_TOOL_FILE_PATH\" == *.py ]]; then uv run ruff format \"$CLAUDE_TOOL_FILE_PATH\" 2>/dev/null || true; fi"
+          }
+        ]
+      }
+    ]
+  }
 }
