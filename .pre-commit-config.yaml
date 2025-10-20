@@ -4,23 +4,23 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        exclude: ^scripts/
+        exclude: ^(scripts/|\.claude/skills/)
       - id: ruff-format
-        exclude: ^scripts/
+        exclude: ^(scripts/|\.claude/skills/)
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: "9db9854e3041219b1eb619872a2dfaf58adfb20b"  # v1.9.0
     hooks:
       - id: mypy
         additional_dependencies: [types-python-dateutil]
-        exclude: ^scripts/
+        exclude: ^(scripts/|\.claude/skills/)
 
   - repo: https://github.com/PyCQA/bandit
     rev: "f3a18ab30bc444e62d02505419ab7059cead0853"  # 1.7.6
     hooks:
       - id: bandit
         args: ["-f", "json"]
-        exclude: ^(tests|scripts)/
+        exclude: ^(tests/|scripts/|\.claude/skills/)
         # Note: Removed pass_filenames: false to only scan changed files
         # This improves commit speed while still maintaining security checks
         # Full tree scan still happens in CI/CD via 'bandit -r mcp_zammad/'
@@ -31,7 +31,7 @@ repos:
     hooks:
       - id: semgrep
         args: ["--config=auto", "--error", "--no-rewrite-rule-ids"]
-        exclude: ^scripts/
+        exclude: ^(scripts/|\.claude/skills/)
 
   - repo: local
     hooks:
