@@ -3,7 +3,36 @@
 import html
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class AttachmentDownloadError(Exception):
+    """Exception raised when attachment download fails.
+
+    Attributes:
+        ticket_id: The ticket ID
+        article_id: The article ID
+        attachment_id: The attachment ID
+        message: Explanation of the error
+    """
+
+    def __init__(
+        self,
+        ticket_id: int,
+        article_id: int,
+        attachment_id: int,
+        original_error: Exception,
+    ) -> None:
+        """Initialize the exception with context."""
+        self.ticket_id = ticket_id
+        self.article_id = article_id
+        self.attachment_id = attachment_id
+        self.original_error = original_error
+        self.message = (
+            f"Failed to download attachment {attachment_id} for ticket {ticket_id} "
+            f"article {article_id}: {original_error!s}"
+        )
+        super().__init__(self.message)
 
 
 class UserBrief(BaseModel):
@@ -320,3 +349,12 @@ class TicketStats(BaseModel):
     escalated_count: int = Field(description="Number of escalated tickets")
     avg_first_response_time: float | None = Field(None, description="Average first response time in minutes")
     avg_resolution_time: float | None = Field(None, description="Average resolution time in minutes")
+
+
+class TagOperationResult(BaseModel):
+    """Result of a tag operation (add/remove)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool = Field(description="Whether the operation was successful")
+    message: str | None = Field(None, description="Optional message about the operation")

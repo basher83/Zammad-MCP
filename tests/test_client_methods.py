@@ -151,27 +151,33 @@ class TestZammadClientMethods:
     def test_add_ticket_tag(self, mock_zammad_api: Mock) -> None:
         """Test add_ticket_tag method."""
         mock_instance = Mock()
-        mock_instance.ticket_tag.add.return_value = {"success": True}
+        # Zammad API returns a boolean
+        mock_instance.ticket_tag.add.return_value = True
         mock_zammad_api.return_value = mock_instance
 
         client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
 
         result = client.add_ticket_tag(1, "urgent")
 
+        # Client converts boolean to TagOperationResult format
         assert result["success"] is True
+        assert result["message"] is None
         mock_instance.ticket_tag.add.assert_called_once_with(1, "urgent")
 
     def test_remove_ticket_tag(self, mock_zammad_api: Mock) -> None:
         """Test remove_ticket_tag method."""
         mock_instance = Mock()
-        mock_instance.ticket_tag.remove.return_value = {"success": True}
+        # Zammad API returns a boolean
+        mock_instance.ticket_tag.remove.return_value = True
         mock_zammad_api.return_value = mock_instance
 
         client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
 
         result = client.remove_ticket_tag(1, "urgent")
 
+        # Client converts boolean to TagOperationResult format
         assert result["success"] is True
+        assert result["message"] is None
         mock_instance.ticket_tag.remove.assert_called_once_with(1, "urgent")
 
     @patch.dict(os.environ, {}, clear=True)

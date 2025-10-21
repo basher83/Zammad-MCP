@@ -160,6 +160,10 @@ The server requires Zammad API credentials. The recommended approach is to use a
    # Option 3: Username/Password
    # ZAMMAD_USERNAME=your-username
    # ZAMMAD_PASSWORD=your-password
+
+   # Optional: Logging level (default: INFO)
+   # Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+   # LOG_LEVEL=INFO
    ```
 
 1. The server will automatically load the `.env` file on startup.

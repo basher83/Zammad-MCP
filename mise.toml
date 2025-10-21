@@ -34,6 +34,20 @@ uv sync
 echo "🪝 Installing pre-commit hooks..."
 pre-commit install
 infisical scan install --pre-commit-hook || echo "⚠️  Infisical not available, skipping..."
+# CodeRabbit CLI installation (opt-in for security)
+# Security note: This downloads and executes a remote script. Only enable if you trust the source.
+# Set INSTALL_CODERABBIT=true to enable automatic installation.
+# See: https://docs.coderabbit.ai/guides/cli-tool
+if [ "${INSTALL_CODERABBIT:-false}" = "true" ]; then
+  if ! command -v coderabbit >/dev/null 2>&1; then
+    echo "📥 Installing coderabbit CLI..."
+    curl -fsSL https://cli.coderabbit.ai/install.sh | sh
+  else
+    echo "✅ coderabbit CLI already installed."
+  fi
+else
+  echo "ℹ️  CodeRabbit CLI installation skipped (set INSTALL_CODERABBIT=true to enable)"
+fi
 echo "✅ Development environment ready!"
 """
 
@@ -97,7 +111,7 @@ run = "uv sync"
 description = "Install pre-commit and infisical hooks"
 run = "pre-commit install && infisical scan install --pre-commit-hook"
 
-[tasks.hooks-run]
+[tasks.pre-commit-run]
 description = "Run pre-commit hooks"
 run = "pre-commit run --all-files"
 

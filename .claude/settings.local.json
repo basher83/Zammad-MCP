@@ -41,7 +41,11 @@
       "mcp__deepwiki__read_wiki_structure",
       "mcp__deepwiki__ask_question",
       "mcp__coderabbitai__get_review_comments",
-      "Bash(git-cliff:*)"
+      "Bash(git-cliff:*)",
+      "Bash(python3:*)",
+      "Bash(coderabbit auth:*)",
+      "Bash(coderabbit:*)",
+      "Bash(mise run:*)"
     ],
     "deny": []
   },
@@ -53,5 +57,18 @@
     "zammad",
     "coderabbitai",
     "codacy"
-  ]
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$CLAUDE_TOOL_FILE_PATH\" == *.py ]]; then uv run ruff format \"$CLAUDE_TOOL_FILE_PATH\" 2>/dev/null || true; fi"
+          }
+        ]
+      }
+    ]
+  }
 }
