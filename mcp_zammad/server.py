@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # Constants
 MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
+MAX_PER_PAGE = 100  # Maximum results per page for pagination
 
 # Zammad state type IDs (from Zammad API)
 STATE_TYPE_NEW = 1
@@ -113,7 +114,7 @@ class ZammadMCPServer:
         self._setup_user_org_tools()
         self._setup_system_tools()
 
-    def _setup_ticket_tools(self) -> None:
+    def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
 
         @self.mcp.tool(
@@ -148,7 +149,16 @@ class ZammadMCPServer:
 
             Returns:
                 List of tickets matching the search criteria
+
+            Raises:
+                ValueError: If pagination parameters are invalid
             """
+            # Validate pagination inputs
+            if page < 1:
+                raise ValueError("page must be >= 1")
+            if not 1 <= per_page <= MAX_PER_PAGE:
+                raise ValueError(f"per_page must be between 1 and {MAX_PER_PAGE}")
+
             client = self.get_client()
             tickets_data = client.search_tickets(
                 query=query,
@@ -306,7 +316,18 @@ class ZammadMCPServer:
 
             Returns:
                 The created article
+
+            Raises:
+                ValueError: If article_type or sender are invalid
             """
+            # Validate article_type and sender
+            valid_types = {"note", "email", "phone"}
+            if article_type not in valid_types:
+                raise ValueError(f"article_type must be one of {sorted(valid_types)}")
+            valid_senders = {"Agent", "Customer", "System"}
+            if sender not in valid_senders:
+                raise ValueError(f"sender must be one of {sorted(valid_senders)}")
+
             client = self.get_client()
             article_data = client.add_article(
                 ticket_id=ticket_id,
@@ -348,19 +369,22 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_download_attachment(ticket_id: int, article_id: int, attachment_id: int) -> str:
+        def zammad_download_attachment(
+            ticket_id: int, article_id: int, attachment_id: int, max_bytes: int | None = 10_000_000
+        ) -> str:
             """Download an attachment from a ticket article.
 
             Args:
                 ticket_id: The ticket ID
                 article_id: The article ID
                 attachment_id: The attachment ID
+                max_bytes: Maximum attachment size in bytes (default: 10MB, None for unlimited)
 
             Returns:
                 Base64-encoded attachment content
 
             Raises:
-                AttachmentDownloadError: If attachment download fails
+                AttachmentDownloadError: If attachment download fails or exceeds max_bytes
             """
             client = self.get_client()
             try:
@@ -372,6 +396,18 @@ class ZammadMCPServer:
                     attachment_id=attachment_id,
                     original_error=e,
                 ) from e
+
+            # Guard against very large attachments
+            if max_bytes is not None and len(attachment_data) > max_bytes:
+                raise AttachmentDownloadError(
+                    ticket_id=ticket_id,
+                    article_id=article_id,
+                    attachment_id=attachment_id,
+                    original_error=ValueError(
+                        f"Attachment size {len(attachment_data)} bytes exceeds max_bytes={max_bytes}"
+                    ),
+                )
+
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")
 
@@ -461,7 +497,16 @@ class ZammadMCPServer:
 
             Returns:
                 List of users matching the query
+
+            Raises:
+                ValueError: If pagination parameters are invalid
             """
+            # Validate pagination inputs
+            if page < 1:
+                raise ValueError("page must be >= 1")
+            if not 1 <= per_page <= MAX_PER_PAGE:
+                raise ValueError(f"per_page must be between 1 and {MAX_PER_PAGE}")
+
             client = self.get_client()
             users_data = client.search_users(query, page, per_page)
             return [User(**user) for user in users_data]
@@ -505,7 +550,16 @@ class ZammadMCPServer:
 
             Returns:
                 List of organizations matching the query
+
+            Raises:
+                ValueError: If pagination parameters are invalid
             """
+            # Validate pagination inputs
+            if page < 1:
+                raise ValueError("page must be >= 1")
+            if not 1 <= per_page <= MAX_PER_PAGE:
+                raise ValueError(f"per_page must be between 1 and {MAX_PER_PAGE}")
+
             client = self.get_client()
             orgs_data = client.search_organizations(query, page, per_page)
             return [Organization(**org) for org in orgs_data]
@@ -969,12 +1023,7 @@ class ZammadMCPServer:
                 # Organize tickets by state
                 ticket_states: dict[str, list[dict[str, Any]]] = {}
                 for ticket in tickets:
-                    state = ticket.get("state")
-                    state_name = ""
-                    if isinstance(state, str):
-                        state_name = state
-                    elif isinstance(state, dict):
-                        state_name = str(state.get("name", ""))
+                    state_name = self._extract_state_name(ticket)
 
                     if state_name not in ticket_states:
                         ticket_states[state_name] = []
@@ -1015,7 +1064,7 @@ class ZammadMCPServer:
         @self.mcp.prompt()
         def analyze_ticket(ticket_id: int) -> str:
             """Generate a prompt to analyze a ticket."""
-            return f"""Please analyze ticket {ticket_id} from Zammad. Use the get_ticket tool to retrieve the ticket details including all articles.
+            return f"""Please analyze ticket {ticket_id} from Zammad. Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
 
 After retrieving the ticket, provide:
 1. A summary of the issue
@@ -1028,15 +1077,15 @@ Use appropriate tools to gather any additional context about the customer or org
         @self.mcp.prompt()
         def draft_response(ticket_id: int, tone: str = "professional") -> str:
             """Generate a prompt to draft a response to a ticket."""
-            return f"""Please help draft a {tone} response to ticket {ticket_id}. 
+            return f"""Please help draft a {tone} response to ticket {ticket_id}.
 
-First, use get_ticket to understand the issue and conversation history. Then draft an appropriate response that:
+First, use zammad_get_ticket to understand the issue and conversation history. Then draft an appropriate response that:
 1. Acknowledges the customer's concern
 2. Provides a clear solution or next steps
 3. Maintains a {tone} tone throughout
 4. Is concise and easy to understand
 
-After drafting, you can use add_article to add the response to the ticket if approved."""
+After drafting, you can use zammad_add_article to add the response to the ticket if approved."""
 
         @self.mcp.prompt()
         def escalation_summary(group: str | None = None) -> str:
@@ -1044,7 +1093,7 @@ After drafting, you can use add_article to add the response to the ticket if app
             group_filter = f" for group '{group}'" if group else ""
             return f"""Please provide a summary of escalated tickets{group_filter}.
 
-Use search_tickets to find tickets with escalation times set. For each escalated ticket:
+Use zammad_search_tickets to find tickets with escalation times set. For each escalated ticket:
 1. Ticket number and title
 2. Escalation type (first response, update, or close)
 3. Time until escalation
