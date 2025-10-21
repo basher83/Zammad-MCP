@@ -3,6 +3,7 @@
 import base64
 import logging
 import os
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,8 +16,10 @@ from .client import ZammadClient
 from .models import (
     Article,
     Attachment,
+    AttachmentDownloadError,
     Group,
     Organization,
+    TagOperationResult,
     Ticket,
     TicketPriority,
     TicketState,
@@ -25,11 +28,10 @@ from .models import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
-MAX_TICKETS_FOR_MEMORY_SCAN = 1000
+MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
 
 
@@ -74,7 +76,7 @@ class ZammadMCPServer:
         cwd_env = Path.cwd() / ".env"
         if cwd_env.exists():
             load_dotenv(cwd_env)
-            logger.info(f"Loaded environment from {cwd_env}")
+            logger.info("Loaded environment from %s", cwd_env)
 
         # Then, try to load from .envrc if it exists and convert to .env format
         envrc_path = Path.cwd() / ".envrc"
@@ -93,7 +95,7 @@ class ZammadMCPServer:
 
             # Test connection
             current_user = self.client.get_current_user()
-            logger.info(f"Connected as: {current_user.get('email', 'Unknown')}")
+            logger.info("Connected as: %s", current_user.get("email", "Unknown"))
         except Exception:
             logger.exception("Failed to initialize Zammad client")
             raise
@@ -107,8 +109,15 @@ class ZammadMCPServer:
     def _setup_ticket_tools(self) -> None:
         """Register ticket-related tools."""
 
-        @self.mcp.tool()
-        def search_tickets(
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_search_tickets(
             query: str | None = None,
             state: str | None = None,
             priority: str | None = None,
@@ -147,8 +156,15 @@ class ZammadMCPServer:
 
             return [Ticket(**ticket) for ticket in tickets_data]
 
-        @self.mcp.tool()
-        def get_ticket(
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_get_ticket(
             ticket_id: int, include_articles: bool = True, article_limit: int = 10, article_offset: int = 0
         ) -> Ticket:
             """Get detailed information about a specific ticket.
@@ -169,8 +185,15 @@ class ZammadMCPServer:
             ticket_data = client.get_ticket(ticket_id, include_articles, article_limit, article_offset)
             return Ticket(**ticket_data)
 
-        @self.mcp.tool()
-        def create_ticket(
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": False,
+                "destructiveHint": False,
+                "idempotentHint": False,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_create_ticket(
             title: str,
             group: str,
             customer: str,
@@ -209,8 +232,15 @@ class ZammadMCPServer:
 
             return Ticket(**ticket_data)
 
-        @self.mcp.tool()
-        def update_ticket(
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": False,
+                "destructiveHint": False,
+                "idempotentHint": False,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_update_ticket(
             ticket_id: int,
             title: str | None = None,
             state: str | None = None,
@@ -243,8 +273,15 @@ class ZammadMCPServer:
 
             return Ticket(**ticket_data)
 
-        @self.mcp.tool()
-        def add_article(
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": False,
+                "destructiveHint": False,
+                "idempotentHint": False,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_add_article(
             ticket_id: int,
             body: str,
             article_type: str = "note",
@@ -274,8 +311,15 @@ class ZammadMCPServer:
 
             return Article(**article_data)
 
-        @self.mcp.tool()
-        def get_article_attachments(ticket_id: int, article_id: int) -> list[Attachment]:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_get_article_attachments(ticket_id: int, article_id: int) -> list[Attachment]:
             """Get list of attachments for a ticket article.
 
             Args:
@@ -289,8 +333,15 @@ class ZammadMCPServer:
             attachments_data = client.get_article_attachments(ticket_id, article_id)
             return [Attachment(**attachment) for attachment in attachments_data]
 
-        @self.mcp.tool()
-        def download_attachment(ticket_id: int, article_id: int, attachment_id: int) -> str:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_download_attachment(ticket_id: int, article_id: int, attachment_id: int) -> str:
             """Download an attachment from a ticket article.
 
             Args:
@@ -299,18 +350,33 @@ class ZammadMCPServer:
                 attachment_id: The attachment ID
 
             Returns:
-                Base64-encoded attachment content or error message
+                Base64-encoded attachment content
+
+            Raises:
+                AttachmentDownloadError: If attachment download fails
             """
             client = self.get_client()
             try:
                 attachment_data = client.download_attachment(ticket_id, article_id, attachment_id)
-                # Convert bytes to base64 string for transmission
-                return base64.b64encode(attachment_data).decode("utf-8")
             except Exception as e:
-                return f"Error downloading attachment: {e!s}"
+                raise AttachmentDownloadError(
+                    ticket_id=ticket_id,
+                    article_id=article_id,
+                    attachment_id=attachment_id,
+                    original_error=e,
+                ) from e
+            # Convert bytes to base64 string for transmission
+            return base64.b64encode(attachment_data).decode("utf-8")
 
-        @self.mcp.tool()
-        def add_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": False,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_add_ticket_tag(ticket_id: int, tag: str) -> TagOperationResult:
             """Add a tag to a ticket.
 
             Args:
@@ -318,13 +384,21 @@ class ZammadMCPServer:
                 tag: The tag to add
 
             Returns:
-                Operation result
+                Operation result with success status
             """
             client = self.get_client()
-            return client.add_ticket_tag(ticket_id, tag)
+            result = client.add_ticket_tag(ticket_id, tag)
+            return TagOperationResult(**result)
 
-        @self.mcp.tool()
-        def remove_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": False,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_remove_ticket_tag(ticket_id: int, tag: str) -> TagOperationResult:
             """Remove a tag from a ticket.
 
             Args:
@@ -332,16 +406,24 @@ class ZammadMCPServer:
                 tag: The tag to remove
 
             Returns:
-                Operation result
+                Operation result with success status
             """
             client = self.get_client()
-            return client.remove_ticket_tag(ticket_id, tag)
+            result = client.remove_ticket_tag(ticket_id, tag)
+            return TagOperationResult(**result)
 
     def _setup_user_org_tools(self) -> None:
         """Register user and organization tools."""
 
-        @self.mcp.tool()
-        def get_user(user_id: int) -> User:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_get_user(user_id: int) -> User:
             """Get user information by ID.
 
             Args:
@@ -354,8 +436,15 @@ class ZammadMCPServer:
             user_data = client.get_user(user_id)
             return User(**user_data)
 
-        @self.mcp.tool()
-        def search_users(query: str, page: int = 1, per_page: int = 25) -> list[User]:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_search_users(query: str, page: int = 1, per_page: int = 25) -> list[User]:
             """Search for users.
 
             Args:
@@ -370,8 +459,15 @@ class ZammadMCPServer:
             users_data = client.search_users(query, page, per_page)
             return [User(**user) for user in users_data]
 
-        @self.mcp.tool()
-        def get_organization(org_id: int) -> Organization:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_get_organization(org_id: int) -> Organization:
             """Get organization information by ID.
 
             Args:
@@ -384,8 +480,15 @@ class ZammadMCPServer:
             org_data = client.get_organization(org_id)
             return Organization(**org_data)
 
-        @self.mcp.tool()
-        def search_organizations(query: str, page: int = 1, per_page: int = 25) -> list[Organization]:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_search_organizations(query: str, page: int = 1, per_page: int = 25) -> list[Organization]:
             """Search for organizations.
 
             Args:
@@ -400,8 +503,15 @@ class ZammadMCPServer:
             orgs_data = client.search_organizations(query, page, per_page)
             return [Organization(**org) for org in orgs_data]
 
-        @self.mcp.tool()
-        def get_current_user() -> User:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_get_current_user() -> User:
             """Get information about the currently authenticated user.
 
             Returns:
@@ -447,8 +557,15 @@ class ZammadMCPServer:
     def _setup_system_tools(self) -> None:
         """Register system information tools."""
 
-        @self.mcp.tool()
-        def get_ticket_stats(
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_get_ticket_stats(
             group: str | None = None,
             start_date: str | None = None,
             end_date: str | None = None,
@@ -466,8 +583,6 @@ class ZammadMCPServer:
             Note: This implementation uses pagination to avoid loading all tickets
             into memory at once, improving performance for large datasets.
             """
-            import time
-
             start_time = time.time()
             client = self.get_client()
 
@@ -476,7 +591,7 @@ class ZammadMCPServer:
                 logger.warning("Date filtering not yet implemented - ignoring date parameters")
 
             group_filter_msg = f" for group '{group}'" if group else ""
-            logger.info(f"Starting ticket statistics calculation{group_filter_msg}")
+            logger.info("Starting ticket statistics calculation%s", group_filter_msg)
 
             # Initialize counters
             total_count = 0
@@ -529,18 +644,25 @@ class ZammadMCPServer:
                 page += 1
 
                 # Safety check to prevent infinite loops
-                if page > MAX_TICKETS_FOR_MEMORY_SCAN:  # Safety limit to prevent infinite loops
+                if page > MAX_PAGES_FOR_TICKET_SCAN:  # Safety limit to prevent infinite loops
                     logger.warning(
-                        f"Reached maximum page limit ({MAX_TICKETS_FOR_MEMORY_SCAN} pages), "
-                        f"processed {total_count} tickets - some tickets may not be counted"
+                        "Reached maximum page limit (%s pages), processed %s tickets - some tickets may not be counted",
+                        MAX_PAGES_FOR_TICKET_SCAN,
+                        total_count,
                     )
                     break
 
             elapsed_time = time.time() - start_time
             logger.info(
-                f"Ticket statistics complete: processed {total_count} tickets "
-                f"across {page-1} pages in {elapsed_time:.2f}s "
-                f"(open={open_count}, closed={closed_count}, pending={pending_count}, escalated={escalated_count})"
+                "Ticket statistics complete: processed %s tickets across %s pages in %.2fs "
+                "(open=%s, closed=%s, pending=%s, escalated=%s)",
+                total_count,
+                page - 1,
+                elapsed_time,
+                open_count,
+                closed_count,
+                pending_count,
+                escalated_count,
             )
 
             return TicketStats(
@@ -553,8 +675,15 @@ class ZammadMCPServer:
                 avg_resolution_time=None,  # TODO: Calculate from ticket data
             )
 
-        @self.mcp.tool()
-        def list_groups() -> list[Group]:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_list_groups() -> list[Group]:
             """Get all available groups (cached).
 
             Returns:
@@ -562,8 +691,15 @@ class ZammadMCPServer:
             """
             return self._get_cached_groups()
 
-        @self.mcp.tool()
-        def list_ticket_states() -> list[TicketState]:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_list_ticket_states() -> list[TicketState]:
             """Get all available ticket states (cached).
 
             Returns:
@@ -571,8 +707,15 @@ class ZammadMCPServer:
             """
             return self._get_cached_states()
 
-        @self.mcp.tool()
-        def list_ticket_priorities() -> list[TicketPriority]:
+        @self.mcp.tool(
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": True,
+            }
+        )
+        def zammad_list_ticket_priorities() -> list[TicketPriority]:
             """Get all available ticket priorities (cached).
 
             Returns:
@@ -598,12 +741,30 @@ class ZammadMCPServer:
                 # Use a reasonable limit for resources to avoid huge responses
                 ticket = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
 
+                # Normalize possibly-expanded fields
+                state = ticket.get("state")
+                state_name = (
+                    state.get("name", "Unknown") if isinstance(state, dict) else (str(state) if state else "Unknown")
+                )
+                priority = ticket.get("priority")
+                priority_name = (
+                    priority.get("name", "Unknown")
+                    if isinstance(priority, dict)
+                    else (str(priority) if priority else "Unknown")
+                )
+                customer = ticket.get("customer")
+                customer_email = (
+                    customer.get("email", "Unknown")
+                    if isinstance(customer, dict)
+                    else (str(customer) if customer else "Unknown")
+                )
+
                 # Format ticket data as readable text
                 lines = [
-                    f"Ticket #{ticket['number']} - {ticket['title']}",
-                    f"State: {ticket.get('state', {}).get('name', 'Unknown')}",
-                    f"Priority: {ticket.get('priority', {}).get('name', 'Unknown')}",
-                    f"Customer: {ticket.get('customer', {}).get('email', 'Unknown')}",
+                    f"Ticket #{ticket.get('number', 'N/A')} - {ticket.get('title', 'No title')}",
+                    f"State: {state_name}",
+                    f"Priority: {priority_name}",
+                    f"Customer: {customer_email}",
                     f"Created: {ticket.get('created_at', 'Unknown')}",
                     "",
                     "Articles:",
@@ -777,327 +938,37 @@ server = ZammadMCPServer()
 # Export the MCP server instance
 mcp = server.mcp
 
-# Legacy constants and functions for backward compatibility with tests
-_UNINITIALIZED = None
-zammad_client = None
 
+def _configure_logging() -> None:
+    """Configure logging from LOG_LEVEL environment variable.
 
-async def initialize() -> None:
-    """Initialize the Zammad client (legacy wrapper for test compatibility)."""
-    await server.initialize()
-    # Update the module-level client reference
-    globals()["zammad_client"] = server.client
+    Reads LOG_LEVEL environment variable (default: INFO) and configures
+    the root logger. Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL.
+    """
+    log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+    valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
+    if log_level_str not in valid_levels:
+        invalid_level = log_level_str  # Store before resetting
+        log_level_str = "INFO"
+        logger.warning(
+            "Invalid LOG_LEVEL '%s', defaulting to INFO. Valid values: %s",
+            invalid_level,
+            ", ".join(valid_levels),
+        )
 
-def search_tickets(
-    query: str | None = None,
-    state: str | None = None,
-    priority: str | None = None,
-    group: str | None = None,
-    owner: str | None = None,
-    customer: str | None = None,
-    page: int = 1,
-    per_page: int = 25,
-) -> list[Ticket]:
-    """Search for tickets (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    tickets_data = zammad_client.search_tickets(
-        query=query,
-        state=state,
-        priority=priority,
-        group=group,
-        owner=owner,
-        customer=customer,
-        page=page,
-        per_page=per_page,
-    )
-    return [Ticket(**ticket) for ticket in tickets_data]
+    log_level = getattr(logging, log_level_str)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
 
-
-def get_ticket(
-    ticket_id: int,
-    include_articles: bool = False,
-    article_limit: int = 10,
-    article_offset: int = 0,
-) -> Ticket:
-    """Get a ticket by ID (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    ticket_data = zammad_client.get_ticket(ticket_id, include_articles, article_limit, article_offset)
-    return Ticket(**ticket_data)
-
-
-def create_ticket(
-    title: str,
-    group: str,
-    customer: str,
-    article_body: str,
-    state: str = "new",
-    priority: str = "2 normal",
-    article_type: str = "note",
-    article_internal: bool = False,
-) -> Ticket:
-    """Create a new ticket (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    ticket_data = zammad_client.create_ticket(
-        title=title,
-        group=group,
-        customer=customer,
-        article_body=article_body,
-        state=state,
-        priority=priority,
-        article_type=article_type,
-        article_internal=article_internal,
-    )
-    return Ticket(**ticket_data)
-
-
-def add_article(
-    ticket_id: int,
-    body: str,
-    article_type: str = "note",
-    internal: bool = False,
-    sender: str = "Agent",
-) -> Article:
-    """Add an article to a ticket (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    article_data = zammad_client.add_article(
-        ticket_id=ticket_id,
-        body=body,
-        article_type=article_type,
-        internal=internal,
-        sender=sender,
-    )
-    return Article(**article_data)
-
-
-def get_article_attachments(ticket_id: int, article_id: int) -> list[Attachment]:
-    """Get list of attachments for a ticket article (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    attachments_data = zammad_client.get_article_attachments(ticket_id, article_id)
-    return [Attachment(**attachment) for attachment in attachments_data]
-
-
-def download_attachment(ticket_id: int, article_id: int, attachment_id: int) -> str:
-    """Download an attachment from a ticket article (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    try:
-        attachment_data = zammad_client.download_attachment(ticket_id, article_id, attachment_id)
-        # Convert bytes to base64 string for transmission
-        return base64.b64encode(attachment_data).decode("utf-8")
-    except Exception as e:
-        return f"Error downloading attachment: {e!s}"
-
-
-def get_user(user_id: int) -> User:
-    """Get a user by ID (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    user_data = zammad_client.get_user(user_id)
-    return User(**user_data)
-
-
-def add_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
-    """Add a tag to a ticket (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    return zammad_client.add_ticket_tag(ticket_id, tag)
-
-
-def remove_ticket_tag(ticket_id: int, tag: str) -> dict[str, Any]:
-    """Remove a tag from a ticket (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    return zammad_client.remove_ticket_tag(ticket_id, tag)
-
-
-def update_ticket(
-    ticket_id: int,
-    title: str | None = None,
-    state: str | None = None,
-    priority: str | None = None,
-    owner: str | None = None,
-    group: str | None = None,
-) -> Ticket:
-    """Update a ticket (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    ticket_data = zammad_client.update_ticket(
-        ticket_id,
-        title=title,
-        state=state,
-        priority=priority,
-        owner=owner,
-        group=group,
-    )
-    return Ticket(**ticket_data)
-
-
-def get_organization(org_id: int) -> Organization:
-    """Get organization by ID (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    org_data = zammad_client.get_organization(org_id)
-    return Organization(**org_data)
-
-
-def search_organizations(
-    query: str,
-    page: int = 1,
-    per_page: int = 25,
-) -> list[Organization]:
-    """Search organizations (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    results = zammad_client.search_organizations(query=query, page=page, per_page=per_page)
-    return [Organization(**org) for org in results]
-
-
-def list_groups() -> list[Group]:
-    """List all groups (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    groups = zammad_client.get_groups()
-    return [Group(**g) for g in groups]
-
-
-def list_ticket_states() -> list[TicketState]:
-    """List all ticket states (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    states = zammad_client.get_ticket_states()
-    return [TicketState(**s) for s in states]
-
-
-def list_ticket_priorities() -> list[TicketPriority]:
-    """List all ticket priorities (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    priorities = zammad_client.get_ticket_priorities()
-    return [TicketPriority(**p) for p in priorities]
-
-
-def get_current_user() -> User:
-    """Get current user (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    user_data = zammad_client.get_current_user()
-    return User(**user_data)
-
-
-def search_users(
-    query: str,
-    page: int = 1,
-    per_page: int = 25,
-) -> list[User]:
-    """Search users (legacy wrapper for test compatibility)."""
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-    results = zammad_client.search_users(query=query, page=page, per_page=per_page)
-    return [User(**user) for user in results]
-
-
-def get_ticket_stats(
-    group: str | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
-) -> TicketStats:
-    """Get ticket statistics using pagination for better performance (legacy wrapper for test compatibility)."""
-    import time
-
-    if zammad_client is None:
-        raise RuntimeError("Zammad client not initialized")
-
-    start_time = time.time()
-
-    # This implementation now matches the optimized tool implementation with pagination
-    if start_date or end_date:
-        logger.warning("Date filtering not yet implemented - ignoring date parameters")
-
-    group_filter_msg = f" for group '{group}'" if group else ""
-    logger.info(f"Starting ticket statistics calculation{group_filter_msg}")
-
-    # Initialize counters
-    total_count = 0
-    open_count = 0
-    closed_count = 0
-    pending_count = 0
-    escalated_count = 0
-
-    # Process tickets in batches
-    page = 1
-    per_page = 100
-
-    while True:
-        # Get a batch of tickets
-        tickets = zammad_client.search_tickets(group=group, page=page, per_page=per_page)
-
-        if not tickets:
-            # No more tickets
-            break
-
-        # Process this batch
-        for ticket in tickets:
-            total_count += 1
-
-            # Handle both expanded (string) and non-expanded (object) state formats
-            state = ticket.get("state")
-            state_name = ""
-            if isinstance(state, str):
-                state_name = state
-            elif isinstance(state, dict):
-                state_name = str(state.get("name", ""))
-
-            # Count by state
-            if state_name in ["new", "open"]:
-                open_count += 1
-            elif state_name == "closed":
-                closed_count += 1
-            elif "pending" in state_name:
-                pending_count += 1
-
-            # Check for escalation
-            if (
-                ticket.get("first_response_escalation_at")
-                or ticket.get("close_escalation_at")
-                or ticket.get("update_escalation_at")
-            ):
-                escalated_count += 1
-
-        # Move to next page
-        page += 1
-
-        # Safety check to prevent infinite loops
-        if page > MAX_TICKETS_FOR_MEMORY_SCAN:  # Safety limit to prevent infinite loops
-            logger.warning(
-                f"Reached maximum page limit ({MAX_TICKETS_FOR_MEMORY_SCAN} pages), "
-                f"processed {total_count} tickets - some tickets may not be counted"
-            )
-            break
-
-    elapsed_time = time.time() - start_time
-    logger.info(
-        f"Ticket statistics complete: processed {total_count} tickets "
-        f"across {page-1} pages in {elapsed_time:.2f}s "
-        f"(open={open_count}, closed={closed_count}, pending={pending_count}, escalated={escalated_count})"
-    )
-
-    return TicketStats(
-        total_count=total_count,
-        open_count=open_count,
-        closed_count=closed_count,
-        pending_count=pending_count,
-        escalated_count=escalated_count,
-        avg_first_response_time=None,  # TODO: Calculate from ticket data
-        avg_resolution_time=None,  # TODO: Calculate from ticket data
-    )
+    # Add handler if none exists
+    if not root_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        root_logger.addHandler(handler)
 
 
 def main() -> None:
     """Main entry point for the server."""
+    _configure_logging()
     mcp.run()

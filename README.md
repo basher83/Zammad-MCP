@@ -13,27 +13,27 @@ A Model Context Protocol (MCP) server for Zammad integration, enabling AI assist
 ### Tools
 
 - **Ticket Management**
-  - `search_tickets` - Search tickets with multiple filters
-  - `get_ticket` - Get detailed ticket information with articles (supports pagination)
-  - `create_ticket` - Create new tickets
-  - `update_ticket` - Update ticket properties
-  - `add_article` - Add comments/notes to tickets
-  - `add_ticket_tag` / `remove_ticket_tag` - Manage ticket tags
+  - `zammad_search_tickets` - Search tickets with multiple filters
+  - `zammad_get_ticket` - Get detailed ticket information with articles (supports pagination)
+  - `zammad_create_ticket` - Create new tickets
+  - `zammad_update_ticket` - Update ticket properties
+  - `zammad_add_article` - Add comments/notes to tickets
+  - `zammad_add_ticket_tag` / `zammad_remove_ticket_tag` - Manage ticket tags
 
 - **Attachment Support** 🆕
-  - `get_article_attachments` - List all attachments for a ticket article
-  - `download_attachment` - Download attachment content as base64-encoded data
+  - `zammad_get_article_attachments` - List all attachments for a ticket article
+  - `zammad_download_attachment` - Download attachment content as base64-encoded data
 
 - **User & Organization Management**
-  - `get_user` / `search_users` - User information and search
-  - `get_organization` / `search_organizations` - Organization data
-  - `get_current_user` - Get authenticated user info
+  - `zammad_get_user` / `zammad_search_users` - User information and search
+  - `zammad_get_organization` / `zammad_search_organizations` - Organization data
+  - `zammad_get_current_user` - Get authenticated user info
 
 - **System Information**
-  - `list_groups` - Get all available groups (cached for performance)
-  - `list_ticket_states` - Get all ticket states (cached for performance)
-  - `list_ticket_priorities` - Get all priority levels (cached for performance)
-  - `get_ticket_stats` - Get ticket statistics (optimized with pagination)
+  - `zammad_list_groups` - Get all available groups (cached for performance)
+  - `zammad_list_ticket_states` - Get all ticket states (cached for performance)
+  - `zammad_list_ticket_priorities` - Get all priority levels (cached for performance)
+  - `zammad_get_ticket_stats` - Get ticket statistics (optimized with pagination)
 
 ### Resources
 
@@ -160,6 +160,10 @@ The server requires Zammad API credentials. The recommended approach is to use a
    # Option 3: Username/Password
    # ZAMMAD_USERNAME=your-username
    # ZAMMAD_PASSWORD=your-password
+
+   # Optional: Logging level (default: INFO)
+   # Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+   # LOG_LEVEL=INFO
    ```
 
 1. The server will automatically load the `.env` file on startup.
