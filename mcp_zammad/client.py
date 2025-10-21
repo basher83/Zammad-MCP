@@ -307,12 +307,26 @@ class ZammadClient:
         return list(tags.get("tags", []))
 
     def add_ticket_tag(self, ticket_id: int, tag: str) -> dict[str, Any]:
-        """Add a tag to a ticket."""
-        return dict(self.api.ticket_tag.add(ticket_id, tag))
+        """Add a tag to a ticket.
+
+        Returns:
+            Dictionary with 'success' key (bool) and optional 'message' key.
+            Format: {"success": True, "message": None}
+        """
+        result = self.api.ticket_tag.add(ticket_id, tag)
+        # Zammad returns a boolean, convert to TagOperationResult format
+        return {"success": bool(result), "message": None}
 
     def remove_ticket_tag(self, ticket_id: int, tag: str) -> dict[str, Any]:
-        """Remove a tag from a ticket."""
-        return dict(self.api.ticket_tag.remove(ticket_id, tag))
+        """Remove a tag from a ticket.
+
+        Returns:
+            Dictionary with 'success' key (bool) and optional 'message' key.
+            Format: {"success": True, "message": None}
+        """
+        result = self.api.ticket_tag.remove(ticket_id, tag)
+        # Zammad returns a boolean, convert to TagOperationResult format
+        return {"success": bool(result), "message": None}
 
     def download_attachment(self, ticket_id: int, article_id: int, attachment_id: int) -> bytes:
         """Download an attachment from a ticket article."""

@@ -168,7 +168,7 @@
   Clarify instructions:
 
 - "Run pre-commit hooks to validate code quality"
-- "If hooks fail, fix issues manually and re-run this command"
+- "If hooks fail, resolve issues manually and re-run this command"
 - "If hooks pass, invoke commit-craft to organize commits"
 
   Pros: Truthful, sets correct expectations
@@ -262,16 +262,16 @@
   - Quick commit creation? → Simplify
   - Quality enforcement? → Add validation
   - Learning tool? → Add guidance
-  2. What should "addressing quality issues" mean?
+  1. What should "addressing quality issues" mean?
   - Auto-fixing formatting? (achievable)
   - Guiding manual fixes? (medium complexity)
   - Blocking bad commits? (easy)
   - All of the above? (hard)
-  3. Who is the target user?
+  1. Who is the target user?
   - Experienced devs → Minimal hand-holding
   - Junior devs → More guidance needed
   - Mixed team → Balance both
-  4. What's the tolerance for complexity?
+  1. What's the tolerance for complexity?
   - Simple wrapper → Solution 3
   - Smart orchestrator → Solution 2 or 4
   - Just be honest → Solution 1

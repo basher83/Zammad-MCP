@@ -3,7 +3,7 @@
 import html
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserBrief(BaseModel):
@@ -324,6 +324,8 @@ class TicketStats(BaseModel):
 
 class TagOperationResult(BaseModel):
     """Result of a tag operation (add/remove)."""
+
+    model_config = ConfigDict(extra="forbid")
 
     success: bool = Field(description="Whether the operation was successful")
     message: str | None = Field(None, description="Optional message about the operation")

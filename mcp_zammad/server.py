@@ -75,7 +75,7 @@ class ZammadMCPServer:
         cwd_env = Path.cwd() / ".env"
         if cwd_env.exists():
             load_dotenv(cwd_env)
-            logger.info(f"Loaded environment from {cwd_env}")
+            logger.info("Loaded environment from %s", cwd_env)
 
         # Then, try to load from .envrc if it exists and convert to .env format
         envrc_path = Path.cwd() / ".envrc"
@@ -94,7 +94,7 @@ class ZammadMCPServer:
 
             # Test connection
             current_user = self.client.get_current_user()
-            logger.info(f"Connected as: {current_user.get('email', 'Unknown')}")
+            logger.info("Connected as: %s", current_user.get('email', 'Unknown'))
         except Exception:
             logger.exception("Failed to initialize Zammad client")
             raise
@@ -306,7 +306,13 @@ class ZammadMCPServer:
                 Exception: If attachment download fails (propagated to MCP framework)
             """
             client = self.get_client()
-            attachment_data = client.download_attachment(ticket_id, article_id, attachment_id)
+            try:
+                attachment_data = client.download_attachment(ticket_id, article_id, attachment_id)
+            except Exception as e:
+                raise Exception(
+                    f"Failed to download attachment {attachment_id} for ticket {ticket_id} "
+                    f"article {article_id}: {str(e)}"
+                ) from e
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")
 
@@ -477,7 +483,7 @@ class ZammadMCPServer:
                 logger.warning("Date filtering not yet implemented - ignoring date parameters")
 
             group_filter_msg = f" for group '{group}'" if group else ""
-            logger.info(f"Starting ticket statistics calculation{group_filter_msg}")
+            logger.info("Starting ticket statistics calculation%s", group_filter_msg)
 
             # Initialize counters
             total_count = 0
@@ -532,16 +538,23 @@ class ZammadMCPServer:
                 # Safety check to prevent infinite loops
                 if page > MAX_PAGES_FOR_TICKET_SCAN:  # Safety limit to prevent infinite loops
                     logger.warning(
-                        f"Reached maximum page limit ({MAX_PAGES_FOR_TICKET_SCAN} pages), "
-                        f"processed {total_count} tickets - some tickets may not be counted"
+                        "Reached maximum page limit (%s pages), processed %s tickets - some tickets may not be counted",
+                        MAX_PAGES_FOR_TICKET_SCAN,
+                        total_count,
                     )
                     break
 
             elapsed_time = time.time() - start_time
             logger.info(
-                f"Ticket statistics complete: processed {total_count} tickets "
-                f"across {page - 1} pages in {elapsed_time:.2f}s "
-                f"(open={open_count}, closed={closed_count}, pending={pending_count}, escalated={escalated_count})"
+                "Ticket statistics complete: processed %s tickets across %s pages in %.2fs "
+                "(open=%s, closed=%s, pending=%s, escalated=%s)",
+                total_count,
+                page - 1,
+                elapsed_time,
+                open_count,
+                closed_count,
+                pending_count,
+                escalated_count,
             )
 
             return TicketStats(
@@ -797,7 +810,40 @@ server = ZammadMCPServer()
 mcp = server.mcp
 
 
+def _configure_logging() -> None:
+    """Configure logging from LOG_LEVEL environment variable.
+
+    Reads LOG_LEVEL environment variable (default: INFO) and configures
+    the root logger. Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL.
+    """
+    log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+    valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+
+    if log_level_str not in valid_levels:
+        invalid_level = log_level_str  # Store before resetting
+        log_level_str = "INFO"
+        logger.warning(
+            "Invalid LOG_LEVEL '%s', defaulting to INFO. Valid values: %s",
+            invalid_level,
+            ", ".join(valid_levels),
+        )
+
+    log_level = getattr(logging, log_level_str)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+
+    # Add handler if none exists
+    if not root_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            )
+        )
+        root_logger.addHandler(handler)
+
+
 def main() -> None:
     """Main entry point for the server."""
-    logging.basicConfig(level=logging.INFO)
+    _configure_logging()
     mcp.run()
