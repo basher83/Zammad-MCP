@@ -157,22 +157,22 @@ async def test_server_initialization(mock_zammad_client):
 
     tool_names = [tool.name for tool in tools]
     expected_tools = [
-        "search_tickets",
-        "get_ticket",
-        "create_ticket",
-        "update_ticket",
-        "add_article",
-        "get_user",
-        "search_users",
-        "get_organization",
-        "search_organizations",
-        "list_groups",
-        "list_ticket_states",
-        "list_ticket_priorities",
-        "get_ticket_stats",
-        "add_ticket_tag",
-        "remove_ticket_tag",
-        "get_current_user",
+        "zammad_search_tickets",
+        "zammad_get_ticket",
+        "zammad_create_ticket",
+        "zammad_update_ticket",
+        "zammad_add_article",
+        "zammad_get_user",
+        "zammad_search_users",
+        "zammad_get_organization",
+        "zammad_search_organizations",
+        "zammad_list_groups",
+        "zammad_list_ticket_states",
+        "zammad_list_ticket_priorities",
+        "zammad_get_ticket_stats",
+        "zammad_add_ticket_tag",
+        "zammad_remove_ticket_tag",
+        "zammad_get_current_user",
     ]
     for tool in expected_tools:
         assert tool in tool_names
@@ -787,6 +787,21 @@ def test_get_ticket_stats_tool(mock_zammad_client):
     # Set up paginated responses - page 1, page 2, then empty page
     mock_instance.search_tickets.side_effect = [page1_tickets, page2_tickets, []]
 
+    # Mock ticket states for state type mapping
+    mock_instance.get_ticket_states.return_value = [
+        {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {
+            "id": 4,
+            "name": "pending reminder",
+            "state_type_id": 4,
+            "created_at": "2024-01-01",
+            "updated_at": "2024-01-01",
+        },
+        {"id": 5, "name": "pending close", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+    ]
+
     server_inst = ZammadMCPServer()
     server_inst.client = mock_instance
 
@@ -795,10 +810,10 @@ def test_get_ticket_stats_tool(mock_zammad_client):
     test_tools = {}
     original_tool = server_inst.mcp.tool
 
-    def capture_tool(name: str | None = None) -> Callable[[Callable[..., Any]], Any]:
+    def capture_tool(name: str | None = None, **kwargs: Any) -> Callable[[Callable[..., Any]], Any]:
         def decorator(func: Callable[..., Any]) -> Any:
             test_tools[func.__name__ if name is None else name] = func
-            return original_tool(name)(func)
+            return original_tool(name, **kwargs)(func)
 
         return decorator
 
@@ -807,8 +822,8 @@ def test_get_ticket_stats_tool(mock_zammad_client):
     server_inst._setup_system_tools()
 
     # Test basic stats
-    assert "get_ticket_stats" in test_tools
-    stats = test_tools["get_ticket_stats"]()
+    assert "zammad_get_ticket_stats" in test_tools
+    stats = test_tools["zammad_get_ticket_stats"]()
 
     assert stats.total_count == 6
     assert stats.open_count == 4  # new + open tickets
@@ -826,7 +841,7 @@ def test_get_ticket_stats_tool(mock_zammad_client):
     mock_instance.reset_mock()
     mock_instance.search_tickets.side_effect = [page1_tickets, []]  # One page then empty
 
-    stats = test_tools["get_ticket_stats"](group="Support")
+    stats = test_tools["zammad_get_ticket_stats"](group="Support")
 
     assert stats.total_count == 3
     assert stats.open_count == 3
@@ -840,7 +855,7 @@ def test_get_ticket_stats_tool(mock_zammad_client):
     mock_instance.search_tickets.side_effect = [page1_tickets + page2_tickets, []]
 
     with patch("mcp_zammad.server.logger") as mock_logger:
-        stats = test_tools["get_ticket_stats"](start_date="2024-01-01", end_date="2024-12-31")
+        stats = test_tools["zammad_get_ticket_stats"](start_date="2024-01-01", end_date="2024-12-31")
 
         assert stats.total_count == 6
         assert mock_instance.search_tickets.call_count == 2
@@ -1243,10 +1258,10 @@ def test_tool_implementations_are_called():
     # We need to actually invoke the tools to cover the implementation lines
     tool_manager = server.mcp._tool_manager
 
-    # Find and call search_tickets tool
+    # Find and call zammad_search_tickets tool
     search_tickets_tool = None
     for tool in tool_manager._tools.values():
-        if tool.name == "search_tickets":
+        if tool.name == "zammad_search_tickets":
             search_tickets_tool = tool.fn
             break
 
@@ -1261,15 +1276,30 @@ def test_get_ticket_stats_pagination():
     server = ZammadMCPServer()
     server.client = Mock()
 
+    # Mock ticket states for state type mapping
+    server.client.get_ticket_states.return_value = [
+        {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {
+            "id": 4,
+            "name": "pending reminder",
+            "state_type_id": 4,
+            "created_at": "2024-01-01",
+            "updated_at": "2024-01-01",
+        },
+        {"id": 5, "name": "pending close", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+    ]
+
     # Capture tools as they're registered
     test_tools = {}
 
     original_tool = server.mcp.tool
 
-    def capture_tool(name: str | None = None) -> Callable[[Callable[..., Any]], Any]:
+    def capture_tool(name: str | None = None, **kwargs: Any) -> Callable[[Callable[..., Any]], Any]:
         def decorator(func: Callable[..., Any]) -> Any:
             test_tools[func.__name__ if name is None else name] = func
-            return original_tool(name)(func)
+            return original_tool(name, **kwargs)(func)
 
         return decorator
 
@@ -1292,8 +1322,8 @@ def test_get_ticket_stats_pagination():
     server.client.search_tickets.side_effect = [page1_tickets, page2_tickets, page3_tickets]
 
     # Get the captured tool and call it
-    assert "get_ticket_stats" in test_tools
-    result = test_tools["get_ticket_stats"]()
+    assert "zammad_get_ticket_stats" in test_tools
+    result = test_tools["zammad_get_ticket_stats"]()
 
     # Verify pagination calls
     assert server.client.search_tickets.call_count == 3
@@ -1319,10 +1349,10 @@ def test_get_ticket_stats_with_date_warning():
 
     original_tool = server.mcp.tool
 
-    def capture_tool(name: str | None = None) -> Callable[[Callable[..., Any]], Any]:
+    def capture_tool(name: str | None = None, **kwargs: Any) -> Callable[[Callable[..., Any]], Any]:
         def decorator(func: Callable[..., Any]) -> Any:
             test_tools[func.__name__ if name is None else name] = func
-            return original_tool(name)(func)
+            return original_tool(name, **kwargs)(func)
 
         return decorator
 
@@ -1335,8 +1365,8 @@ def test_get_ticket_stats_with_date_warning():
 
     with patch("mcp_zammad.server.logger") as mock_logger:
         # Get the captured tool
-        assert "get_ticket_stats" in test_tools
-        stats = test_tools["get_ticket_stats"](start_date="2024-01-01", end_date="2024-12-31")
+        assert "zammad_get_ticket_stats" in test_tools
+        stats = test_tools["zammad_get_ticket_stats"](start_date="2024-01-01", end_date="2024-12-31")
 
         assert stats.total_count == 0
         mock_logger.warning.assert_called_with("Date filtering not yet implemented - ignoring date parameters")

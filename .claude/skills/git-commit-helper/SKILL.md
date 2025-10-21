@@ -21,7 +21,7 @@ git diff --staged
 
 Follow conventional commits format:
 
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]
@@ -42,7 +42,8 @@ Follow conventional commits format:
 ### Examples
 
 **Feature commit:**
-```
+
+```text
 feat(auth): add JWT authentication
 
 Implement JWT-based authentication system with:
@@ -52,7 +53,8 @@ Implement JWT-based authentication system with:
 ```
 
 **Bug fix:**
-```
+
+```text
 fix(api): handle null values in user profile
 
 Prevent crashes when user profile fields are null.
@@ -60,7 +62,8 @@ Add null checks before accessing nested properties.
 ```
 
 **Refactor:**
-```
+
+```text
 refactor(database): simplify query builder
 
 Extract common query patterns into reusable functions.
@@ -88,6 +91,7 @@ git diff --staged path/to/file
 ## Commit message guidelines
 
 **DO:**
+
 - Use imperative mood ("add feature" not "added feature")
 - Keep first line under 50 characters
 - Capitalize first letter
@@ -95,6 +99,7 @@ git diff --staged path/to/file
 - Explain WHY not just WHAT in body
 
 **DON'T:**
+
 - Use vague messages like "update" or "fix stuff"
 - Include technical implementation details in summary
 - Write paragraphs in summary line
@@ -104,7 +109,7 @@ git diff --staged path/to/file
 
 When committing multiple related changes:
 
-```
+```text
 refactor(core): restructure authentication module
 
 - Move auth logic from controllers to service layer
@@ -118,14 +123,17 @@ Breaking change: Auth service now requires config object
 ## Scope examples
 
 **Frontend:**
+
 - `feat(ui): add loading spinner to dashboard`
 - `fix(form): validate email format`
 
 **Backend:**
+
 - `feat(api): add user profile endpoint`
 - `fix(db): resolve connection pool leak`
 
 **Infrastructure:**
+
 - `chore(ci): update Node version to 20`
 - `feat(docker): add multi-stage build`
 
@@ -133,7 +141,7 @@ Breaking change: Auth service now requires config object
 
 Indicate breaking changes clearly:
 
-```
+```text
 feat(api)!: restructure API response format
 
 BREAKING CHANGE: All API responses now follow JSON:API spec
