@@ -16,6 +16,7 @@ from .client import ZammadClient
 from .models import (
     Article,
     Attachment,
+    AttachmentDownloadError,
     Group,
     Organization,
     TagOperationResult,
@@ -303,15 +304,17 @@ class ZammadMCPServer:
                 Base64-encoded attachment content
 
             Raises:
-                Exception: If attachment download fails (propagated to MCP framework)
+                AttachmentDownloadError: If attachment download fails
             """
             client = self.get_client()
             try:
                 attachment_data = client.download_attachment(ticket_id, article_id, attachment_id)
             except Exception as e:
-                raise Exception(
-                    f"Failed to download attachment {attachment_id} for ticket {ticket_id} "
-                    f"article {article_id}: {str(e)}"
+                raise AttachmentDownloadError(
+                    ticket_id=ticket_id,
+                    article_id=article_id,
+                    attachment_id=attachment_id,
+                    original_error=e,
                 ) from e
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")

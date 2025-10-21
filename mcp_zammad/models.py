@@ -6,6 +6,35 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+class AttachmentDownloadError(Exception):
+    """Exception raised when attachment download fails.
+
+    Attributes:
+        ticket_id: The ticket ID
+        article_id: The article ID
+        attachment_id: The attachment ID
+        message: Explanation of the error
+    """
+
+    def __init__(
+        self,
+        ticket_id: int,
+        article_id: int,
+        attachment_id: int,
+        original_error: Exception,
+    ) -> None:
+        """Initialize the exception with context."""
+        self.ticket_id = ticket_id
+        self.article_id = article_id
+        self.attachment_id = attachment_id
+        self.original_error = original_error
+        self.message = (
+            f"Failed to download attachment {attachment_id} for ticket {ticket_id} "
+            f"article {article_id}: {str(original_error)}"
+        )
+        super().__init__(self.message)
+
+
 class UserBrief(BaseModel):
     """Brief user information."""
 
