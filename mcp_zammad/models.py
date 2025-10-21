@@ -30,7 +30,7 @@ class AttachmentDownloadError(Exception):
         self.original_error = original_error
         self.message = (
             f"Failed to download attachment {attachment_id} for ticket {ticket_id} "
-            f"article {article_id}: {str(original_error)}"
+            f"article {article_id}: {original_error!s}"
         )
         super().__init__(self.message)
 
