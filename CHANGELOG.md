@@ -15,12 +15,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **BREAKING**: Removed legacy wrapper functions from `mcp_zammad.server` module (v1.0.0)
+- Code quality improvements based on CodeRabbit analysis
+  - Convert f-string logging to parameterized (lazy) logging for better performance
+  - Add configurable LOG_LEVEL environment variable with validation
+  - Improve error handling for attachment downloads with contextual messages
+  - Fix TagOperationResult model to forbid extra fields (strict Pydantic validation)
+  - Fix tag operation methods to return proper dict format
+
+### Breaking Changes
+
+- **Removed legacy wrapper functions from `mcp_zammad.server` module** (v1.0.0)
   - All 19 legacy wrapper functions have been removed
   - Tests migrated to use `ZammadMCPServer` class directly
   - Removed ~320 lines of duplicated code
-  - If you were importing functions like `initialize()`, `search_tickets()`, etc. from `mcp_zammad.server`, you must now use the `ZammadMCPServer` class
-  - Migration example:
+  - **Migration steps**: If you were importing functions like `initialize()`, `search_tickets()`, etc. from `mcp_zammad.server`, you must now use the `ZammadMCPServer` class:
+
+    1. Instantiate `ZammadMCPServer()`
+    2. Call `await server.initialize()` to set up the client
+    3. Use `server.get_client()` to access the Zammad client
+    4. Call methods directly on the client instance
+
+    **Example:**
 
     ```python
     # Before (legacy pattern):
@@ -37,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     tickets = [Ticket(**t) for t in tickets_data]
     ```
 
-  - For more migration patterns, see docs/PHASE3_MIGRATION_PLAN.md or git history before v1.0.0
+  - For detailed migration patterns, see [PHASE3_MIGRATION_PLAN.md](docs/PHASE3_MIGRATION_PLAN.md)
 
 ### Dependencies
 
