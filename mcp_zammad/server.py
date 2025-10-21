@@ -95,7 +95,7 @@ class ZammadMCPServer:
 
             # Test connection
             current_user = self.client.get_current_user()
-            logger.info("Connected as: %s", current_user.get("email", "Unknown"))
+            logger.info("Connected as user ID: %s", current_user.get("id", "unknown"))
         except Exception:
             logger.exception("Failed to initialize Zammad client")
             raise
