@@ -34,6 +34,13 @@ logger = logging.getLogger(__name__)
 MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
 
+# Zammad state type IDs (from Zammad API)
+STATE_TYPE_NEW = 1
+STATE_TYPE_OPEN = 2
+STATE_TYPE_CLOSED = 3
+STATE_TYPE_PENDING_REMINDER = 4
+STATE_TYPE_PENDING_CLOSE = 5
+
 
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
@@ -553,6 +560,8 @@ class ZammadMCPServer:
             del self._states_cache
         if hasattr(self, "_priorities_cache"):
             del self._priorities_cache
+        if hasattr(self, "_state_type_mapping"):
+            del self._state_type_mapping
 
     @staticmethod
     def _extract_state_name(ticket: dict[str, Any]) -> str:
@@ -587,8 +596,18 @@ class ZammadMCPServer:
             or ticket.get("update_escalation_at")
         )
 
-    @staticmethod
-    def _categorize_ticket_state(state_name: str) -> tuple[int, int, int]:
+    def _get_state_type_mapping(self) -> dict[str, int]:
+        """Get mapping of state names to state_type_id.
+
+        Returns:
+            Dictionary mapping state name to state_type_id
+        """
+        if not hasattr(self, "_state_type_mapping"):
+            states = self._get_cached_states()
+            self._state_type_mapping = {state.name: state.state_type_id for state in states}
+        return self._state_type_mapping
+
+    def _categorize_ticket_state(self, state_name: str) -> tuple[int, int, int]:
         """Categorize a ticket state into open/closed/pending counters.
 
         Args:
@@ -596,12 +615,22 @@ class ZammadMCPServer:
 
         Returns:
             Tuple of (open_increment, closed_increment, pending_increment)
+
+        Note:
+            Uses state_type_id from Zammad instead of string matching:
+            - 1 (new), 2 (open) -> open
+            - 3 (closed) -> closed
+            - 4 (pending reminder), 5 (pending close) -> pending
         """
-        if state_name in ["new", "open"]:
+        state_type_mapping = self._get_state_type_mapping()
+        state_type_id = state_type_mapping.get(state_name, 0)
+
+        # Categorize based on state_type_id
+        if state_type_id in [STATE_TYPE_NEW, STATE_TYPE_OPEN]:
             return (1, 0, 0)
-        if state_name == "closed":
+        if state_type_id == STATE_TYPE_CLOSED:
             return (0, 1, 0)
-        if "pending" in state_name:
+        if state_type_id in [STATE_TYPE_PENDING_REMINDER, STATE_TYPE_PENDING_CLOSE]:
             return (0, 0, 1)
         return (0, 0, 0)
 

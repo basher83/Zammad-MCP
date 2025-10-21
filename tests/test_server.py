@@ -787,6 +787,21 @@ def test_get_ticket_stats_tool(mock_zammad_client):
     # Set up paginated responses - page 1, page 2, then empty page
     mock_instance.search_tickets.side_effect = [page1_tickets, page2_tickets, []]
 
+    # Mock ticket states for state type mapping
+    mock_instance.get_ticket_states.return_value = [
+        {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {
+            "id": 4,
+            "name": "pending reminder",
+            "state_type_id": 4,
+            "created_at": "2024-01-01",
+            "updated_at": "2024-01-01",
+        },
+        {"id": 5, "name": "pending close", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+    ]
+
     server_inst = ZammadMCPServer()
     server_inst.client = mock_instance
 
@@ -1260,6 +1275,21 @@ def test_get_ticket_stats_pagination():
     """Test that get_ticket_stats tool uses pagination correctly."""
     server = ZammadMCPServer()
     server.client = Mock()
+
+    # Mock ticket states for state type mapping
+    server.client.get_ticket_states.return_value = [
+        {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {
+            "id": 4,
+            "name": "pending reminder",
+            "state_type_id": 4,
+            "created_at": "2024-01-01",
+            "updated_at": "2024-01-01",
+        },
+        {"id": 5, "name": "pending close", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+    ]
 
     # Capture tools as they're registered
     test_tools = {}
