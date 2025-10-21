@@ -1015,25 +1015,26 @@ def test_resource_error_handling():
     server.client.get_ticket.side_effect = Exception("API Error")
 
     result = test_resources["zammad://ticket/{ticket_id}"](ticket_id="999")
-    assert "Error retrieving ticket 999: API Error" in result
+    assert "Error during retrieving ticket 999" in result
+    assert "API Error" in result
 
     # Test user resource error
     server.client.get_user.side_effect = Exception("User not found")
 
     result = test_resources["zammad://user/{user_id}"](user_id="999")
-    assert "Error retrieving user 999: User not found" in result
+    assert "Error: Resource not found during retrieving user 999" in result
 
     # Test org resource error
     server.client.get_organization.side_effect = Exception("Org not found")
 
     result = test_resources["zammad://organization/{org_id}"](org_id="999")
-    assert "Error retrieving organization 999: Org not found" in result
+    assert "Error: Resource not found during retrieving organization 999" in result
 
     # Test queue resource error
     server.client.search_tickets.side_effect = Exception("Queue not found")
 
     result = test_resources["zammad://queue/{group}"](group="nonexistent")
-    assert "Error retrieving queue for group nonexistent: Queue not found" in result
+    assert "Error: Resource not found during retrieving queue for group 'nonexistent'" in result
 
 
 def test_prompt_handlers():
@@ -1267,7 +1268,8 @@ def test_tool_implementations_are_called():
 
     assert search_tickets_tool is not None
     result = search_tickets_tool(query="test")
-    assert len(result) == 1
+    assert isinstance(result, str)
+    assert "Ticket #12345" in result
     server.client.search_tickets.assert_called_once()
 
 
