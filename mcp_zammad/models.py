@@ -4,7 +4,7 @@ import html
 from datetime import date, datetime
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 
 class StrictBaseModel(BaseModel):
@@ -375,7 +375,7 @@ class GetTicketStatsParams(StrictBaseModel):
 
     @field_validator("end_date")
     @classmethod
-    def validate_date_range(cls, v: date | datetime | None, info) -> date | datetime | None:
+    def validate_date_range(cls, v: date | datetime | None, info: ValidationInfo) -> date | datetime | None:
         """Validate that end_date is not before start_date.
 
         TODO: This validation is currently a placeholder since date filtering
