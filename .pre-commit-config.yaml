@@ -33,6 +33,18 @@ repos:
         args: ["--config=auto", "--error", "--no-rewrite-rule-ids"]
         exclude: ^(scripts/|\.claude/skills/)
 
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: "d7a4f7cf4914d3bffb9b83bdbc45fd2a00c91ff9"  # v0.18.1
+    hooks:
+      - id: markdownlint-cli2
+        name: markdownlint-cli2
+        description: "Lint Markdown files with markdownlint-cli2"
+        # Configuration in .markdownlint-cli2.jsonc and .markdownlint.jsonc
+        # Pre-commit level exclusions for performance (avoid passing to hook)
+        exclude: ^(\.claude/|docs/ai-docs/|docs/dev/|\.venv/|node_modules/)
+        # --no-globs: Only lint files passed by pre-commit (not globs from config)
+        args: ["--no-globs"]
+
   - repo: local
     hooks:
       - id: pip-audit

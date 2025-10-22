@@ -17,6 +17,7 @@ This document consolidates recurring feedback from CodeRabbit reviews across mul
 **Severity:** Medium (breaks agent functionality)
 
 **Problem:**
+
 - `total` field set to page count instead of true total
 - `has_more` heuristic unreliable
 - JSON truncation breaks validity
@@ -25,6 +26,7 @@ This document consolidates recurring feedback from CodeRabbit reviews across mul
 See [pagination-patterns.md](./pagination-patterns.md) for complete guide.
 
 **Quick Fix:**
+
 ```python
 response = {
     "items": [...],
@@ -44,11 +46,13 @@ response = {
 **Severity:** Low (style/consistency issue)
 
 **Problem:**
+
 - Using `List[str]` instead of `list[str]`
 - Using `Optional[T]` instead of `T | None`
 - Using `Union[A, B]` instead of `A | B`
 
 **Solution:**
+
 ```python
 # ✅ Modern (Python 3.10+)
 items: list[str]
@@ -77,11 +81,13 @@ result: Union[int, str]
 Parameter names shadow built-ins or type names.
 
 **Common violations:**
+
 - `type` (built-in) → use `article_type`, `resource_type`
 - `id` (built-in) → use `ticket_id`, `user_id`
 - `format` (built-in) → use `response_format`
 
 **Solution:**
+
 ```python
 # ❌ BAD
 def create_article(type: str, id: int):
@@ -103,6 +109,7 @@ def create_article(article_type: str, ticket_id: int):
 Hard-coded `CHARACTER_LIMIT = 25000` requires code changes for different deployments.
 
 **Solution:**
+
 ```python
 CHARACTER_LIMIT = int(os.getenv("ZAMMAD_MCP_CHARACTER_LIMIT", "25000"))
 ```
@@ -123,6 +130,7 @@ Catching `Exception` without specificity or re-raising.
 > "Do not catch blind exception: `Exception` (BLE001)"
 
 **Acceptable Usage:**
+
 ```python
 # ✅ GOOD: Catch, handle, re-raise
 try:
@@ -156,15 +164,18 @@ except Exception:
 Functions with high cyclomatic complexity (> 8-10) are hard to maintain and test.
 
 **CodeRabbit Warnings:**
+
 - `_handle_api_error`: complexity 10
 - `_setup_ticket_tools`: complexity 24
 
 **Solution:**
+
 - Extract error-specific handlers into separate functions
 - Break large setup methods into smaller helpers
 - Use dictionaries/mappings instead of long if/elif chains
 
 **Example Refactor:**
+
 ```python
 # ❌ High complexity
 def _handle_api_error(e, context):
@@ -233,6 +244,7 @@ CodeRabbit has a "Learnings" feature that tracks project-specific patterns:
    - Source: CLAUDE.md
 
 **How to leverage:**
+
 - CodeRabbit auto-applies these learnings in reviews
 - Stored in CodeRabbit's knowledge base
 - Referenced in path_instructions (.coderabbit.yaml)
@@ -247,12 +259,14 @@ CodeRabbit has a "Learnings" feature that tracks project-specific patterns:
 **Impact:** Failed API calls, poor UX
 
 **Solution Implemented:**
+
 1. Show both ID and number in markdown: `Ticket #65003` + `ID: 3`
 2. Update tool docstrings with clarification
 3. Add helpful error messages when ticket not found
 
 **PR:** #102
 **Lessons:**
+
 - UX issues compound over time
 - Proactive documentation prevents errors
 - Error messages are opportunities to educate
@@ -264,12 +278,14 @@ CodeRabbit has a "Learnings" feature that tracks project-specific patterns:
 **Focus:** Response formats, pagination, agent optimization
 
 **Key Learnings:**
+
 1. Agents need both JSON (programmatic) and markdown (readable) formats
 2. Pagination metadata must be accurate for agent decision-making
 3. Error messages should guide agents toward correct usage
 4. Tool names should reflect agent mental models
 
 **Implemented:**
+
 - `ResponseFormat` enum with JSON/markdown support
 - Proper pagination metadata
 - Actionable error handling
@@ -284,12 +300,14 @@ CodeRabbit has a "Learnings" feature that tracks project-specific patterns:
 **Breaking Change:** Tools now accept Pydantic models instead of kwargs
 
 **Benefits:**
+
 - Early validation before API calls
 - Better error messages
 - Enforce constraints (page >= 1, per_page in [1..100])
 - Type safety
 
 **Migration Pattern:**
+
 ```python
 # Before
 result = tool("zammad_search_tickets", query="test", page=1)
@@ -307,11 +325,13 @@ result = tool("zammad_search_tickets", params=params)
 ### Ruff (Python linter)
 
 **Most Common:**
+
 - `RUF100`: Unused noqa directive
 - `BLE001`: Do not catch blind exception
 - `PLC0415`: Import should be at top-level (tests)
 
 **Configuration:**
+
 - Line length: 120 characters
 - Target: Python 3.10+
 - Format + lint in one tool
@@ -319,6 +339,7 @@ result = tool("zammad_search_tickets", params=params)
 ### GitHub Check: Codacy
 
 **Common Warnings:**
+
 - Cyclomatic complexity > 8
 - Function length > 50 lines
 - Too many parameters
@@ -328,6 +349,7 @@ result = tool("zammad_search_tickets", params=params)
 ### LanguageTool (Documentation)
 
 **Common:**
+
 - "GitHub" capitalization (not "github")
 - Markdown formatting consistency
 - Prose clarity improvements
@@ -359,6 +381,7 @@ result = tool("zammad_search_tickets", params=params)
 ## 🔄 Update Process
 
 **Monthly Review (30 minutes):**
+
 1. Review last 10 merged PRs
 2. Extract new patterns from CodeRabbit comments
 3. Update this file with new learnings
@@ -366,6 +389,7 @@ result = tool("zammad_search_tickets", params=params)
 5. Adjust pre-PR checklist
 
 **When to Update:**
+
 - New CodeRabbit pattern appears 2+ times
 - Major PR with significant feedback
 - New MCP best practice discovered
@@ -385,6 +409,7 @@ result = tool("zammad_search_tickets", params=params)
 ## 🎓 Learning from CodeRabbit
 
 **Best Practices:**
+
 1. **Don't just fix** - understand the pattern
 2. **Document learnings** - update this file
 3. **Share knowledge** - update CLAUDE.md and .coderabbit.yaml
@@ -392,6 +417,7 @@ result = tool("zammad_search_tickets", params=params)
 5. **Track metrics** - measure improvement
 
 **When CodeRabbit comments:**
+
 1. Read the full comment + rationale
 2. Fix the immediate issue
 3. Search codebase for similar patterns
@@ -403,6 +429,7 @@ result = tool("zammad_search_tickets", params=params)
 ## 🔮 Future Automation
 
 **Planned (Phase 3):**
+
 - Script to extract CodeRabbit comments from PRs
 - Auto-generate updates to this file
 - Trend analysis of feedback frequency

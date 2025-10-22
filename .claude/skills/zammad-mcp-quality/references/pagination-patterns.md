@@ -54,11 +54,13 @@ def _format_tickets_json(tickets: list[Ticket], total: int | None, page: int, pe
 ```
 
 **When to use None:**
+
 - Zammad API doesn't provide total count
 - Expensive to compute total
 - Streaming/dynamic results
 
 **When total is None, include metadata:**
+
 ```python
 "_meta": {
     "total_unknown": True,
@@ -85,6 +87,7 @@ def _format_tickets_json(tickets: list[Ticket], total: int | None, page: int, pe
 ```
 
 **For complete lists (groups, states, priorities):**
+
 ```python
 "has_more": False,  # Always false for cached complete lists
 "next_page": None,

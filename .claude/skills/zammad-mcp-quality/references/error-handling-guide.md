@@ -64,6 +64,7 @@ def zammad_get_ticket(params: GetTicketParams) -> Ticket:
 ```
 
 **Key Elements:**
+
 1. **Docstring guidance**: Prevents mistake before it happens
 2. **Error detection**: Catches "not found" pattern
 3. **Educational message**: Explains id vs number
@@ -169,7 +170,8 @@ class TicketSearchParams(BaseModel):
 ```
 
 **Error raised:**
-```
+
+```text
 ValidationError: Query must be at least 2 characters. Use specific search terms for better results.
 ```
 

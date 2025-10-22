@@ -80,6 +80,7 @@ def process_ticket(ticket: Ticket, ticket_data: dict):
 ```
 
 **Common shadowing fixes:**
+
 - `type` → `article_type`, `resource_type`, `entity_type`
 - `id` → `ticket_id`, `user_id`, `org_id`
 - `format` → `response_format`, `output_format`

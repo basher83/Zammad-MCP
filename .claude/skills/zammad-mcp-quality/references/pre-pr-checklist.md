@@ -32,6 +32,7 @@ uv run pytest
 ## ✅ Code Quality Checks
 
 ### Type Annotations
+
 → *See [type-annotation-standards.md](./type-annotation-standards.md)*
 
 - [ ] All functions have return type hints
@@ -43,6 +44,7 @@ uv run pytest
 - [ ] No parameter shadowing (`type` → `article_type`, `id` → `ticket_id`, `format` → `response_format`)
 
 **Quick check:**
+
 ```bash
 # Search for legacy typing imports
 rg "from typing import (List|Dict|Optional|Union)" mcp_zammad/
@@ -51,6 +53,7 @@ rg "from typing import (List|Dict|Optional|Union)" mcp_zammad/
 ---
 
 ### Pagination (if applicable)
+
 → *See [pagination-patterns.md](./pagination-patterns.md)*
 
 - [ ] `total` field shows true total (or `None` if unknown), NOT page count
@@ -61,6 +64,7 @@ rg "from typing import (List|Dict|Optional|Union)" mcp_zammad/
 - [ ] Documented in docstring that `total` may be `None`
 
 **Quick check:**
+
 ```python
 # Verify pagination metadata structure
 response = {
@@ -74,6 +78,7 @@ response = {
 ---
 
 ### Error Handling
+
 → *See [error-handling-guide.md](./error-handling-guide.md)*
 
 - [ ] Error messages are actionable (tell user what to do next)
@@ -84,6 +89,7 @@ response = {
 - [ ] Document common errors in tool docstrings
 
 **Template:**
+
 ```python
 raise ValueError(
     f"{WHAT_FAILED}. "
@@ -102,10 +108,11 @@ raise ValueError(
 - [ ] Returns appropriate type (`str`, Pydantic model, etc.)
 - [ ] Includes comprehensive docstring with Args/Returns
 - [ ] Tool name follows naming convention (`zammad_` prefix)
-- [ ] Uses dependency injection (` get_client()`)
+- [ ] Uses dependency injection (`get_client()`)
 - [ ] Handles errors gracefully with actionable messages
 
 **Example:**
+
 ```python
 @mcp.tool(
     annotations={
@@ -138,6 +145,7 @@ def zammad_search_tickets(params: TicketSearchParams) -> str:
 - [ ] Docstring explains model purpose
 
 **Example:**
+
 ```python
 class TicketSearchParams(BaseModel):
     """Parameters for searching tickets."""
@@ -169,6 +177,7 @@ class TicketSearchParams(BaseModel):
 - [ ] Coverage maintained: `uv run pytest --cov=mcp_zammad`
 
 **Test organization:**
+
 1. Fixtures at top
 2. Basic functionality tests
 3. Parametrized tests
@@ -285,6 +294,7 @@ Once all checks pass:
 ## 📚 Reference Documents
 
 For detailed guidance:
+
 - [pagination-patterns.md](./pagination-patterns.md)
 - [error-handling-guide.md](./error-handling-guide.md)
 - [type-annotation-standards.md](./type-annotation-standards.md)

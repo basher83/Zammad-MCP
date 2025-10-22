@@ -8,6 +8,7 @@ description: Quality assurance and CodeRabbit learning system for Zammad MCP dev
 ## Purpose
 
 Ensure consistent, high-quality contributions to the Zammad MCP project by:
+
 1. **Preventing recurring issues** flagged by CodeRabbit
 2. **Providing actionable checklists** for self-review
 3. **Capturing project learnings** in accessible references
@@ -16,6 +17,7 @@ Ensure consistent, high-quality contributions to the Zammad MCP project by:
 ## When to Use This Skill
 
 Trigger this skill when:
+
 - **Before creating a PR** - Self-review with checklist
 - **Implementing MCP tools** - Follow established patterns
 - **Adding pagination** - Use correct metadata structure
@@ -42,6 +44,7 @@ When starting a new feature, review relevant references:
 ### 2. During Development
 
 Keep patterns in mind while coding:
+
 - Use Python 3.10+ type syntax
 - Provide actionable error messages
 - Structure pagination metadata correctly
@@ -56,6 +59,7 @@ Keep patterns in mind while coding:
 This takes 5-10 minutes but reduces review iterations by 60-70%.
 
 **Quick quality check:**
+
 ```bash
 # From project root
 ./scripts/quality-check.sh && uv run pytest --cov=mcp_zammad
@@ -101,6 +105,7 @@ Consolidated feedback from PR reviews. Living knowledge base.
 
 **[pagination-patterns.md](./references/pagination-patterns.md)**
 Complete guide to pagination in MCP servers:
+
 - Required metadata fields
 - Common mistakes & fixes
 - JSON truncation that preserves validity
@@ -108,6 +113,7 @@ Complete guide to pagination in MCP servers:
 
 **[error-handling-guide.md](./references/error-handling-guide.md)**
 Actionable error message patterns:
+
 - Error message template
 - HTTP status code mapping
 - ID vs number confusion (Issue #99)
@@ -116,6 +122,7 @@ Actionable error message patterns:
 
 **[type-annotation-standards.md](./references/type-annotation-standards.md)**
 Python 3.10+ type annotation guide:
+
 - Modern vs legacy syntax
 - Parameter shadowing fixes
 - Pydantic model types
@@ -144,7 +151,7 @@ python scripts/extract_feedback.py --prs 10 --output references/coderabbit-learn
 
 ### Example 1: Before Creating a PR
 
-```
+```text
 User: "I'm ready to create a PR for the new search filter feature"
 
 Claude: Let me help you with pre-PR review using the Zammad MCP Quality skill.
@@ -172,7 +179,7 @@ Let me fix the pagination issue before you create the PR...
 
 ### Example 2: Implementing New Tool
 
-```
+```text
 User: "Add a new tool for managing ticket watchers"
 
 Claude: I'll implement following Zammad MCP patterns from the quality skill.
@@ -192,7 +199,7 @@ Implementing tool with these quality standards...
 
 ### Example 3: Addressing CodeRabbit Feedback
 
-```
+```text
 CodeRabbit: "The 'total' field is set to page count, not true total across all pages."
 
 Claude: Let me check the pagination-patterns.md guide...
@@ -220,11 +227,13 @@ Found 3 other locations with same issue. Fixing all...
 Track these over time to measure skill effectiveness:
 
 ### Leading Indicators
+
 - CodeRabbit comments per PR (Target: < 5)
 - Checklist completion rate (Target: 100%)
 - Pre-commit check pass rate (Target: > 95%)
 
 ### Lagging Indicators
+
 - Issue recurrence rate (same pattern 2+ PRs)
 - Time to first approval (Target: < 1 hour)
 - Test coverage (Target: > 90%)
@@ -236,6 +245,7 @@ Track these over time to measure skill effectiveness:
 ### Update Triggers
 
 Update this skill when:
+
 - CodeRabbit pattern appears 2+ times
 - Major PR with significant feedback
 - New MCP best practice discovered
@@ -254,6 +264,7 @@ Update this skill when:
 ### Contributors
 
 When updating references:
+
 - Use imperative form (not second person)
 - Include code examples (both good and bad)
 - Link to source PRs/issues
@@ -289,16 +300,19 @@ This skill **complements** existing docs:
 **Expected outcomes after skill adoption:**
 
 **Week 1:**
+
 - 60-70% reduction in common CodeRabbit comments
 - Faster PR reviews (fewer iterations)
 - Developers report increased confidence
 
 **Month 1:**
+
 - Comprehensive reference guides for all major patterns
 - Self-documenting knowledge base
 - Measurable reduction in repeated feedback
 
 **Month 3+:**
+
 - Self-improving system with periodic updates
 - New contributor onboarding resource
 - Foundation for automation (Phase 3)
@@ -324,6 +338,7 @@ A: Start with pre-pr-checklist.md - it links to detailed guides as needed.
 ## Future Enhancements (Phase 3)
 
 Planned automation:
+
 - `extract_feedback.py` - Parse CodeRabbit comments from PRs
 - Semi-automated skill updates from PR feedback
 - CI/CD integration for pre-commit validation
