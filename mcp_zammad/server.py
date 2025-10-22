@@ -767,7 +767,7 @@ class ZammadMCPServer:
                 Formatted response in either JSON or Markdown format
             """
             client = self.get_client()
-            users_data = client.search_users(params.query, params.page, params.per_page)
+            users_data = client.search_users(query=params.query, page=params.page, per_page=params.per_page)
             users = [User(**user) for user in users_data]
 
             # Format response
@@ -817,7 +817,7 @@ class ZammadMCPServer:
                 Formatted response in either JSON or Markdown format
             """
             client = self.get_client()
-            orgs_data = client.search_organizations(params.query, params.page, params.per_page)
+            orgs_data = client.search_organizations(query=params.query, page=params.page, per_page=params.per_page)
             orgs = [Organization(**org) for org in orgs_data]
 
             # Format response
