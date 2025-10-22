@@ -448,25 +448,62 @@ def test_create_ticket_tool(mock_zammad_client, ticket_factory):
 
 
 def test_add_article_tool(mock_zammad_client, sample_article_data):
-    """Test the add_article tool."""
+    """Test the add_article tool with ArticleCreate params model."""
     mock_instance, _ = mock_zammad_client
 
     mock_instance.add_article.return_value = sample_article_data
 
     server_inst = ZammadMCPServer()
     server_inst.client = mock_instance
-    client = server_inst.get_client()
 
-    article_data = client.add_article(ticket_id=1, body="New comment", article_type="note", internal=False)
-    result = Article(**article_data)
+    # Capture tools
+    test_tools: dict[str, Any] = {}
+    original_tool = server_inst.mcp.tool
+
+    def capture_tool(name: str | None = None, **kwargs: Any) -> Callable[[Callable[..., Any]], Any]:
+        def decorator(func: Callable[..., Any]) -> Any:
+            test_tools[func.__name__ if name is None else name] = func
+            return original_tool(name, **kwargs)(func)
+
+        return decorator
+
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Test with ArticleCreate params using Enum values
+    from mcp_zammad.models import ArticleCreate, ArticleType, ArticleSender
+
+    params = ArticleCreate(ticket_id=1, body="New comment", type=ArticleType.NOTE, sender=ArticleSender.AGENT)
+    result = test_tools["zammad_add_article"](params)
 
     assert result.body == "Test article"
     assert result.type == "note"
 
-    # Client method doesn't pass sender (it's set by the API wrapper)
+    # Verify the client was called with correct params
     mock_instance.add_article.assert_called_once_with(
-        ticket_id=1, body="New comment", article_type="note", internal=False
+        ticket_id=1, article_type="note", body="New comment", internal=False, sender="Agent"
     )
+
+
+def test_add_article_invalid_type():
+    """Test that ArticleCreate rejects invalid article types."""
+    from mcp_zammad.models import ArticleCreate
+
+    # Test invalid article type
+    with pytest.raises(Exception) as exc_info:  # Pydantic ValidationError
+        ArticleCreate(ticket_id=1, body="test", type="invalid_type")
+    assert "validation" in str(exc_info.value).lower()
+
+
+def test_add_article_invalid_sender():
+    """Test that ArticleCreate rejects invalid sender types."""
+    from mcp_zammad.models import ArticleCreate
+
+    # Test invalid sender
+    with pytest.raises(Exception) as exc_info:  # Pydantic ValidationError
+        ArticleCreate(ticket_id=1, body="test", sender="InvalidSender")
+    assert "validation" in str(exc_info.value).lower()
 
 
 def test_get_user_tool(mock_zammad_client, sample_user_data):
