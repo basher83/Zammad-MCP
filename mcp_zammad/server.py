@@ -18,6 +18,8 @@ from .client import ZammadClient
 from .models import (
     Article,
     ArticleCreate,
+    ArticleSender,
+    ArticleType,
     Attachment,
     AttachmentDownloadError,
     DownloadAttachmentParams,
@@ -583,22 +585,14 @@ class ZammadMCPServer:
 
             Returns:
                 The created article
-
-            Raises:
-                ValueError: If article_type or sender are invalid
             """
-            # Validate article_type and sender
-            valid_types = {"note", "email", "phone"}
-            if params.type not in valid_types:
-                raise ValueError(f"article_type must be one of {sorted(valid_types)}")
-            valid_senders = {"Agent", "Customer", "System"}
-            if params.sender not in valid_senders:
-                raise ValueError(f"sender must be one of {sorted(valid_senders)}")
-
             client = self.get_client()
             # Extract ticket_id and type separately to avoid duplicate kwargs
+            # Convert enum values to strings for API call
             article_params = params.model_dump(exclude={"ticket_id", "type"})
-            article_data = client.add_article(ticket_id=params.ticket_id, article_type=params.type, **article_params)
+            article_data = client.add_article(
+                ticket_id=params.ticket_id, article_type=params.type.value, **article_params
+            )
 
             return Article(**article_data)
 

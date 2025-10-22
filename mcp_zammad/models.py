@@ -19,6 +19,34 @@ class ResponseFormat(str, Enum):
     JSON = "json"
 
 
+class ArticleType(str, Enum):
+    """Article type enumeration.
+
+    Attributes:
+        NOTE: Internal note
+        EMAIL: Email communication
+        PHONE: Phone call record
+    """
+
+    NOTE = "note"
+    EMAIL = "email"
+    PHONE = "phone"
+
+
+class ArticleSender(str, Enum):
+    """Article sender type enumeration.
+
+    Attributes:
+        AGENT: Sent by an agent
+        CUSTOMER: Sent by a customer
+        SYSTEM: System-generated
+    """
+
+    AGENT = "Agent"
+    CUSTOMER = "Customer"
+    SYSTEM = "System"
+
+
 class AttachmentDownloadError(Exception):
     """Exception raised when attachment download fails.
 
@@ -228,9 +256,9 @@ class ArticleCreate(BaseModel):
 
     ticket_id: int = Field(description="Ticket ID to add article to", gt=0)
     body: str = Field(description="Article body content", max_length=100000)
-    type: str = Field(default="note", description="Article type (note, email, phone)", max_length=50)
+    type: ArticleType = Field(default=ArticleType.NOTE, description="Article type")
     internal: bool = Field(default=False, description="Whether the article is internal")
-    sender: str = Field(default="Agent", description="Sender type (Agent, Customer, System)", max_length=50)
+    sender: ArticleSender = Field(default=ArticleSender.AGENT, description="Sender type")
 
     @field_validator("body")
     @classmethod
