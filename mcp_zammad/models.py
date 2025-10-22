@@ -7,6 +7,16 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+class StrictBaseModel(BaseModel):
+    """Base model with strict validation that forbids extra fields.
+
+    This ensures that typos or incorrect field names in request parameters
+    are caught early with clear validation errors rather than being silently ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ResponseFormat(str, Enum):
     """Output format for tool responses.
 
@@ -192,7 +202,7 @@ class Ticket(BaseModel):
     articles: list[Article] | None = None
 
 
-class TicketCreate(BaseModel):
+class TicketCreate(StrictBaseModel):
     """Create ticket request."""
 
     title: str = Field(description="Ticket title/subject", max_length=200)
@@ -211,7 +221,7 @@ class TicketCreate(BaseModel):
         return html.escape(v)
 
 
-class TicketUpdate(BaseModel):
+class TicketUpdate(StrictBaseModel):
     """Update ticket request."""
 
     title: str | None = Field(None, description="New ticket title", max_length=200)
@@ -227,7 +237,7 @@ class TicketUpdate(BaseModel):
         return html.escape(v) if v else v
 
 
-class TicketSearchParams(BaseModel):
+class TicketSearchParams(StrictBaseModel):
     """Ticket search parameters."""
 
     query: str | None = Field(None, description="Free text search query")
@@ -251,7 +261,7 @@ class Attachment(BaseModel):
     created_at: datetime | None = None
 
 
-class ArticleCreate(BaseModel):
+class ArticleCreate(StrictBaseModel):
     """Create article request."""
 
     ticket_id: int = Field(description="Ticket ID to add article to", gt=0)
@@ -267,7 +277,7 @@ class ArticleCreate(BaseModel):
         return html.escape(v)
 
 
-class GetTicketParams(BaseModel):
+class GetTicketParams(StrictBaseModel):
     """Get ticket request parameters."""
 
     ticket_id: int = Field(gt=0, description="Ticket ID")
@@ -276,7 +286,7 @@ class GetTicketParams(BaseModel):
     article_offset: int = Field(default=0, ge=0, description="Number of articles to skip for pagination")
 
 
-class TicketUpdateParams(BaseModel):
+class TicketUpdateParams(StrictBaseModel):
     """Update ticket request parameters."""
 
     ticket_id: int = Field(gt=0, description="The ticket ID to update")
@@ -293,14 +303,14 @@ class TicketUpdateParams(BaseModel):
         return html.escape(v) if v else v
 
 
-class GetArticleAttachmentsParams(BaseModel):
+class GetArticleAttachmentsParams(StrictBaseModel):
     """Get article attachments request parameters."""
 
     ticket_id: int = Field(gt=0, description="Ticket ID")
     article_id: int = Field(gt=0, description="Article ID")
 
 
-class DownloadAttachmentParams(BaseModel):
+class DownloadAttachmentParams(StrictBaseModel):
     """Download attachment request parameters."""
 
     ticket_id: int = Field(gt=0, description="Ticket ID")
@@ -311,20 +321,20 @@ class DownloadAttachmentParams(BaseModel):
     )
 
 
-class TagOperationParams(BaseModel):
+class TagOperationParams(StrictBaseModel):
     """Tag operation (add/remove) request parameters."""
 
     ticket_id: int = Field(gt=0, description="Ticket ID")
     tag: str = Field(min_length=1, max_length=100, description="Tag name")
 
 
-class GetUserParams(BaseModel):
+class GetUserParams(StrictBaseModel):
     """Get user request parameters."""
 
     user_id: int = Field(gt=0, description="User ID")
 
 
-class SearchUsersParams(BaseModel):
+class SearchUsersParams(StrictBaseModel):
     """Search users request parameters."""
 
     query: str = Field(min_length=1, description="Search query (name, email, etc.)")
@@ -333,13 +343,13 @@ class SearchUsersParams(BaseModel):
     response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
 
 
-class GetOrganizationParams(BaseModel):
+class GetOrganizationParams(StrictBaseModel):
     """Get organization request parameters."""
 
     org_id: int = Field(gt=0, description="Organization ID")
 
 
-class SearchOrganizationsParams(BaseModel):
+class SearchOrganizationsParams(StrictBaseModel):
     """Search organizations request parameters."""
 
     query: str = Field(min_length=1, description="Search query (name, domain, etc.)")
@@ -348,7 +358,7 @@ class SearchOrganizationsParams(BaseModel):
     response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
 
 
-class GetTicketStatsParams(BaseModel):
+class GetTicketStatsParams(StrictBaseModel):
     """Get ticket statistics request parameters."""
 
     group: str | None = Field(None, description="Filter by group name")
@@ -378,7 +388,7 @@ class GetTicketStatsParams(BaseModel):
         return v
 
 
-class ListParams(BaseModel):
+class ListParams(StrictBaseModel):
     """List resource request parameters."""
 
     response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
