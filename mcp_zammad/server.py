@@ -369,7 +369,7 @@ class ZammadMCPServer:
         self._setup_user_org_tools()
         self._setup_system_tools()
 
-    def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
+    def _setup_ticket_tools(self) -> None:
         """Register ticket-related tools."""
 
         @self.mcp.tool(
