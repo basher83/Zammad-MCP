@@ -290,12 +290,11 @@ def _format_list_markdown(items: list[Group] | list[TicketState] | list[TicketPr
     return "\n".join(lines)
 
 
-def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriority], item_type: str) -> str:
+def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriority]) -> str:
     """Format a generic list as JSON for programmatic processing.
 
     Args:
         items: List of items to format
-        item_type: Type of items (e.g., "groups", "states", "priorities") - deprecated, kept for compatibility
 
     Returns:
         JSON-formatted string with pagination metadata
@@ -428,7 +427,7 @@ class ZammadMCPServer:
         self._setup_user_org_tools()
         self._setup_system_tools()
 
-    def _setup_ticket_tools(self) -> None:
+    def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
 
         @self.mcp.tool(
@@ -1234,7 +1233,7 @@ class ZammadMCPServer:
 
             # Format response
             if response_format == ResponseFormat.JSON:
-                result = _format_list_json(groups, "groups")
+                result = _format_list_json(groups)
             else:
                 result = _format_list_markdown(groups, "Group")
 
@@ -1261,7 +1260,7 @@ class ZammadMCPServer:
 
             # Format response
             if response_format == ResponseFormat.JSON:
-                result = _format_list_json(states, "states")
+                result = _format_list_json(states)
             else:
                 result = _format_list_markdown(states, "Ticket State")
 
@@ -1288,7 +1287,7 @@ class ZammadMCPServer:
 
             # Format response
             if response_format == ResponseFormat.JSON:
-                result = _format_list_json(priorities, "priorities")
+                result = _format_list_json(priorities)
             else:
                 result = _format_list_markdown(priorities, "Ticket Priority")
 
