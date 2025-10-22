@@ -268,9 +268,7 @@ class ArticleCreate(StrictBaseModel):
 
     ticket_id: int = Field(description="Ticket ID to add article to", gt=0)
     body: str = Field(description="Article body content", max_length=100000)
-    article_type: ArticleType = Field(
-        default=ArticleType.NOTE, alias="type", description="Article type"
-    )
+    article_type: ArticleType = Field(default=ArticleType.NOTE, alias="type", description="Article type")
     internal: bool = Field(default=False, description="Whether the article is internal")
     sender: ArticleSender = Field(default=ArticleSender.AGENT, description="Sender type")
 
