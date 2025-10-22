@@ -1,7 +1,7 @@
 """Pydantic models for Zammad entities."""
 
 import html
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -352,8 +352,30 @@ class GetTicketStatsParams(BaseModel):
     """Get ticket statistics request parameters."""
 
     group: str | None = Field(None, description="Filter by group name")
-    start_date: str | None = Field(None, description="Start date (ISO format) - NOT YET IMPLEMENTED")
-    end_date: str | None = Field(None, description="End date (ISO format) - NOT YET IMPLEMENTED")
+    start_date: date | datetime | None = Field(
+        None, description="Start date for filtering tickets (ISO format: YYYY-MM-DD) - NOT YET IMPLEMENTED"
+    )
+    end_date: date | datetime | None = Field(
+        None, description="End date for filtering tickets (ISO format: YYYY-MM-DD) - NOT YET IMPLEMENTED"
+    )
+
+    @field_validator("end_date")
+    @classmethod
+    def validate_date_range(cls, v: date | datetime | None, info) -> date | datetime | None:
+        """Validate that end_date is not before start_date.
+
+        TODO: This validation is currently a placeholder since date filtering
+        is not yet implemented in the backend. Once implemented, this will
+        ensure end_date >= start_date.
+        """
+        if v is not None and info.data.get("start_date") is not None:
+            start = info.data["start_date"]
+            # Convert datetime to date for comparison if needed
+            start_date = start.date() if isinstance(start, datetime) else start
+            end_date = v.date() if isinstance(v, datetime) else v
+            if end_date < start_date:
+                raise ValueError("end_date must be greater than or equal to start_date")
+        return v
 
 
 class ListParams(BaseModel):
