@@ -596,8 +596,8 @@ class ZammadMCPServer:
                 raise ValueError(f"sender must be one of {sorted(valid_senders)}")
 
             client = self.get_client()
-            # Extract ticket_id and article fields separately
-            article_params = params.model_dump(exclude={"ticket_id"})
+            # Extract ticket_id and type separately to avoid duplicate kwargs
+            article_params = params.model_dump(exclude={"ticket_id", "type"})
             article_data = client.add_article(ticket_id=params.ticket_id, article_type=params.type, **article_params)
 
             return Article(**article_data)
