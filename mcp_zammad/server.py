@@ -84,9 +84,19 @@ def _format_tickets_markdown(tickets: list[Ticket], query_info: str = "Search Re
     lines.append("")
 
     for ticket in tickets:
-        # Handle expanded fields
-        state_name = ticket.state.name if isinstance(ticket.state, StateBrief) else str(ticket.state)
-        priority_name = ticket.priority.name if isinstance(ticket.priority, PriorityBrief) else str(ticket.priority)
+        # Handle expanded fields with safe fallback
+        if isinstance(ticket.state, StateBrief):
+            state_name = ticket.state.name
+        elif isinstance(ticket.state, str):
+            state_name = ticket.state
+        else:
+            state_name = "Unknown"
+        if isinstance(ticket.priority, PriorityBrief):
+            priority_name = ticket.priority.name
+        elif isinstance(ticket.priority, str):
+            priority_name = ticket.priority
+        else:
+            priority_name = "Unknown"
 
         lines.append(f"## Ticket #{ticket.number} - {ticket.title}")
         lines.append(f"- **State**: {state_name}")
