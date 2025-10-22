@@ -587,11 +587,11 @@ class ZammadMCPServer:
                 The created article
             """
             client = self.get_client()
-            # Extract ticket_id and type separately to avoid duplicate kwargs
+            # Extract ticket_id and article_type separately to avoid duplicate kwargs
             # Convert enum values to strings for API call
-            article_params = params.model_dump(exclude={"ticket_id", "type"})
+            article_params = params.model_dump(exclude={"ticket_id", "article_type"})
             article_data = client.add_article(
-                ticket_id=params.ticket_id, article_type=params.type.value, **article_params
+                ticket_id=params.ticket_id, article_type=params.article_type.value, **article_params
             )
 
             return Article(**article_data)

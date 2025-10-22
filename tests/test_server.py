@@ -474,7 +474,9 @@ def test_add_article_tool(mock_zammad_client, sample_article_data):
     # Test with ArticleCreate params using Enum values
     from mcp_zammad.models import ArticleCreate, ArticleType, ArticleSender
 
-    params = ArticleCreate(ticket_id=1, body="New comment", type=ArticleType.NOTE, sender=ArticleSender.AGENT)
+    params = ArticleCreate(
+        ticket_id=1, body="New comment", article_type=ArticleType.NOTE, sender=ArticleSender.AGENT
+    )
     result = test_tools["zammad_add_article"](params)
 
     assert result.body == "Test article"
@@ -492,7 +494,7 @@ def test_add_article_invalid_type():
 
     # Test invalid article type
     with pytest.raises(Exception) as exc_info:  # Pydantic ValidationError
-        ArticleCreate(ticket_id=1, body="test", type="invalid_type")
+        ArticleCreate(ticket_id=1, body="test", article_type="invalid_type")
     assert "validation" in str(exc_info.value).lower()
 
 
@@ -504,6 +506,19 @@ def test_add_article_invalid_sender():
     with pytest.raises(Exception) as exc_info:  # Pydantic ValidationError
         ArticleCreate(ticket_id=1, body="test", sender="InvalidSender")
     assert "validation" in str(exc_info.value).lower()
+
+
+def test_add_article_backward_compat_alias():
+    """Test that ArticleCreate accepts 'type' alias for backward compatibility."""
+    from mcp_zammad.models import ArticleCreate, ArticleType
+
+    # Test using alias 'type' instead of 'article_type'
+    params = ArticleCreate(ticket_id=1, body="test", type="email")
+    assert params.article_type == ArticleType.EMAIL
+
+    # Test that field is accessible as article_type
+    params2 = ArticleCreate(ticket_id=1, body="test", type=ArticleType.PHONE)
+    assert params2.article_type == ArticleType.PHONE
 
 
 def test_get_user_tool(mock_zammad_client, sample_user_data):

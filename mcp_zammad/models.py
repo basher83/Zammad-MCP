@@ -264,9 +264,13 @@ class Attachment(BaseModel):
 class ArticleCreate(StrictBaseModel):
     """Create article request."""
 
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
     ticket_id: int = Field(description="Ticket ID to add article to", gt=0)
     body: str = Field(description="Article body content", max_length=100000)
-    type: ArticleType = Field(default=ArticleType.NOTE, description="Article type")
+    article_type: ArticleType = Field(
+        default=ArticleType.NOTE, alias="type", description="Article type"
+    )
     internal: bool = Field(default=False, description="Whether the article is internal")
     sender: ArticleSender = Field(default=ArticleSender.AGENT, description="Sender type")
 
