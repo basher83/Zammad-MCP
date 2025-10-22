@@ -539,6 +539,16 @@ class ZammadMCPServer:
             to control the response size. Articles are returned in chronological order.
             """
             client = self.get_client()
+# At the top of mcp_zammad/server.py (file-scope):
+class TicketIdGuidanceError(ValueError):
+    def __init__(self, ticket_id: int):
+        super().__init__(
+            f"Ticket ID {ticket_id} not found. "
+            "Use the internal 'id' from search results, not the display 'number'. "
+            "Example: For ticket #65003, search first to find its internal ID."
+        )
+
+# …later, inside the MCP tool implementation:
             try:
                 ticket_data = client.get_ticket(
                     ticket_id=params.ticket_id,
@@ -550,13 +560,8 @@ class ZammadMCPServer:
             except Exception as e:
                 error_msg = str(e).lower()
                 if "not found" in error_msg or "couldn't find" in error_msg:
-                    raise ValueError(
-                        f"Ticket ID {params.ticket_id} not found. "
-                        f"Note: Use the internal 'id' field from search results, not the display 'number'. "
-                        f"Example: For ticket #65003, search first to find its internal ID."
-                    ) from e
+                    raise TicketIdGuidanceError(params.ticket_id) from e
                 raise
-
         @self.mcp.tool(
             annotations={
                 "readOnlyHint": False,
