@@ -195,11 +195,13 @@ Avoid granting admin permissions unless absolutely necessary.
 ### If You Suspect a Security Breach
 
 1. **Immediate Actions**
+
    - Revoke potentially compromised API tokens
    - Change any exposed credentials
    - Check Zammad audit logs for suspicious activity
 
 1. **Assessment**
+
    - Determine scope of potential exposure
    - Identify affected systems and data
    - Document timeline of events

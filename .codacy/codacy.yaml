@@ -1,7 +1,20 @@
----
+exclude_paths:
+    - tests/**
+    - htmlcov/**
+    - .coverage
+    - '**/__pycache__/**'
+    - '*.pyc'
+    - dist/**
+    - build/**
+    - '*.egg-info/**'
+    - .git/**
+    - .github/**
+    - .claude/**
+    - docs/ai-docs/**
+    - docs/dev/**
+    - scripts/**
 runtimes:
     - python@3.11.11
-
 tools:
     - lizard@1.17.19
     - pylint@3.3.7
@@ -9,33 +22,3 @@ tools:
     - ruff@0.6.7
     - bandit@1.7.9
     - mypy@1.11.2
-    # Exclude tools that don't apply to Python projects or require Docker
-    # - markdownlint  # Requires Docker tools (disabled in CI), handled by pre-commit
-    # - trivy         # Container scanner - not needed for Python code
-    # - pmd           # Java static analyzer - not applicable
-
-exclude_paths:
-    # Test files and artifacts
-    - 'tests/**'
-    - 'htmlcov/**'
-    - '.coverage'
-
-    # Python build and cache
-    - '**/__pycache__/**'
-    - '*.pyc'
-    - 'dist/**'
-    - 'build/**'
-    - '*.egg-info/**'
-
-    # Git and CI
-    - '.git/**'
-    - '.github/**'
-
-    # Documentation exclusions (AI-specific and dev notes)
-    - '.claude/**'           # Claude Code internal files
-    - 'docs/ai-docs/**'      # AI assistant reference materials
-    - 'docs/dev/**'          # Developer personal notes
-
-    # Script files (not Python)
-    - 'scripts/**/*.sh'
-    - 'scripts/**/*.ps1'
