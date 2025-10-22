@@ -18,8 +18,6 @@ from .client import ZammadClient
 from .models import (
     Article,
     ArticleCreate,
-    ArticleSender,
-    ArticleType,
     Attachment,
     AttachmentDownloadError,
     DownloadAttachmentParams,
@@ -46,6 +44,7 @@ from .models import (
     TicketStats,
     TicketUpdateParams,
     User,
+    UserBrief,
 )
 
 # Configure logging
@@ -165,6 +164,7 @@ def _format_tickets_markdown(tickets: list[Ticket], query_info: str = "Search Re
             priority_name = "Unknown"
 
         lines.append(f"## Ticket #{ticket.number} - {ticket.title}")
+        lines.append(f"- **ID**: {ticket.id}")
         lines.append(f"- **State**: {state_name}")
         lines.append(f"- **Priority**: {priority_name}")
         # Use isoformat() to include timezone information if available
@@ -186,7 +186,7 @@ def _format_tickets_json(tickets: list[Ticket], total: int | None, page: int, pe
     Returns:
         JSON-formatted string with pagination metadata
     """
-    response = {
+    response: dict[str, Any] = {
         "items": [ticket.model_dump() for ticket in tickets],
         "total": total,  # None when true total is unknown
         "count": len(tickets),
@@ -240,7 +240,7 @@ def _format_users_json(users: list[User], total: int | None, page: int, per_page
     Returns:
         JSON-formatted string with pagination metadata
     """
-    response = {
+    response: dict[str, Any] = {
         "items": [user.model_dump() for user in users],
         "total": total,  # None when true total is unknown
         "count": len(users),
@@ -291,7 +291,7 @@ def _format_organizations_json(orgs: list[Organization], total: int | None, page
     Returns:
         JSON-formatted string with pagination metadata
     """
-    response = {
+    response: dict[str, Any] = {
         "items": [org.model_dump() for org in orgs],
         "total": total,  # None when true total is unknown
         "count": len(orgs),
@@ -325,7 +325,7 @@ def _format_list_markdown(items: list[Group] | list[TicketState] | list[TicketPr
     lines.append("")
 
     for item in sorted_items:
-        lines.append(f"- **{item.name}** (ID: {item.id})")
+        lines.append(f"- **{item.name}** (ID: {item.id})")  # type: ignore[attr-defined]
 
     return "\n".join(lines)
 
@@ -348,8 +348,8 @@ def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriori
     per_page = total
     offset = 0
 
-    response = {
-        "items": [item.model_dump() for item in sorted_items],
+    response: dict[str, Any] = {
+        "items": [item.model_dump() for item in sorted_items],  # type: ignore[attr-defined]
         "total": total,
         "count": total,
         "page": page,
@@ -527,7 +527,10 @@ class ZammadMCPServer:
             """Get detailed information about a specific ticket.
 
             Args:
-                params: Get ticket parameters including ticket_id and article options
+                params: Get ticket parameters including ticket_id and article options.
+                       ticket_id must be the internal database ID (NOT the display number).
+                       Use the 'id' field from search results, not the 'number' field.
+                       Example: For "Ticket #65003", use the 'id' value from search results.
 
             Returns:
                 Ticket details including articles if requested
@@ -536,13 +539,23 @@ class ZammadMCPServer:
             to control the response size. Articles are returned in chronological order.
             """
             client = self.get_client()
-            ticket_data = client.get_ticket(
-                ticket_id=params.ticket_id,
-                include_articles=params.include_articles,
-                article_limit=params.article_limit,
-                article_offset=params.article_offset,
-            )
-            return Ticket(**ticket_data)
+            try:
+                ticket_data = client.get_ticket(
+                    ticket_id=params.ticket_id,
+                    include_articles=params.include_articles,
+                    article_limit=params.article_limit,
+                    article_offset=params.article_offset,
+                )
+                return Ticket(**ticket_data)
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "not found" in error_msg or "couldn't find" in error_msg:
+                    raise ValueError(
+                        f"Ticket ID {params.ticket_id} not found. "
+                        f"Note: Use the internal 'id' field from search results, not the display 'number'. "
+                        f"Example: For ticket #65003, search first to find its internal ID."
+                    ) from e
+                raise
 
         @self.mcp.tool(
             annotations={
@@ -578,17 +591,29 @@ class ZammadMCPServer:
             """Update an existing ticket.
 
             Args:
-                params: Ticket update parameters including ticket_id and fields to update
+                params: Ticket update parameters including ticket_id and fields to update.
+                       ticket_id must be the internal database ID (NOT the display number).
+                       Use the 'id' field from search results, not the 'number' field.
+                       Example: For "Ticket #65003", use the 'id' value from search results.
 
             Returns:
                 The updated ticket
             """
             client = self.get_client()
-            # Extract ticket_id and update fields separately
-            update_data = params.model_dump(exclude={"ticket_id"}, exclude_none=True)
-            ticket_data = client.update_ticket(ticket_id=params.ticket_id, **update_data)
-
-            return Ticket(**ticket_data)
+            try:
+                # Extract ticket_id and update fields separately
+                update_data = params.model_dump(exclude={"ticket_id"}, exclude_none=True)
+                ticket_data = client.update_ticket(ticket_id=params.ticket_id, **update_data)
+                return Ticket(**ticket_data)
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "not found" in error_msg or "couldn't find" in error_msg:
+                    raise ValueError(
+                        f"Ticket ID {params.ticket_id} not found. "
+                        f"Note: Use the internal 'id' field from search results, not the display 'number'. "
+                        f"Example: For ticket #65003, search first to find its internal ID."
+                    ) from e
+                raise
 
         @self.mcp.tool(
             annotations={
@@ -602,7 +627,10 @@ class ZammadMCPServer:
             """Add an article (comment/note) to a ticket.
 
             Args:
-                params: Article creation parameters
+                params: Article creation parameters including ticket_id.
+                       ticket_id must be the internal database ID (NOT the display number).
+                       Use the 'id' field from search results, not the 'number' field.
+                       Example: For "Ticket #65003", use the 'id' value from search results.
 
             Returns:
                 The created article
@@ -629,7 +657,10 @@ class ZammadMCPServer:
             """Get list of attachments for a ticket article.
 
             Args:
-                params: Article attachments request parameters
+                params: Article attachments request parameters including ticket_id.
+                       ticket_id must be the internal database ID (NOT the display number).
+                       Use the 'id' field from search results, not the 'number' field.
+                       Example: For "Ticket #65003", use the 'id' value from search results.
 
             Returns:
                 List of attachment information
@@ -650,7 +681,10 @@ class ZammadMCPServer:
             """Download an attachment from a ticket article.
 
             Args:
-                params: Download attachment parameters
+                params: Download attachment parameters including ticket_id.
+                       ticket_id must be the internal database ID (NOT the display number).
+                       Use the 'id' field from search results, not the 'number' field.
+                       Example: For "Ticket #65003", use the 'id' value from search results.
 
             Returns:
                 Base64-encoded attachment content
@@ -695,7 +729,10 @@ class ZammadMCPServer:
             """Add a tag to a ticket.
 
             Args:
-                params: Tag operation parameters
+                params: Tag operation parameters including ticket_id.
+                       ticket_id must be the internal database ID (NOT the display number).
+                       Use the 'id' field from search results, not the 'number' field.
+                       Example: For "Ticket #65003", use the 'id' value from search results.
 
             Returns:
                 Operation result with success status
@@ -716,7 +753,10 @@ class ZammadMCPServer:
             """Remove a tag from a ticket.
 
             Args:
-                params: Tag operation parameters
+                params: Tag operation parameters including ticket_id.
+                       ticket_id must be the internal database ID (NOT the display number).
+                       Use the 'id' field from search results, not the 'number' field.
+                       Example: For "Ticket #65003", use the 'id' value from search results.
 
             Returns:
                 Operation result with success status
@@ -1203,51 +1243,67 @@ class ZammadMCPServer:
         """Register ticket resource."""
 
         @self.mcp.resource("zammad://ticket/{ticket_id}")
-        def get_ticket_resource(ticket_id: str) -> str:
+        def get_ticket_resource(ticket_id: str) -> str:  # noqa: PLR0912
             """Get a ticket as a resource."""
             client = self.get_client()
             try:
                 # Use a reasonable limit for resources to avoid huge responses
-                ticket = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
+                ticket_data = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
+                ticket = Ticket(**ticket_data)
 
-                # Normalize possibly-expanded fields
-                state = ticket.get("state")
-                state_name = (
-                    state.get("name", "Unknown") if isinstance(state, dict) else (str(state) if state else "Unknown")
-                )
-                priority = ticket.get("priority")
-                priority_name = (
-                    priority.get("name", "Unknown")
-                    if isinstance(priority, dict)
-                    else (str(priority) if priority else "Unknown")
-                )
-                customer = ticket.get("customer")
-                customer_email = (
-                    customer.get("email", "Unknown")
-                    if isinstance(customer, dict)
-                    else (str(customer) if customer else "Unknown")
-                )
+                # Normalize possibly-expanded fields (same pattern as _format_tickets_markdown)
+                if isinstance(ticket.state, StateBrief):
+                    state_name = ticket.state.name
+                elif isinstance(ticket.state, str):
+                    state_name = ticket.state
+                else:
+                    state_name = "Unknown"
+
+                if isinstance(ticket.priority, PriorityBrief):
+                    priority_name = ticket.priority.name
+                elif isinstance(ticket.priority, str):
+                    priority_name = ticket.priority
+                else:
+                    priority_name = "Unknown"
+
+                if isinstance(ticket.customer, UserBrief):
+                    customer_email = ticket.customer.email or "Unknown"
+                elif isinstance(ticket.customer, str):
+                    customer_email = ticket.customer
+                else:
+                    customer_email = "Unknown"
 
                 # Format ticket data as readable text
                 lines = [
-                    f"Ticket #{ticket.get('number', 'N/A')} - {ticket.get('title', 'No title')}",
+                    f"Ticket #{ticket.number} - {ticket.title}",
+                    f"ID: {ticket.id}",
                     f"State: {state_name}",
                     f"Priority: {priority_name}",
                     f"Customer: {customer_email}",
-                    f"Created: {ticket.get('created_at', 'Unknown')}",
+                    f"Created: {ticket.created_at.isoformat()}",
                     "",
                     "Articles:",
                     "",
                 ]
 
-                for article in ticket.get("articles", []):
-                    lines.extend(
-                        [
-                            f"--- {article.get('created_at', 'Unknown')} by {(article.get('created_by') or {}).get('email', 'Unknown')} ---",
-                            article.get("body", ""),
-                            "",
-                        ]
-                    )
+                # Handle articles if present
+                if ticket.articles:
+                    for article in ticket.articles:
+                        # Extract created_by email
+                        if isinstance(article.created_by, UserBrief):
+                            created_by_email = article.created_by.email or "Unknown"
+                        elif isinstance(article.created_by, str):
+                            created_by_email = article.created_by
+                        else:
+                            created_by_email = "Unknown"
+
+                        lines.extend(
+                            [
+                                f"--- {article.created_at.isoformat()} by {created_by_email} ---",
+                                article.body,
+                                "",
+                            ]
+                        )
 
                 return _truncate_response("\n".join(lines))
             except (requests.exceptions.RequestException, ValueError) as e:
@@ -1339,7 +1395,9 @@ class ZammadMCPServer:
                             customer.get("email", "Unknown") if isinstance(customer, dict) else str(customer)
                         )
 
-                        lines.append(f"  #{ticket.get('number', 'N/A')} - {ticket.get('title', 'No title')[:50]}...")
+                        lines.append(
+                            f"  #{ticket.get('number', 'N/A')} (ID: {ticket.get('id', 'N/A')}) - {ticket.get('title', 'No title')[:50]}..."
+                        )
                         lines.append(f"    Priority: {priority_name}, Customer: {customer_email}")
                         lines.append(f"    Created: {ticket.get('created_at', 'Unknown')}")
 
@@ -1356,8 +1414,13 @@ class ZammadMCPServer:
 
         @self.mcp.prompt()
         def analyze_ticket(ticket_id: int) -> str:
-            """Generate a prompt to analyze a ticket."""
-            return f"""Please analyze ticket {ticket_id} from Zammad. Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
+            """Generate a prompt to analyze a ticket.
+
+            Note: ticket_id must be the internal database ID (NOT the display number).
+            Use the 'id' field from search results, not the 'number' field.
+            Example: For "Ticket #65003", use the 'id' value from search results.
+            """
+            return f"""Please analyze ticket with ID {ticket_id} from Zammad. Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
 
 After retrieving the ticket, provide:
 1. A summary of the issue
@@ -1369,8 +1432,13 @@ Use appropriate tools to gather any additional context about the customer or org
 
         @self.mcp.prompt()
         def draft_response(ticket_id: int, tone: str = "professional") -> str:
-            """Generate a prompt to draft a response to a ticket."""
-            return f"""Please help draft a {tone} response to ticket {ticket_id}.
+            """Generate a prompt to draft a response to a ticket.
+
+            Note: ticket_id must be the internal database ID (NOT the display number).
+            Use the 'id' field from search results, not the 'number' field.
+            Example: For "Ticket #65003", use the 'id' value from search results.
+            """
+            return f"""Please help draft a {tone} response to ticket with ID {ticket_id}.
 
 First, use zammad_get_ticket to understand the issue and conversation history. Then draft an appropriate response that:
 1. Acknowledges the customer's concern

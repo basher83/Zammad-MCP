@@ -110,3 +110,11 @@ run = "pre-commit run --all-files"
 [tasks.infisical-scan]
 description = "Scan repository for secrets and sensitive data"
 run = "infisical scan"
+
+[tasks.markdown-lint]
+description = "Lint Markdown files"
+run = "markdownlint-cli2 '**/*.md'"
+
+[tasks.markdown-fix]
+description = "Fix Markdown files"
+run = "markdownlint-cli2 '**/*.md' --fix"

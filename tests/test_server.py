@@ -5,6 +5,7 @@ import os
 import pathlib
 import tempfile
 from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -18,13 +19,16 @@ from mcp_zammad.models import (
     Group,
     ListParams,
     Organization,
+    PriorityBrief,
     ResponseFormat,
     SearchUsersParams,
+    StateBrief,
     Ticket,
     TicketPriority,
     TicketSearchParams,
     TicketState,
     User,
+    UserBrief,
 )
 from mcp_zammad.server import (
     ZammadMCPServer,
@@ -473,11 +477,9 @@ def test_add_article_tool(mock_zammad_client, sample_article_data):
     server_inst._setup_tools()
 
     # Test with ArticleCreate params using Enum values
-    from mcp_zammad.models import ArticleCreate, ArticleType, ArticleSender
+    from mcp_zammad.models import ArticleCreate, ArticleSender, ArticleType
 
-    params = ArticleCreate(
-        ticket_id=1, body="New comment", article_type=ArticleType.NOTE, sender=ArticleSender.AGENT
-    )
+    params = ArticleCreate(ticket_id=1, body="New comment", article_type=ArticleType.NOTE, sender=ArticleSender.AGENT)
     result = test_tools["zammad_add_article"](params)
 
     assert result.body == "Test article"
@@ -939,23 +941,39 @@ def test_resource_handlers():
     # Setup resources
     server._setup_resources()
 
-    # Test ticket resource
-    server.client.get_ticket.return_value = {
-        "id": 1,
-        "number": "12345",
-        "title": "Test Issue",
-        "state": {"name": "open"},
-        "priority": {"name": "high"},
-        "customer": {"email": "test@example.com"},
-        "created_at": "2024-01-01T00:00:00Z",
-        "articles": [
-            {
-                "created_at": "2024-01-01T00:00:00Z",
-                "created_by": {"email": "agent@example.com"},
-                "body": "Initial ticket description",
-            }
+    # Test ticket resource - must use Pydantic models (issue #100 fix)
+    # Mock must return a dict (as the real client does), not a Ticket object
+    ticket_obj = Ticket(
+        id=1,
+        number="12345",
+        title="Test Issue",
+        group_id=1,
+        state_id=1,
+        priority_id=2,
+        customer_id=1,
+        created_by_id=1,
+        updated_by_id=1,
+        created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        updated_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        state=StateBrief(id=1, name="open", state_type_id=1),
+        priority=PriorityBrief(id=2, name="high"),
+        customer=UserBrief(id=1, login="test", email="test@example.com"),
+        articles=[
+            Article(
+                id=1,
+                ticket_id=1,
+                type="note",
+                sender="Agent",
+                body="Initial ticket description",
+                created_by_id=1,
+                updated_by_id=1,
+                created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+                updated_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+                created_by=UserBrief(id=1, login="agent", email="agent@example.com"),
+            )
         ],
-    }
+    )
+    server.client.get_ticket.return_value = ticket_obj.model_dump()
 
     # Set up the client for the server
     server.get_client = lambda: server.client  # type: ignore[method-assign, assignment, return-value]  # type: ignore[method-assign]
@@ -1048,8 +1066,8 @@ def test_resource_handlers():
     assert "Total Tickets: 2" in result
     assert "Open (1 tickets):" in result
     assert "Closed (1 tickets):" in result
-    assert "#12345 - Test Issue 1" in result
-    assert "#12346 - Test Issue 2" in result
+    assert "#12345 (ID: 1) - Test Issue 1" in result
+    assert "#12346 (ID: 2) - Test Issue 2" in result
 
     # Test empty queue resource
     server.client.search_tickets.return_value = []
@@ -1129,13 +1147,13 @@ def test_prompt_handlers():
     # Test analyze_ticket prompt
     assert "analyze_ticket" in test_prompts
     result = test_prompts["analyze_ticket"](ticket_id=123)
-    assert "analyze ticket 123" in result
+    assert "analyze ticket with ID 123" in result
     assert "get_ticket tool" in result
 
     # Test draft_response prompt
     assert "draft_response" in test_prompts
     result = test_prompts["draft_response"](ticket_id=123, tone="friendly")
-    assert "draft a friendly response to ticket 123" in result
+    assert "draft a friendly response to ticket with ID 123" in result
     assert "add_article" in result
 
     # Test escalation_summary prompt
@@ -1658,28 +1676,79 @@ class TestResourceHandlers:
     """Test resource handler implementations."""
 
     def test_ticket_resource_handler(self, server_instance: ZammadMCPServer) -> None:
-        """Test ticket resource handler - tests the actual function logic."""
-        # Mock ticket data
-        ticket_data = {
-            "id": 123,
-            "number": 123,
-            "title": "Test Ticket",
-            "state": {"name": "open"},
-            "priority": {"name": "2 normal"},
-            "created_at": "2024-01-01T00:00:00Z",
-        }
-        server_instance.client.get_ticket.return_value = ticket_data  # type: ignore[union-attr]
+        """Test ticket resource handler with Pydantic models - tests issue #100 fix."""
+        # Create a proper Pydantic Ticket object with expanded fields
+        ticket = Ticket(
+            id=123,
+            number="12345",
+            title="Test Ticket",
+            group_id=1,
+            state_id=1,
+            priority_id=2,
+            customer_id=1,
+            created_by_id=1,
+            updated_by_id=1,
+            created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            # Expanded fields (the bug was here - using .get() on these)
+            state=StateBrief(id=1, name="open", state_type_id=1),
+            priority=PriorityBrief(id=2, name="2 normal"),
+            customer=UserBrief(id=1, login="customer", email="customer@example.com"),
+            articles=[
+                Article(
+                    id=1,
+                    ticket_id=123,
+                    type="note",
+                    sender="Agent",
+                    body="Test article",
+                    created_by_id=1,
+                    updated_by_id=1,
+                    created_at=datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc),
+                    updated_at=datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc),
+                    created_by=UserBrief(id=1, login="agent", email="agent@example.com"),
+                )
+            ],
+        )
+
+        # Mock must return a dict (as the real client does), not a Ticket object
+        server_instance.client.get_ticket.return_value = ticket.model_dump()  # type: ignore[union-attr]
 
         # Import and test the resource handler function directly
-
-        # Create a test function that mimics the resource handler
+        # Create a test function that mimics the actual resource handler
         def test_get_ticket_resource(ticket_id: str) -> str:
             client = server_instance.get_client()
             try:
-                ticket = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
+                ticket_data = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
+                ticket = Ticket(**ticket_data)
+
+                # This is the pattern from the fixed code - using attribute access
+                if isinstance(ticket.state, StateBrief):
+                    state_name = ticket.state.name
+                elif isinstance(ticket.state, str):
+                    state_name = ticket.state
+                else:
+                    state_name = "Unknown"
+
+                if isinstance(ticket.priority, PriorityBrief):
+                    priority_name = ticket.priority.name
+                elif isinstance(ticket.priority, str):
+                    priority_name = ticket.priority
+                else:
+                    priority_name = "Unknown"
+
+                if isinstance(ticket.customer, UserBrief):
+                    customer_email = ticket.customer.email or "Unknown"
+                elif isinstance(ticket.customer, str):
+                    customer_email = ticket.customer
+                else:
+                    customer_email = "Unknown"
+
                 lines = [
-                    f"Ticket #{ticket['number']} - {ticket['title']}",
-                    f"State: {ticket.get('state', {}).get('name', 'Unknown')}",
+                    f"Ticket #{ticket.number} - {ticket.title}",
+                    f"ID: {ticket.id}",
+                    f"State: {state_name}",
+                    f"Priority: {priority_name}",
+                    f"Customer: {customer_email}",
                 ]
                 return "\n".join(lines)
             except Exception as e:
@@ -1688,8 +1757,12 @@ class TestResourceHandlers:
         # Test the handler logic
         result = test_get_ticket_resource("123")
 
-        assert "Ticket #123 - Test Ticket" in result
+        # Verify the output
+        assert "Ticket #12345 - Test Ticket" in result
+        assert "ID: 123" in result
         assert "State: open" in result
+        assert "Priority: 2 normal" in result
+        assert "Customer: customer@example.com" in result
         server_instance.client.get_ticket.assert_called_once_with(123, include_articles=True, article_limit=20)  # type: ignore[union-attr]
 
     def test_user_resource_handler(self, server_instance: ZammadMCPServer) -> None:
@@ -1971,7 +2044,7 @@ class TestJSONOutputAndTruncation:
         from mcp_zammad.server import _truncate_response
 
         # Create a large JSON object
-        large_json_obj = {
+        large_json_obj: dict[str, Any] = {
             "items": [
                 {
                     "id": i,

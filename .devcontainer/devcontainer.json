@@ -5,9 +5,9 @@
 	],
 	"features": {
 		"ghcr.io/tailscale/codespace/tailscale": {},
-		"ghcr.io/skriptfabrik/devcontainer-features/infisical-cli:1": {}
+		"ghcr.io/skriptfabrik/devcontainer-features/infisical-cli:1": {},
+		"ghcr.io/devcontainers-extra/features/mise:1": {}
 	},
-	"postCreateCommand": ".devcontainer/setup-mise.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
