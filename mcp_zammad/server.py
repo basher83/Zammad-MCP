@@ -185,7 +185,7 @@ def _format_tickets_json(tickets: list[Ticket], total: int | None, page: int, pe
     Returns:
         JSON-formatted string with pagination metadata
     """
-    response = {
+    response: dict[str, Any] = {
         "items": [ticket.model_dump() for ticket in tickets],
         "total": total,  # None when true total is unknown
         "count": len(tickets),
@@ -239,7 +239,7 @@ def _format_users_json(users: list[User], total: int | None, page: int, per_page
     Returns:
         JSON-formatted string with pagination metadata
     """
-    response = {
+    response: dict[str, Any] = {
         "items": [user.model_dump() for user in users],
         "total": total,  # None when true total is unknown
         "count": len(users),
@@ -290,7 +290,7 @@ def _format_organizations_json(orgs: list[Organization], total: int | None, page
     Returns:
         JSON-formatted string with pagination metadata
     """
-    response = {
+    response: dict[str, Any] = {
         "items": [org.model_dump() for org in orgs],
         "total": total,  # None when true total is unknown
         "count": len(orgs),
@@ -324,7 +324,7 @@ def _format_list_markdown(items: list[Group] | list[TicketState] | list[TicketPr
     lines.append("")
 
     for item in sorted_items:
-        lines.append(f"- **{item.name}** (ID: {item.id})")
+        lines.append(f"- **{item.name}** (ID: {item.id})")  # type: ignore[attr-defined]
 
     return "\n".join(lines)
 
@@ -347,8 +347,8 @@ def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriori
     per_page = total
     offset = 0
 
-    response = {
-        "items": [item.model_dump() for item in sorted_items],
+    response: dict[str, Any] = {
+        "items": [item.model_dump() for item in sorted_items],  # type: ignore[attr-defined]
         "total": total,
         "count": total,
         "page": page,

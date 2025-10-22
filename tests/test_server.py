@@ -1968,7 +1968,7 @@ class TestJSONOutputAndTruncation:
         from mcp_zammad.server import _truncate_response
 
         # Create a large JSON object
-        large_json_obj = {
+        large_json_obj: dict[str, Any] = {
             "items": [
                 {
                     "id": i,

@@ -12,7 +12,7 @@ repos:
     rev: "9db9854e3041219b1eb619872a2dfaf58adfb20b"  # v1.9.0
     hooks:
       - id: mypy
-        additional_dependencies: [types-python-dateutil]
+        additional_dependencies: [types-python-dateutil, types-requests]
         exclude: ^(scripts/|\.claude/skills/)
 
   - repo: https://github.com/PyCQA/bandit
