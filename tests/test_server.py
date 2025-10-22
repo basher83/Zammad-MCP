@@ -10,7 +10,21 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from mcp_zammad.models import Article, Attachment, Group, Organization, Ticket, TicketPriority, TicketState, User
+from mcp_zammad.models import (
+    Article,
+    Attachment,
+    GetTicketStatsParams,
+    Group,
+    ListParams,
+    Organization,
+    ResponseFormat,
+    SearchUsersParams,
+    Ticket,
+    TicketPriority,
+    TicketSearchParams,
+    TicketState,
+    User,
+)
 from mcp_zammad.server import (
     ZammadMCPServer,
     main,
@@ -823,7 +837,8 @@ def test_get_ticket_stats_tool(mock_zammad_client):
 
     # Test basic stats
     assert "zammad_get_ticket_stats" in test_tools
-    stats = test_tools["zammad_get_ticket_stats"]()
+    params = GetTicketStatsParams()
+    stats = test_tools["zammad_get_ticket_stats"](params)
 
     assert stats.total_count == 6
     assert stats.open_count == 4  # new + open tickets
@@ -841,7 +856,8 @@ def test_get_ticket_stats_tool(mock_zammad_client):
     mock_instance.reset_mock()
     mock_instance.search_tickets.side_effect = [page1_tickets, []]  # One page then empty
 
-    stats = test_tools["zammad_get_ticket_stats"](group="Support")
+    params_with_group = GetTicketStatsParams(group="Support")
+    stats = test_tools["zammad_get_ticket_stats"](params_with_group)
 
     assert stats.total_count == 3
     assert stats.open_count == 3
@@ -855,7 +871,8 @@ def test_get_ticket_stats_tool(mock_zammad_client):
     mock_instance.search_tickets.side_effect = [page1_tickets + page2_tickets, []]
 
     with patch("mcp_zammad.server.logger") as mock_logger:
-        stats = test_tools["zammad_get_ticket_stats"](start_date="2024-01-01", end_date="2024-12-31")
+        params_with_dates = GetTicketStatsParams(start_date="2024-01-01", end_date="2024-12-31")
+        stats = test_tools["zammad_get_ticket_stats"](params_with_dates)
 
         assert stats.total_count == 6
         assert mock_instance.search_tickets.call_count == 2
@@ -1013,6 +1030,7 @@ def test_resource_error_handling():
 
     # Test ticket resource error
     import requests
+
     server.client.get_ticket.side_effect = requests.exceptions.RequestException("API Error")
 
     result = test_resources["zammad://ticket/{ticket_id}"](ticket_id="999")
@@ -1268,7 +1286,8 @@ def test_tool_implementations_are_called():
             break
 
     assert search_tickets_tool is not None
-    result = search_tickets_tool(query="test")
+    params = TicketSearchParams(query="test")
+    result = search_tickets_tool(params)
     assert isinstance(result, str)
     assert "Ticket #12345" in result
     server.client.search_tickets.assert_called_once()
@@ -1326,7 +1345,8 @@ def test_get_ticket_stats_pagination():
 
     # Get the captured tool and call it
     assert "zammad_get_ticket_stats" in test_tools
-    result = test_tools["zammad_get_ticket_stats"]()
+    params = GetTicketStatsParams()
+    result = test_tools["zammad_get_ticket_stats"](params)
 
     # Verify pagination calls
     assert server.client.search_tickets.call_count == 3
@@ -1369,7 +1389,8 @@ def test_get_ticket_stats_with_date_warning():
     with patch("mcp_zammad.server.logger") as mock_logger:
         # Get the captured tool
         assert "zammad_get_ticket_stats" in test_tools
-        stats = test_tools["zammad_get_ticket_stats"](start_date="2024-01-01", end_date="2024-12-31")
+        params = GetTicketStatsParams(start_date="2024-01-01", end_date="2024-12-31")
+        stats = test_tools["zammad_get_ticket_stats"](params)
 
         assert stats.total_count == 0
         mock_logger.warning.assert_called_with("Date filtering not yet implemented - ignoring date parameters")
@@ -1792,7 +1813,6 @@ class TestJSONOutputAndTruncation:
     def test_search_tickets_json_format(self) -> None:
         """Test search_tickets with JSON output format."""
         import json
-        from mcp_zammad.models import ResponseFormat
 
         server_inst = ZammadMCPServer()
         server_inst.client = Mock()
@@ -1824,6 +1844,7 @@ class TestJSONOutputAndTruncation:
             def decorator(func: Callable[..., Any]) -> Any:
                 test_tools[func.__name__ if name is None else name] = func
                 return original_tool(name, **kwargs)(func)
+
             return decorator
 
         server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
@@ -1831,10 +1852,8 @@ class TestJSONOutputAndTruncation:
         server_inst._setup_tools()
 
         # Call with JSON format
-        result = test_tools["zammad_search_tickets"](
-            query="test",
-            response_format=ResponseFormat.JSON
-        )
+        params = TicketSearchParams(query="test", response_format=ResponseFormat.JSON)
+        result = test_tools["zammad_search_tickets"](params)
 
         # Verify it's valid JSON
         parsed = json.loads(result)
@@ -1850,7 +1869,6 @@ class TestJSONOutputAndTruncation:
     def test_search_users_json_format(self) -> None:
         """Test search_users with JSON output format."""
         import json
-        from mcp_zammad.models import ResponseFormat
 
         server_inst = ZammadMCPServer()
         server_inst.client = Mock()
@@ -1877,6 +1895,7 @@ class TestJSONOutputAndTruncation:
             def decorator(func: Callable[..., Any]) -> Any:
                 test_tools[func.__name__ if name is None else name] = func
                 return original_tool(name, **kwargs)(func)
+
             return decorator
 
         server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
@@ -1884,10 +1903,8 @@ class TestJSONOutputAndTruncation:
         server_inst._setup_tools()
 
         # Call with JSON format
-        result = test_tools["zammad_search_users"](
-            query="test",
-            response_format=ResponseFormat.JSON
-        )
+        params = SearchUsersParams(query="test", response_format=ResponseFormat.JSON)
+        result = test_tools["zammad_search_users"](params)
 
         # Verify it's valid JSON
         parsed = json.loads(result)
@@ -1899,6 +1916,7 @@ class TestJSONOutputAndTruncation:
     def test_json_truncation_preserves_validity(self) -> None:
         """Test that JSON truncation maintains valid JSON."""
         import json
+
         from mcp_zammad.server import _truncate_response
 
         # Create a large JSON object
@@ -1907,7 +1925,7 @@ class TestJSONOutputAndTruncation:
                 {
                     "id": i,
                     "title": f"Ticket {i}" * 100,  # Make it large
-                    "description": "x" * 1000
+                    "description": "x" * 1000,
                 }
                 for i in range(100)
             ],
@@ -1957,6 +1975,7 @@ class TestJSONOutputAndTruncation:
 
         # Verify it's not JSON (should fail JSON parsing)
         import json
+
         with pytest.raises(json.JSONDecodeError):
             json.loads(truncated)
 
@@ -1973,16 +1992,33 @@ class TestJSONOutputAndTruncation:
     def test_list_json_pagination_metadata(self) -> None:
         """Test that list JSON responses include full pagination metadata."""
         import json
-        from mcp_zammad.models import ResponseFormat
 
         server_inst = ZammadMCPServer()
         server_inst.client = Mock()
 
         # Mock groups
         server_inst.client.get_groups.return_value = [
-            {"id": 3, "name": "Group C", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
-            {"id": 1, "name": "Group A", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
-            {"id": 2, "name": "Group B", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
+            {
+                "id": 3,
+                "name": "Group C",
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+            },
+            {
+                "id": 1,
+                "name": "Group A",
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+            },
+            {
+                "id": 2,
+                "name": "Group B",
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+            },
         ]
 
         # Capture tools
@@ -1993,6 +2029,7 @@ class TestJSONOutputAndTruncation:
             def decorator(func: Callable[..., Any]) -> Any:
                 test_tools[func.__name__ if name is None else name] = func
                 return original_tool(name, **kwargs)(func)
+
             return decorator
 
         server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
@@ -2000,9 +2037,8 @@ class TestJSONOutputAndTruncation:
         server_inst._setup_tools()
 
         # Call with JSON format
-        result = test_tools["zammad_list_groups"](
-            response_format=ResponseFormat.JSON
-        )
+        params = ListParams(response_format=ResponseFormat.JSON)
+        result = test_tools["zammad_list_groups"](params)
 
         # Verify it's valid JSON
         parsed = json.loads(result)

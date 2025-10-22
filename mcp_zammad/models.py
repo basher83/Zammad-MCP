@@ -208,8 +208,9 @@ class TicketSearchParams(BaseModel):
     group: str | None = Field(None, description="Filter by group name")
     owner: str | None = Field(None, description="Filter by owner login/email")
     customer: str | None = Field(None, description="Filter by customer email")
-    page: int = Field(default=1, description="Page number")
-    per_page: int = Field(default=25, description="Results per page")
+    page: int = Field(default=1, ge=1, description="Page number (must be >= 1)")
+    per_page: int = Field(default=25, ge=1, le=100, description="Results per page (1-100)")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
 
 
 class Attachment(BaseModel):
@@ -236,6 +237,101 @@ class ArticleCreate(BaseModel):
     def sanitize_body(cls, v: str) -> str:
         """Escape HTML to prevent XSS attacks."""
         return html.escape(v)
+
+
+class GetTicketParams(BaseModel):
+    """Get ticket request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    include_articles: bool = Field(default=True, description="Whether to include ticket articles/comments")
+    article_limit: int = Field(default=10, ge=-1, description="Maximum number of articles to return (-1 for all)")
+    article_offset: int = Field(default=0, ge=0, description="Number of articles to skip for pagination")
+
+
+class TicketUpdateParams(BaseModel):
+    """Update ticket request parameters."""
+
+    ticket_id: int = Field(gt=0, description="The ticket ID to update")
+    title: str | None = Field(None, description="New ticket title", max_length=200)
+    state: str | None = Field(None, description="New state name", max_length=100)
+    priority: str | None = Field(None, description="New priority name", max_length=100)
+    owner: str | None = Field(None, description="New owner login/email", max_length=255)
+    group: str | None = Field(None, description="New group name", max_length=100)
+
+    @field_validator("title")
+    @classmethod
+    def sanitize_title(cls, v: str | None) -> str | None:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v) if v else v
+
+
+class GetArticleAttachmentsParams(BaseModel):
+    """Get article attachments request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    article_id: int = Field(gt=0, description="Article ID")
+
+
+class DownloadAttachmentParams(BaseModel):
+    """Download attachment request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    article_id: int = Field(gt=0, description="Article ID")
+    attachment_id: int = Field(gt=0, description="Attachment ID")
+    max_bytes: int | None = Field(
+        default=10_000_000, ge=1, description="Maximum attachment size in bytes (None for unlimited)"
+    )
+
+
+class TagOperationParams(BaseModel):
+    """Tag operation (add/remove) request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    tag: str = Field(min_length=1, max_length=100, description="Tag name")
+
+
+class GetUserParams(BaseModel):
+    """Get user request parameters."""
+
+    user_id: int = Field(gt=0, description="User ID")
+
+
+class SearchUsersParams(BaseModel):
+    """Search users request parameters."""
+
+    query: str = Field(min_length=1, description="Search query (name, email, etc.)")
+    page: int = Field(default=1, ge=1, description="Page number (must be >= 1)")
+    per_page: int = Field(default=25, ge=1, le=100, description="Results per page (1-100)")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class GetOrganizationParams(BaseModel):
+    """Get organization request parameters."""
+
+    org_id: int = Field(gt=0, description="Organization ID")
+
+
+class SearchOrganizationsParams(BaseModel):
+    """Search organizations request parameters."""
+
+    query: str = Field(min_length=1, description="Search query (name, domain, etc.)")
+    page: int = Field(default=1, ge=1, description="Page number (must be >= 1)")
+    per_page: int = Field(default=25, ge=1, le=100, description="Results per page (1-100)")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class GetTicketStatsParams(BaseModel):
+    """Get ticket statistics request parameters."""
+
+    group: str | None = Field(None, description="Filter by group name")
+    start_date: str | None = Field(None, description="Start date (ISO format) - NOT YET IMPLEMENTED")
+    end_date: str | None = Field(None, description="End date (ISO format) - NOT YET IMPLEMENTED")
+
+
+class ListParams(BaseModel):
+    """List resource request parameters."""
+
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
 
 
 class User(BaseModel):
