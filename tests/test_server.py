@@ -9,6 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from mcp_zammad.models import (
     Article,
@@ -493,9 +494,8 @@ def test_add_article_invalid_type():
     from mcp_zammad.models import ArticleCreate
 
     # Test invalid article type
-    with pytest.raises(Exception) as exc_info:  # Pydantic ValidationError
+    with pytest.raises(ValidationError, match="article_type"):
         ArticleCreate(ticket_id=1, body="test", article_type="invalid_type")
-    assert "validation" in str(exc_info.value).lower()
 
 
 def test_add_article_invalid_sender():
@@ -503,9 +503,8 @@ def test_add_article_invalid_sender():
     from mcp_zammad.models import ArticleCreate
 
     # Test invalid sender
-    with pytest.raises(Exception) as exc_info:  # Pydantic ValidationError
+    with pytest.raises(ValidationError, match="sender"):
         ArticleCreate(ticket_id=1, body="test", sender="InvalidSender")
-    assert "validation" in str(exc_info.value).lower()
 
 
 def test_add_article_backward_compat_alias():
