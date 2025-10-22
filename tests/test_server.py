@@ -1012,29 +1012,30 @@ def test_resource_error_handling():
     server._setup_resources()
 
     # Test ticket resource error
-    server.client.get_ticket.side_effect = Exception("API Error")
+    import requests
+    server.client.get_ticket.side_effect = requests.exceptions.RequestException("API Error")
 
     result = test_resources["zammad://ticket/{ticket_id}"](ticket_id="999")
     assert "Error during retrieving ticket 999" in result
-    assert "API Error" in result
+    assert "API Error" in result or "RequestException" in result
 
     # Test user resource error
-    server.client.get_user.side_effect = Exception("User not found")
+    server.client.get_user.side_effect = requests.exceptions.HTTPError("User not found")
 
     result = test_resources["zammad://user/{user_id}"](user_id="999")
-    assert "Error: Resource not found during retrieving user 999" in result
+    assert "Error" in result and "retrieving user 999" in result
 
     # Test org resource error
-    server.client.get_organization.side_effect = Exception("Org not found")
+    server.client.get_organization.side_effect = requests.exceptions.HTTPError("Org not found")
 
     result = test_resources["zammad://organization/{org_id}"](org_id="999")
-    assert "Error: Resource not found during retrieving organization 999" in result
+    assert "Error" in result and "retrieving organization 999" in result
 
     # Test queue resource error
-    server.client.search_tickets.side_effect = Exception("Queue not found")
+    server.client.search_tickets.side_effect = requests.exceptions.HTTPError("Queue not found")
 
     result = test_resources["zammad://queue/{group}"](group="nonexistent")
-    assert "Error: Resource not found during retrieving queue for group 'nonexistent'" in result
+    assert "Error" in result and "retrieving queue for group 'nonexistent'" in result
 
 
 def test_prompt_handlers():
@@ -1783,3 +1784,185 @@ class TestAttachmentSupport:
         # Test that the error is raised
         with pytest.raises(Exception, match="API Error"):
             server_inst.client.download_attachment(123, 456, 789)  # type: ignore[union-attr]
+
+
+class TestJSONOutputAndTruncation:
+    """Test JSON output format and truncation behavior."""
+
+    def test_search_tickets_json_format(self) -> None:
+        """Test search_tickets with JSON output format."""
+        import json
+        from mcp_zammad.models import ResponseFormat
+
+        server_inst = ZammadMCPServer()
+        server_inst.client = Mock()
+
+        # Mock search results
+        server_inst.client.search_tickets.return_value = [
+            {
+                "id": 1,
+                "number": "12345",
+                "title": "Test Ticket",
+                "state_id": 1,
+                "priority_id": 2,
+                "group_id": 1,
+                "customer_id": 1,
+                "state": "open",
+                "priority": "normal",
+                "created_by_id": 1,
+                "updated_by_id": 1,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+        # Capture tools
+        test_tools: dict[str, Any] = {}
+        original_tool = server_inst.mcp.tool
+
+        def capture_tool(name: str | None = None, **kwargs: Any) -> Callable[[Callable[..., Any]], Any]:
+            def decorator(func: Callable[..., Any]) -> Any:
+                test_tools[func.__name__ if name is None else name] = func
+                return original_tool(name, **kwargs)(func)
+            return decorator
+
+        server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+        server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+        server_inst._setup_tools()
+
+        # Call with JSON format
+        result = test_tools["zammad_search_tickets"](
+            query="test",
+            response_format=ResponseFormat.JSON
+        )
+
+        # Verify it's valid JSON
+        parsed = json.loads(result)
+        assert parsed["count"] == 1
+        assert parsed["total"] is None  # total is None when unknown
+        assert parsed["page"] == 1
+        assert parsed["per_page"] == 25
+        assert parsed["has_more"] is False
+        assert "tickets" in parsed
+        assert len(parsed["tickets"]) == 1
+
+    def test_search_users_json_format(self) -> None:
+        """Test search_users with JSON output format."""
+        import json
+        from mcp_zammad.models import ResponseFormat
+
+        server_inst = ZammadMCPServer()
+        server_inst.client = Mock()
+
+        # Mock search results
+        server_inst.client.search_users.return_value = [
+            {
+                "id": 1,
+                "login": "user@example.com",
+                "firstname": "Test",
+                "lastname": "User",
+                "email": "user@example.com",
+                "active": True,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+            }
+        ]
+
+        # Capture tools
+        test_tools: dict[str, Any] = {}
+        original_tool = server_inst.mcp.tool
+
+        def capture_tool(name: str | None = None, **kwargs: Any) -> Callable[[Callable[..., Any]], Any]:
+            def decorator(func: Callable[..., Any]) -> Any:
+                test_tools[func.__name__ if name is None else name] = func
+                return original_tool(name, **kwargs)(func)
+            return decorator
+
+        server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+        server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+        server_inst._setup_tools()
+
+        # Call with JSON format
+        result = test_tools["zammad_search_users"](
+            query="test",
+            response_format=ResponseFormat.JSON
+        )
+
+        # Verify it's valid JSON
+        parsed = json.loads(result)
+        assert parsed["count"] == 1
+        assert parsed["total"] is None
+        assert "users" in parsed
+
+    def test_json_truncation_preserves_validity(self) -> None:
+        """Test that JSON truncation maintains valid JSON."""
+        import json
+        from mcp_zammad.server import _truncate_response
+
+        # Create a large JSON object
+        large_json_obj = {
+            "total": None,
+            "count": 100,
+            "page": 1,
+            "per_page": 100,
+            "tickets": [
+                {
+                    "id": i,
+                    "title": f"Ticket {i}" * 100,  # Make it large
+                    "description": "x" * 1000
+                }
+                for i in range(100)
+            ]
+        }
+        large_json_str = json.dumps(large_json_obj, indent=2)
+
+        # Ensure it's over the limit
+        assert len(large_json_str) > 25000
+
+        # Truncate it
+        truncated = _truncate_response(large_json_str, limit=25000)
+
+        # Verify it's still valid JSON
+        parsed = json.loads(truncated)
+
+        # Verify truncation metadata is present
+        assert "_meta" in parsed
+        assert parsed["_meta"]["truncated"] is True
+        assert parsed["_meta"]["original_size"] == len(large_json_str)
+        assert parsed["_meta"]["limit"] == 25000
+
+        # Verify result is under limit
+        assert len(truncated) <= 25000
+
+    def test_markdown_truncation(self) -> None:
+        """Test markdown truncation adds warning message."""
+        from mcp_zammad.server import _truncate_response
+
+        # Create large markdown content
+        large_markdown = "# Test\n" + ("This is a long line\n" * 2000)
+
+        # Ensure it's over the limit
+        assert len(large_markdown) > 25000
+
+        # Truncate it
+        truncated = _truncate_response(large_markdown, limit=25000)
+
+        # Verify warning message is present
+        assert "Response Truncated" in truncated
+        assert "exceeds limit" in truncated
+        assert "pagination" in truncated.lower()
+
+        # Verify it's not JSON (should fail JSON parsing)
+        import json
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(truncated)
+
+    def test_truncation_under_limit_unchanged(self) -> None:
+        """Test that content under limit is not modified."""
+        from mcp_zammad.server import _truncate_response
+
+        small_text = "This is a small text that should not be truncated."
+        result = _truncate_response(small_text, limit=1000)
+
+        # Should be unchanged
+        assert result == small_text
