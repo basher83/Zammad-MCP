@@ -275,11 +275,14 @@ def _format_list_markdown(items: list[Group] | list[TicketState] | list[TicketPr
     Returns:
         Markdown-formatted string
     """
+    # Sort items by id for stable ordering
+    sorted_items = sorted(items, key=lambda x: x.id)
+
     lines = [f"# {item_type} List", ""]
-    lines.append(f"Found {len(items)} {item_type.lower()}(s)")
+    lines.append(f"Found {len(sorted_items)} {item_type.lower()}(s)")
     lines.append("")
 
-    for item in items:
+    for item in sorted_items:
         lines.append(f"- **{item.name}** (ID: {item.id})")
 
     return "\n".join(lines)
@@ -293,12 +296,27 @@ def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriori
         item_type: Type of items (e.g., "groups", "states", "priorities")
 
     Returns:
-        JSON-formatted string
+        JSON-formatted string with pagination metadata
     """
+    # Sort items by id for stable ordering
+    sorted_items = sorted(items, key=lambda x: x.id)
+
+    # Since these are complete cached lists, pagination shows all items on page 1
+    total = len(sorted_items)
+    page = 1
+    per_page = total
+    offset = 0
+
     response = {
-        "total": len(items),
-        "count": len(items),
-        item_type: [item.model_dump() for item in items],
+        "total": total,
+        "count": total,
+        "page": page,
+        "per_page": per_page,
+        "offset": offset,
+        "has_more": False,  # Always false for complete lists
+        "next_page": None,
+        "next_offset": None,
+        item_type: [item.model_dump() for item in sorted_items],
     }
 
     return json.dumps(response, indent=2, default=str)

@@ -1966,3 +1966,58 @@ class TestJSONOutputAndTruncation:
 
         # Should be unchanged
         assert result == small_text
+
+    def test_list_json_pagination_metadata(self) -> None:
+        """Test that list JSON responses include full pagination metadata."""
+        import json
+        from mcp_zammad.models import ResponseFormat
+
+        server_inst = ZammadMCPServer()
+        server_inst.client = Mock()
+
+        # Mock groups
+        server_inst.client.get_groups.return_value = [
+            {"id": 3, "name": "Group C", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
+            {"id": 1, "name": "Group A", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
+            {"id": 2, "name": "Group B", "active": True, "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"},
+        ]
+
+        # Capture tools
+        test_tools: dict[str, Any] = {}
+        original_tool = server_inst.mcp.tool
+
+        def capture_tool(name: str | None = None, **kwargs: Any) -> Callable[[Callable[..., Any]], Any]:
+            def decorator(func: Callable[..., Any]) -> Any:
+                test_tools[func.__name__ if name is None else name] = func
+                return original_tool(name, **kwargs)(func)
+            return decorator
+
+        server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+        server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+        server_inst._setup_tools()
+
+        # Call with JSON format
+        result = test_tools["zammad_list_groups"](
+            response_format=ResponseFormat.JSON
+        )
+
+        # Verify it's valid JSON
+        parsed = json.loads(result)
+
+        # Verify pagination metadata is present
+        assert parsed["total"] == 3
+        assert parsed["count"] == 3
+        assert parsed["page"] == 1
+        assert parsed["per_page"] == 3
+        assert parsed["offset"] == 0
+        assert parsed["has_more"] is False
+        assert parsed["next_page"] is None
+        assert parsed["next_offset"] is None
+        assert "groups" in parsed
+
+        # Verify items are sorted by id (stable ordering)
+        groups = parsed["groups"]
+        assert len(groups) == 3
+        assert groups[0]["id"] == 1  # Should be sorted
+        assert groups[1]["id"] == 2
+        assert groups[2]["id"] == 3
