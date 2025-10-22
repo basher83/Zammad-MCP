@@ -537,7 +537,10 @@ class ZammadMCPServer:
             """
             client = self.get_client()
             ticket_data = client.get_ticket(
-                params.ticket_id, params.include_articles, params.article_limit, params.article_offset
+                ticket_id=params.ticket_id,
+                include_articles=params.include_articles,
+                article_limit=params.article_limit,
+                article_offset=params.article_offset,
             )
             return Ticket(**ticket_data)
 
