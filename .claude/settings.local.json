@@ -45,7 +45,13 @@
       "Bash(python3:*)",
       "Bash(coderabbit auth:*)",
       "Bash(coderabbit:*)",
-      "Bash(mise run:*)"
+      "Bash(mise run:*)",
+      "mcp__zammad__zammad_get_current_user",
+      "mcp__zammad__zammad_list_groups",
+      "mcp__zammad__zammad_list_ticket_states",
+      "mcp__zammad__zammad_list_ticket_priorities",
+      "mcp__zammad__zammad_search_tickets",
+      "mcp__zammad__zammad_get_ticket"
     ],
     "deny": []
   },
