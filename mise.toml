@@ -34,19 +34,25 @@ uv sync
 echo "🪝 Installing pre-commit hooks..."
 pre-commit install
 infisical scan install --pre-commit-hook || echo "⚠️  Infisical not available, skipping..."
-# CodeRabbit CLI installation (opt-in for security)
-# Security note: This downloads and executes a remote script. Only enable if you trust the source.
-# Set INSTALL_CODERABBIT=true to enable automatic installation.
+# CodeRabbit CLI installation instructions
+# For security, we do not auto-install. Please install manually:
+#
+# Option 1 (Recommended): Use distro package manager or pre-built binary
+#   - Download from: https://github.com/coderabbitai/coderabbit-cli/releases
+#   - Verify checksum before installation
+#
+# Option 2: Use official installer (review script first!)
+#   curl -fsSL https://cli.coderabbit.ai/install.sh -o /tmp/coderabbit-install.sh
+#   # Review the script content before running
+#   cat /tmp/coderabbit-install.sh
+#   # Run only after verification
+#   sh /tmp/coderabbit-install.sh
+#
 # See: https://docs.coderabbit.ai/guides/cli-tool
-if [ "${INSTALL_CODERABBIT:-false}" = "true" ]; then
-  if ! command -v coderabbit >/dev/null 2>&1; then
-    echo "📥 Installing coderabbit CLI..."
-    curl -fsSL https://cli.coderabbit.ai/install.sh | sh
-  else
-    echo "✅ coderabbit CLI already installed."
-  fi
+if ! command -v coderabbit >/dev/null 2>&1; then
+  echo "ℹ️  CodeRabbit CLI not installed. See mise.toml for installation instructions."
 else
-  echo "ℹ️  CodeRabbit CLI installation skipped (set INSTALL_CODERABBIT=true to enable)"
+  echo "✅ coderabbit CLI already installed."
 fi
 echo "✅ Development environment ready!"
 """

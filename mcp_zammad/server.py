@@ -85,9 +85,9 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
                 "note": "Response truncated; reduce page/per_page or add filters."
             })
             return json.dumps(obj, indent=2, default=str)
-        except Exception:
+        except Exception as e:
             # fall back to plaintext truncation if JSON parsing fails
-            pass
+            logger.debug("Failed to parse/truncate JSON response: %s", e, exc_info=True)
 
     # Plaintext/Markdown truncation with visible warning
     truncated = content[:limit]
