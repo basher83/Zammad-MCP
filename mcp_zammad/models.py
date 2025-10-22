@@ -2,8 +2,21 @@
 
 import html
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class ResponseFormat(str, Enum):
+    """Output format for tool responses.
+
+    Attributes:
+        MARKDOWN: Human-readable markdown format
+        JSON: Machine-readable JSON format with full metadata
+    """
+
+    MARKDOWN = "markdown"
+    JSON = "json"
 
 
 class AttachmentDownloadError(Exception):

@@ -1,6 +1,7 @@
 """Zammad MCP Server implementation."""
 
 import base64
+import json
 import logging
 import os
 import time
@@ -9,6 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+import requests
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
@@ -19,6 +21,9 @@ from .models import (
     AttachmentDownloadError,
     Group,
     Organization,
+    PriorityBrief,
+    ResponseFormat,
+    StateBrief,
     TagOperationResult,
     Ticket,
     TicketPriority,
@@ -34,6 +39,7 @@ logger = logging.getLogger(__name__)
 MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
 MAX_PER_PAGE = 100  # Maximum results per page for pagination
+CHARACTER_LIMIT = int(os.getenv("ZAMMAD_MCP_CHARACTER_LIMIT", "25000"))  # Maximum response size in characters
 
 # Zammad state type IDs (from Zammad API)
 STATE_TYPE_NEW = 1
@@ -41,6 +47,313 @@ STATE_TYPE_OPEN = 2
 STATE_TYPE_CLOSED = 3
 STATE_TYPE_PENDING_REMINDER = 4
 STATE_TYPE_PENDING_CLOSE = 5
+
+
+def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
+    """Truncate response with helpful message if over limit.
+
+    For JSON responses, preserves validity by shrinking arrays and adding metadata.
+    For markdown/text responses, appends a truncation warning.
+
+    Args:
+        content: The content to potentially truncate
+        limit: Maximum character limit (default: CHARACTER_LIMIT)
+
+    Returns:
+        Original content if under limit, truncated content with warning if over
+    """
+    if len(content) <= limit:
+        return content
+
+    # Try to preserve JSON validity if the content is JSON
+    stripped = content.lstrip()
+    if stripped.startswith("{"):
+        try:
+            obj = json.loads(content)
+            # Attempt to shrink the "items" array until under limit
+            if "items" in obj and isinstance(obj["items"], list):
+                while obj["items"] and len(json.dumps(obj, indent=2, default=str)) > limit:
+                    obj["items"].pop()  # remove from end
+
+            # Add metadata about truncation
+            meta = obj.setdefault("_meta", {})
+            meta.update({
+                "truncated": True,
+                "original_size": len(content),
+                "limit": limit,
+                "note": "Response truncated; reduce page/per_page or add filters."
+            })
+            return json.dumps(obj, indent=2, default=str)
+        except Exception as e:
+            # fall back to plaintext truncation if JSON parsing fails
+            logger.debug("Failed to parse/truncate JSON response: %s", e, exc_info=True)
+
+    # Plaintext/Markdown truncation with visible warning
+    truncated = content[:limit]
+    truncated += "\n\n⚠️ **Response Truncated**\n"
+    truncated += f"Response size ({len(content)} chars) exceeds limit ({limit} chars).\n"
+    truncated += "Use pagination (page/per_page) or add filters to see more results."
+    return truncated
+
+
+def _format_tickets_markdown(tickets: list[Ticket], query_info: str = "Search Results") -> str:
+    """Format tickets as markdown for human readability.
+
+    Args:
+        tickets: List of tickets to format
+        query_info: Description of the query/search
+
+    Returns:
+        Markdown-formatted string
+    """
+    lines = [f"# Ticket Search Results: {query_info}", ""]
+    lines.append(f"Found {len(tickets)} ticket(s)")
+    lines.append("")
+
+    for ticket in tickets:
+        # Handle expanded fields with safe fallback
+        if isinstance(ticket.state, StateBrief):
+            state_name = ticket.state.name
+        elif isinstance(ticket.state, str):
+            state_name = ticket.state
+        else:
+            state_name = "Unknown"
+        if isinstance(ticket.priority, PriorityBrief):
+            priority_name = ticket.priority.name
+        elif isinstance(ticket.priority, str):
+            priority_name = ticket.priority
+        else:
+            priority_name = "Unknown"
+
+        lines.append(f"## Ticket #{ticket.number} - {ticket.title}")
+        lines.append(f"- **State**: {state_name}")
+        lines.append(f"- **Priority**: {priority_name}")
+        lines.append(f"- **Created**: {ticket.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _format_tickets_json(tickets: list[Ticket], total: int | None, page: int, per_page: int) -> str:
+    """Format tickets as JSON for programmatic processing.
+
+    Args:
+        tickets: List of tickets to format
+        total: Total count of matching tickets across all pages (None if unknown)
+        page: Current page number
+        per_page: Results per page
+
+    Returns:
+        JSON-formatted string with pagination metadata
+    """
+    response = {
+        "items": [ticket.model_dump() for ticket in tickets],
+        "total": total,  # None when true total is unknown
+        "count": len(tickets),
+        "page": page,
+        "per_page": per_page,
+        "offset": (page - 1) * per_page,
+        "has_more": len(tickets) == per_page,  # heuristic when total unknown
+        "next_page": page + 1 if len(tickets) == per_page else None,
+        "next_offset": page * per_page if len(tickets) == per_page else None,
+        "_meta": {},  # Pre-allocated for truncation flags
+    }
+
+    return json.dumps(response, indent=2, default=str)
+
+
+def _format_users_markdown(users: list[User], query_info: str = "Search Results") -> str:
+    """Format users as markdown for human readability.
+
+    Args:
+        users: List of users to format
+        query_info: Description of the query/search
+
+    Returns:
+        Markdown-formatted string
+    """
+    lines = [f"# User Search Results: {query_info}", ""]
+    lines.append(f"Found {len(users)} user(s)")
+    lines.append("")
+
+    for user in users:
+        full_name = f"{user.firstname or ''} {user.lastname or ''}".strip() or "N/A"
+        lines.append(f"## {full_name}")
+        lines.append(f"- **ID**: {user.id}")
+        lines.append(f"- **Email**: {user.email or 'N/A'}")
+        lines.append(f"- **Login**: {user.login or 'N/A'}")
+        lines.append(f"- **Active**: {user.active}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _format_users_json(users: list[User], total: int | None, page: int, per_page: int) -> str:
+    """Format users as JSON for programmatic processing.
+
+    Args:
+        users: List of users to format
+        total: Total count of matching users across all pages (None if unknown)
+        page: Current page number
+        per_page: Results per page
+
+    Returns:
+        JSON-formatted string with pagination metadata
+    """
+    response = {
+        "items": [user.model_dump() for user in users],
+        "total": total,  # None when true total is unknown
+        "count": len(users),
+        "page": page,
+        "per_page": per_page,
+        "offset": (page - 1) * per_page,
+        "has_more": len(users) == per_page,  # heuristic when total unknown
+        "next_page": page + 1 if len(users) == per_page else None,
+        "next_offset": page * per_page if len(users) == per_page else None,
+        "_meta": {},  # Pre-allocated for truncation flags
+    }
+
+    return json.dumps(response, indent=2, default=str)
+
+
+def _format_organizations_markdown(orgs: list[Organization], query_info: str = "Search Results") -> str:
+    """Format organizations as markdown for human readability.
+
+    Args:
+        orgs: List of organizations to format
+        query_info: Description of the query/search
+
+    Returns:
+        Markdown-formatted string
+    """
+    lines = [f"# Organization Search Results: {query_info}", ""]
+    lines.append(f"Found {len(orgs)} organization(s)")
+    lines.append("")
+
+    for org in orgs:
+        lines.append(f"## {org.name}")
+        lines.append(f"- **ID**: {org.id}")
+        lines.append(f"- **Active**: {org.active}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _format_organizations_json(orgs: list[Organization], total: int | None, page: int, per_page: int) -> str:
+    """Format organizations as JSON for programmatic processing.
+
+    Args:
+        orgs: List of organizations to format
+        total: Total count of matching organizations across all pages (None if unknown)
+        page: Current page number
+        per_page: Results per page
+
+    Returns:
+        JSON-formatted string with pagination metadata
+    """
+    response = {
+        "items": [org.model_dump() for org in orgs],
+        "total": total,  # None when true total is unknown
+        "count": len(orgs),
+        "page": page,
+        "per_page": per_page,
+        "offset": (page - 1) * per_page,
+        "has_more": len(orgs) == per_page,  # heuristic when total unknown
+        "next_page": page + 1 if len(orgs) == per_page else None,
+        "next_offset": page * per_page if len(orgs) == per_page else None,
+        "_meta": {},  # Pre-allocated for truncation flags
+    }
+
+    return json.dumps(response, indent=2, default=str)
+
+
+def _format_list_markdown(items: list[Group] | list[TicketState] | list[TicketPriority], item_type: str) -> str:
+    """Format a generic list as markdown for human readability.
+
+    Args:
+        items: List of items to format
+        item_type: Type of items (e.g., "Group", "State", "Priority")
+
+    Returns:
+        Markdown-formatted string
+    """
+    # Sort items by id for stable ordering
+    sorted_items = sorted(items, key=lambda x: x.id)
+
+    lines = [f"# {item_type} List", ""]
+    lines.append(f"Found {len(sorted_items)} {item_type.lower()}(s)")
+    lines.append("")
+
+    for item in sorted_items:
+        lines.append(f"- **{item.name}** (ID: {item.id})")
+
+    return "\n".join(lines)
+
+
+def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriority]) -> str:
+    """Format a generic list as JSON for programmatic processing.
+
+    Args:
+        items: List of items to format
+
+    Returns:
+        JSON-formatted string with pagination metadata
+    """
+    # Sort items by id for stable ordering
+    sorted_items = sorted(items, key=lambda x: x.id)
+
+    # Since these are complete cached lists, pagination shows all items on page 1
+    total = len(sorted_items)
+    page = 1
+    per_page = total
+    offset = 0
+
+    response = {
+        "items": [item.model_dump() for item in sorted_items],
+        "total": total,
+        "count": total,
+        "page": page,
+        "per_page": per_page,
+        "offset": offset,
+        "has_more": False,  # Always false for complete lists
+        "next_page": None,
+        "next_offset": None,
+        "_meta": {},  # Pre-allocated for truncation flags
+    }
+
+    return json.dumps(response, indent=2, default=str)
+
+
+def _handle_api_error(e: Exception, context: str = "operation") -> str:
+    """Format errors with actionable guidance for LLM agents.
+
+    Args:
+        e: The exception that occurred
+        context: Description of what was being attempted
+
+    Returns:
+        Formatted error message with guidance
+    """
+    error_msg = str(e).lower()
+
+    # Check for specific error patterns
+    if "not found" in error_msg or "404" in error_msg:
+        return f"Error: Resource not found during {context}. Please verify the ID is correct and you have access."
+
+    if "forbidden" in error_msg or "403" in error_msg:
+        return f"Error: Permission denied for {context}. Your credentials lack access to this resource."
+
+    if "unauthorized" in error_msg or "401" in error_msg:
+        return f"Error: Authentication failed for {context}. Check ZAMMAD_HTTP_TOKEN is valid."
+
+    if "timeout" in error_msg:
+        return f"Error: Request timeout during {context}. The server may be slow - try again or reduce the scope."
+
+    if "connection" in error_msg or "network" in error_msg:
+        return f"Error: Network issue during {context}. Check ZAMMAD_URL is correct and the server is reachable."
+
+    # Generic error with type information
+    return f"Error during {context}: {type(e).__name__} - {e}"
 
 
 class ZammadMCPServer:
@@ -114,7 +427,7 @@ class ZammadMCPServer:
         self._setup_user_org_tools()
         self._setup_system_tools()
 
-    def _setup_ticket_tools(self) -> None:
+    def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
 
         @self.mcp.tool(
@@ -134,7 +447,8 @@ class ZammadMCPServer:
             customer: str | None = None,
             page: int = 1,
             per_page: int = 25,
-        ) -> list[Ticket]:
+            response_format: ResponseFormat = ResponseFormat.MARKDOWN,
+        ) -> str:
             """Search for tickets with various filters.
 
             Args:
@@ -146,9 +460,10 @@ class ZammadMCPServer:
                 customer: Filter by customer email
                 page: Page number (default: 1)
                 per_page: Results per page (default: 25)
+                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
 
             Returns:
-                List of tickets matching the search criteria
+                Formatted response in either JSON or Markdown format
 
             Raises:
                 ValueError: If pagination parameters are invalid
@@ -171,7 +486,31 @@ class ZammadMCPServer:
                 per_page=per_page,
             )
 
-            return [Ticket(**ticket) for ticket in tickets_data]
+            tickets = [Ticket(**ticket) for ticket in tickets_data]
+
+            # Build query info string
+            filters = []
+            if query:
+                filters.append(f"query='{query}'")
+            if state:
+                filters.append(f"state='{state}'")
+            if priority:
+                filters.append(f"priority='{priority}'")
+            if group:
+                filters.append(f"group='{group}'")
+            if owner:
+                filters.append(f"owner='{owner}'")
+            if customer:
+                filters.append(f"customer='{customer}'")
+            query_info = ", ".join(filters) if filters else "All tickets"
+
+            # Format response
+            if response_format == ResponseFormat.JSON:
+                result = _format_tickets_json(tickets, None, page, per_page)
+            else:
+                result = _format_tickets_markdown(tickets, query_info)
+
+            return _truncate_response(result)
 
         @self.mcp.tool(
             annotations={
@@ -389,7 +728,7 @@ class ZammadMCPServer:
             client = self.get_client()
             try:
                 attachment_data = client.download_attachment(ticket_id, article_id, attachment_id)
-            except Exception as e:
+            except (requests.exceptions.RequestException, ValueError, AttachmentDownloadError) as e:
                 raise AttachmentDownloadError(
                     ticket_id=ticket_id,
                     article_id=article_id,
@@ -487,16 +826,19 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_search_users(query: str, page: int = 1, per_page: int = 25) -> list[User]:
+        def zammad_search_users(
+            query: str, page: int = 1, per_page: int = 25, response_format: ResponseFormat = ResponseFormat.MARKDOWN
+        ) -> str:
             """Search for users.
 
             Args:
                 query: Search query (name, email, etc.)
                 page: Page number
                 per_page: Results per page
+                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
 
             Returns:
-                List of users matching the query
+                Formatted response in either JSON or Markdown format
 
             Raises:
                 ValueError: If pagination parameters are invalid
@@ -509,7 +851,15 @@ class ZammadMCPServer:
 
             client = self.get_client()
             users_data = client.search_users(query, page, per_page)
-            return [User(**user) for user in users_data]
+            users = [User(**user) for user in users_data]
+
+            # Format response
+            if response_format == ResponseFormat.JSON:
+                result = _format_users_json(users, None, page, per_page)
+            else:
+                result = _format_users_markdown(users, f"query='{query}'")
+
+            return _truncate_response(result)
 
         @self.mcp.tool(
             annotations={
@@ -540,16 +890,19 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_search_organizations(query: str, page: int = 1, per_page: int = 25) -> list[Organization]:
+        def zammad_search_organizations(
+            query: str, page: int = 1, per_page: int = 25, response_format: ResponseFormat = ResponseFormat.MARKDOWN
+        ) -> str:
             """Search for organizations.
 
             Args:
                 query: Search query (name, domain, etc.)
                 page: Page number
                 per_page: Results per page
+                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
 
             Returns:
-                List of organizations matching the query
+                Formatted response in either JSON or Markdown format
 
             Raises:
                 ValueError: If pagination parameters are invalid
@@ -562,7 +915,15 @@ class ZammadMCPServer:
 
             client = self.get_client()
             orgs_data = client.search_organizations(query, page, per_page)
-            return [Organization(**org) for org in orgs_data]
+            orgs = [Organization(**org) for org in orgs_data]
+
+            # Format response
+            if response_format == ResponseFormat.JSON:
+                result = _format_organizations_json(orgs, None, page, per_page)
+            else:
+                result = _format_organizations_markdown(orgs, f"query='{query}'")
+
+            return _truncate_response(result)
 
         @self.mcp.tool(
             annotations={
@@ -859,13 +1220,24 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_list_groups() -> list[Group]:
+        def zammad_list_groups(response_format: ResponseFormat = ResponseFormat.MARKDOWN) -> str:
             """Get all available groups (cached).
 
+            Args:
+                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
+
             Returns:
-                List of all groups
+                Formatted response in either JSON or Markdown format
             """
-            return self._get_cached_groups()
+            groups = self._get_cached_groups()
+
+            # Format response
+            if response_format == ResponseFormat.JSON:
+                result = _format_list_json(groups)
+            else:
+                result = _format_list_markdown(groups, "Group")
+
+            return _truncate_response(result)
 
         @self.mcp.tool(
             annotations={
@@ -875,13 +1247,24 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_list_ticket_states() -> list[TicketState]:
+        def zammad_list_ticket_states(response_format: ResponseFormat = ResponseFormat.MARKDOWN) -> str:
             """Get all available ticket states (cached).
 
+            Args:
+                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
+
             Returns:
-                List of all ticket states
+                Formatted response in either JSON or Markdown format
             """
-            return self._get_cached_states()
+            states = self._get_cached_states()
+
+            # Format response
+            if response_format == ResponseFormat.JSON:
+                result = _format_list_json(states)
+            else:
+                result = _format_list_markdown(states, "Ticket State")
+
+            return _truncate_response(result)
 
         @self.mcp.tool(
             annotations={
@@ -891,13 +1274,24 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_list_ticket_priorities() -> list[TicketPriority]:
+        def zammad_list_ticket_priorities(response_format: ResponseFormat = ResponseFormat.MARKDOWN) -> str:
             """Get all available ticket priorities (cached).
 
+            Args:
+                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
+
             Returns:
-                List of all ticket priorities
+                Formatted response in either JSON or Markdown format
             """
-            return self._get_cached_priorities()
+            priorities = self._get_cached_priorities()
+
+            # Format response
+            if response_format == ResponseFormat.JSON:
+                result = _format_list_json(priorities)
+            else:
+                result = _format_list_markdown(priorities, "Ticket Priority")
+
+            return _truncate_response(result)
 
     def _setup_resources(self) -> None:
         """Register all resources with the MCP server."""
@@ -956,9 +1350,9 @@ class ZammadMCPServer:
                         ]
                     )
 
-                return "\n".join(lines)
-            except Exception as e:
-                return f"Error retrieving ticket {ticket_id}: {e!s}"
+                return _truncate_response("\n".join(lines))
+            except (requests.exceptions.RequestException, ValueError) as e:
+                return _handle_api_error(e, context=f"retrieving ticket {ticket_id}")
 
     def _setup_user_resource(self) -> None:
         """Register user resource."""
@@ -981,8 +1375,8 @@ class ZammadMCPServer:
                 ]
 
                 return "\n".join(lines)
-            except Exception as e:
-                return f"Error retrieving user {user_id}: {e!s}"
+            except (requests.exceptions.RequestException, ValueError) as e:
+                return _handle_api_error(e, context=f"retrieving user {user_id}")
 
     def _setup_organization_resource(self) -> None:
         """Register organization resource."""
@@ -1003,8 +1397,8 @@ class ZammadMCPServer:
                 ]
 
                 return "\n".join(lines)
-            except Exception as e:
-                return f"Error retrieving organization {org_id}: {e!s}"
+            except (requests.exceptions.RequestException, ValueError) as e:
+                return _handle_api_error(e, context=f"retrieving organization {org_id}")
 
     def _setup_queue_resource(self) -> None:
         """Register queue resource."""
@@ -1054,9 +1448,9 @@ class ZammadMCPServer:
                         lines.append(f"    ... and {len(state_tickets) - MAX_TICKETS_PER_STATE_IN_QUEUE} more tickets")
                     lines.append("")
 
-                return "\n".join(lines)
-            except Exception as e:
-                return f"Error retrieving queue for group {group}: {e!s}"
+                return _truncate_response("\n".join(lines))
+            except (requests.exceptions.RequestException, ValueError) as e:
+                return _handle_api_error(e, context=f"retrieving queue for group '{group}'")
 
     def _setup_prompts(self) -> None:
         """Register all prompts with the MCP server."""

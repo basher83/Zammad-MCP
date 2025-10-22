@@ -9,50 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **mcp**: Implement MCP best practices for LLM agent optimization (#95)
+  - Add ResponseFormat enum supporting markdown and JSON output formats
+  - Add CHARACTER_LIMIT constant (25,000 chars) with automatic truncation
+  - Implement formatting helpers for tickets, users, organizations, groups, states, and priorities
+  - Add enhanced pagination metadata (total, count, has_more, next_offset) to JSON responses
+  - Improve error messages with actionable guidance for LLM agents
+  - Apply truncation to resource handlers (ticket, user, organization, queue)
+  - Update search and list tools to support response_format parameter
 - **devcontainer**: Add devcontainer configuration and setup script for mise installation
 - **claude**: Introduce agent framework and modernize config
 - **devex**: Add mise tool configuration for development environment
-
-### Changed
-
-- Code quality improvements based on CodeRabbit analysis
-  - Convert f-string logging to parameterized (lazy) logging for better performance
-  - Add configurable LOG_LEVEL environment variable with validation
-  - Improve error handling for attachment downloads with contextual messages
-  - Fix TagOperationResult model to forbid extra fields (strict Pydantic validation)
-  - Fix tag operation methods to return proper dict format
-
-### Breaking Changes
-
-- **Removed legacy wrapper functions from `mcp_zammad.server` module** (v1.0.0)
-  - All 19 legacy wrapper functions have been removed
-  - Tests migrated to use `ZammadMCPServer` class directly
-  - Removed ~320 lines of duplicated code
-  - **Migration steps**: If you were importing functions like `initialize()`, `search_tickets()`, etc. from `mcp_zammad.server`, you must now use the `ZammadMCPServer` class:
-
-    1. Instantiate `ZammadMCPServer()`
-    2. Call `await server.initialize()` to set up the client
-    3. Use `server.get_client()` to access the Zammad client
-    4. Call methods directly on the client instance
-
-    **Example:**
-
-    ```python
-    # Before (legacy pattern):
-    from mcp_zammad.server import initialize, search_tickets
-    await initialize()
-    tickets = search_tickets(state="open")
-
-    # After (new pattern):
-    from mcp_zammad.server import ZammadMCPServer
-    server = ZammadMCPServer()
-    await server.initialize()
-    client = server.get_client()
-    tickets_data = client.search_tickets(state="open")
-    tickets = [Ticket(**t) for t in tickets_data]
-    ```
-
-  - For detailed migration patterns, see [PHASE3_MIGRATION_PLAN.md](docs/PHASE3_MIGRATION_PLAN.md)
+- **devex**: Automate changelog management with git-cliff
+- **docs**: Add comprehensive migration guide for transitioning from legacy wrappers to ZammadMCPServer
+- [**breaking**] Remove legacy wrapper functions (BREAKING CHANGE)
+- **claude**: Add MCP-specialized agent definitions
+- **claude**: Add git branch cleanup command
+- **claude**: Add ultra-think deep analysis command
+- **claude**: Add reusable Claude Code skills
 
 ### Dependencies
 
@@ -89,19 +63,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **deps**: Update github/codeql-action digest to f443b60 (v3)
 - **deps**: Update astral-sh/setup-uv digest to 3259c62 (v6.8.0)
 - **renovate**: Fix json formatting
+- **deps**: Update github/codeql-action digest to 16140ae (v4) (#89)
+- **deps**: Update python:3.13-slim Docker digest to 0796012
+- **deps**: Update dependency uv to v0.9.4
+- **deps**: Update astral-sh/setup-uv digest to 2ddd2b9 (v7.1.0)
+
+### Documentation
+
+- **deprecation**: Add Phase 3 execution plan for legacy wrapper removal
+- Improve migration guidance and remove duplicate tests
+- **claude**: Enhance git_commit and prime command docs
+- **git-commit**: Add comprehensive analysis of command intent vs implementation
+- **changelog**: Restructure breaking changes per Keep a Changelog format
 
 ### Fixed
 
-- **performance**: Optimize `get_ticket_stats` to use pagination instead of loading all tickets into memory (closes #12)
-  - Both MCP tool and legacy wrapper now process tickets in batches of 100
-  - Added performance metrics logging (tickets processed, pages fetched, elapsed time)
-  - Configurable safety limit prevents infinite loops
-  - Fixes performance bottleneck for large datasets (>100 tickets)
-  - Updated tests to verify pagination behavior
-  - Updated ARCHITECTURE.md to document optimization
 - Update Codacy action reference from commit hash to tag version
 - Add correct tag
 - **renovate**: Update renovate configuration to proper format
+- **deps**: Upgrade authlib to 1.6.5 to fix security vulnerabilities
+- **ci**: Configure pip-audit to ignore unfixable pip vulnerability
+- **performance**: Optimize get_ticket_stats to use pagination instead of loading all tickets
+- **security**: Remove PII from initialization logging
 
 ### Miscellaneous Tasks
 
@@ -110,6 +93,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Temp backup coderabbit
 - Clarify Safety action pin to v1.0.1 tag target
 - **claude**: Remove obsolete commands, docs, and hooks
+- **dev**: Pin python version, update mise tasks
+- **dev**: Enhance Claude Code and mise configuration
+- **docs**: Add WARP.md
+- **refactor**: Clean up and apply coderabbit suggestions
+
+### Refactor
+
+- Address CodeRabbit review feedback
+- **tests**: Add explicit type hints to decorator functions
+- **quality**: Apply CodeRabbit recommendations for code quality
+- **errors**: Add custom AttachmentDownloadError exception
+- **client**: Remove redundant bool() conversion in tag methods
+- **server**: Reduce complexity in zammad_get_ticket_stats method
+- **server**: Use state type IDs for robust state categorization
+- **validation**: Add input validation and fix code quality issues
+
+### Styling
+
+- **ci**: Fix YAML inline comment spacing in codacy workflow
 
 <!-- generated by git-cliff -->
 

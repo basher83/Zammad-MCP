@@ -270,7 +270,7 @@
   1. Who is the target user?
   - Experienced devs → Minimal hand-holding
   - Junior devs → More guidance needed
-  - Mixed team → Balance both
+  - More guidance needed - Mixed team: Balance both.
   1. What's the tolerance for complexity?
   - Simple wrapper → Solution 3
   - Smart orchestrator → Solution 2 or 4
