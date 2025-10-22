@@ -9,10 +9,10 @@ tools:
     - ruff@0.6.7
     - bandit@1.7.9
     - mypy@1.11.2
-    - markdownlint@0.33.0
-    # Exclude tools that don't apply to Python projects
-    # - trivy  # Container scanner - not needed for Python code
-    # - pmd    # Java static analyzer - not applicable
+    # Exclude tools that don't apply to Python projects or require Docker
+    # - markdownlint  # Requires Docker tools (disabled in CI), handled by pre-commit
+    # - trivy         # Container scanner - not needed for Python code
+    # - pmd           # Java static analyzer - not applicable
 
 exclude_paths:
     # Test files and artifacts
