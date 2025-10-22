@@ -562,7 +562,7 @@ class ZammadMCPServer:
                 The created ticket
             """
             client = self.get_client()
-            ticket_data = client.create_ticket(**params.model_dump())
+            ticket_data = client.create_ticket(**params.model_dump(exclude_none=True, mode="json"))
 
             return Ticket(**ticket_data)
 
