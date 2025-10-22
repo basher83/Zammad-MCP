@@ -86,10 +86,22 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
     if stripped.startswith("{"):
         try:
             obj = json.loads(content)
-            # Attempt to shrink the "items" array until under limit
+            # Attempt to shrink the "items" array until under limit using binary search
             if "items" in obj and isinstance(obj["items"], list):
-                while obj["items"] and len(json.dumps(obj, indent=2, default=str)) > limit:
-                    obj["items"].pop()  # remove from end
+                original_items = obj["items"]
+                items_count = len(original_items)
+
+                # Binary search to find max items that fit under limit
+                left, right = 0, items_count
+                while left < right:
+                    mid = (left + right + 1) // 2
+                    obj["items"] = original_items[:mid]
+                    if len(json.dumps(obj, indent=2, default=str)) <= limit:
+                        left = mid
+                    else:
+                        right = mid - 1
+
+                obj["items"] = original_items[:left]
 
             # Add metadata about truncation
             meta = obj.setdefault("_meta", {})
@@ -474,19 +486,15 @@ class ZammadMCPServer:
             tickets = [Ticket(**ticket) for ticket in tickets_data]
 
             # Build query info string
-            filters = []
-            if params.query:
-                filters.append(f"query='{params.query}'")
-            if params.state:
-                filters.append(f"state='{params.state}'")
-            if params.priority:
-                filters.append(f"priority='{params.priority}'")
-            if params.group:
-                filters.append(f"group='{params.group}'")
-            if params.owner:
-                filters.append(f"owner='{params.owner}'")
-            if params.customer:
-                filters.append(f"customer='{params.customer}'")
+            filter_parts = {
+                "query": params.query,
+                "state": params.state,
+                "priority": params.priority,
+                "group": params.group,
+                "owner": params.owner,
+                "customer": params.customer,
+            }
+            filters = [f"{k}='{v}'" for k, v in filter_parts.items() if v]
             query_info = ", ".join(filters) if filters else "All tickets"
 
             # Format response
@@ -977,7 +985,7 @@ class ZammadMCPServer:
         pending_count = 0
         escalated_count = 0
         page = 1
-        per_page = 100
+        per_page = MAX_PER_PAGE
 
         while True:
             tickets = client.search_tickets(group=group, page=page, per_page=per_page)
