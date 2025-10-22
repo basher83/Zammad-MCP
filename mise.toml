@@ -118,3 +118,15 @@ run = "markdownlint-cli2 '**/*.md'"
 [tasks.markdown-fix]
 description = "Fix Markdown files"
 run = "markdownlint-cli2 '**/*.md' --fix"
+
+[tasks.codacy-fetch]
+description = "Remote fetch configuration from Codacy"
+run = "codacy-cli init --api-token $CODACY_API_TOKEN --provider $CODACY_PROVIDER --organization $CODACY_ORGANIZATION --repository $CODACY_REPO"
+
+[tasks.codacy-reset]
+description = "Reset to repository-specific configurations from Codacy"
+run = "codacy-cli config reset --api-token $CODACY_API_TOKEN --provider $CODACY_PROVIDER --organization $CODACY_ORGANIZATION --repository $CODACY_REPO"
+
+[tasks.claude-danger]
+description = "Run Claude Code in dangerous mode (skip permissions)"
+run = "claude --dangerously-skip-permissions"
