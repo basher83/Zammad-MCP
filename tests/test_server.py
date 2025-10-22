@@ -12,7 +12,6 @@ import pytest
 from pydantic import ValidationError
 
 from mcp_zammad.models import (
-    Article,
     Attachment,
     GetTicketStatsParams,
     Group,
@@ -473,11 +472,9 @@ def test_add_article_tool(mock_zammad_client, sample_article_data):
     server_inst._setup_tools()
 
     # Test with ArticleCreate params using Enum values
-    from mcp_zammad.models import ArticleCreate, ArticleType, ArticleSender
+    from mcp_zammad.models import ArticleCreate, ArticleSender, ArticleType
 
-    params = ArticleCreate(
-        ticket_id=1, body="New comment", article_type=ArticleType.NOTE, sender=ArticleSender.AGENT
-    )
+    params = ArticleCreate(ticket_id=1, body="New comment", article_type=ArticleType.NOTE, sender=ArticleSender.AGENT)
     result = test_tools["zammad_add_article"](params)
 
     assert result.body == "Test article"
@@ -1048,8 +1045,8 @@ def test_resource_handlers():
     assert "Total Tickets: 2" in result
     assert "Open (1 tickets):" in result
     assert "Closed (1 tickets):" in result
-    assert "#12345 - Test Issue 1" in result
-    assert "#12346 - Test Issue 2" in result
+    assert "#12345 (ID: 1) - Test Issue 1" in result
+    assert "#12346 (ID: 2) - Test Issue 2" in result
 
     # Test empty queue resource
     server.client.search_tickets.return_value = []
@@ -1129,13 +1126,13 @@ def test_prompt_handlers():
     # Test analyze_ticket prompt
     assert "analyze_ticket" in test_prompts
     result = test_prompts["analyze_ticket"](ticket_id=123)
-    assert "analyze ticket 123" in result
+    assert "analyze ticket with ID 123" in result
     assert "get_ticket tool" in result
 
     # Test draft_response prompt
     assert "draft_response" in test_prompts
     result = test_prompts["draft_response"](ticket_id=123, tone="friendly")
-    assert "draft a friendly response to ticket 123" in result
+    assert "draft a friendly response to ticket with ID 123" in result
     assert "add_article" in result
 
     # Test escalation_summary prompt
