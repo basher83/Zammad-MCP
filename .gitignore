@@ -6,8 +6,6 @@ __pycache__/
 # C extensions
 *.so
 
-.cursor/
-.cursor/mcp.json
 # Distribution / packaging
 .Python
 build/
@@ -231,7 +229,12 @@ temp/
 tmp/
 .env.local
 .env.*.local
+
+# Development tools
+mise.local.toml
 .mcp.json
+.cursor/
+.cursor/mcp.json
 
 # MCP/Zammad specific
 zammad_cache/

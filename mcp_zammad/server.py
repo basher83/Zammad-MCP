@@ -17,18 +17,34 @@ from mcp.server.fastmcp import FastMCP
 from .client import ZammadClient
 from .models import (
     Article,
+    ArticleCreate,
+    ArticleSender,
+    ArticleType,
     Attachment,
     AttachmentDownloadError,
+    DownloadAttachmentParams,
+    GetArticleAttachmentsParams,
+    GetOrganizationParams,
+    GetTicketParams,
+    GetTicketStatsParams,
+    GetUserParams,
     Group,
+    ListParams,
     Organization,
     PriorityBrief,
     ResponseFormat,
+    SearchOrganizationsParams,
+    SearchUsersParams,
     StateBrief,
+    TagOperationParams,
     TagOperationResult,
     Ticket,
+    TicketCreate,
     TicketPriority,
+    TicketSearchParams,
     TicketState,
     TicketStats,
+    TicketUpdateParams,
     User,
 )
 
@@ -70,19 +86,42 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
     if stripped.startswith("{"):
         try:
             obj = json.loads(content)
-            # Attempt to shrink the "items" array until under limit
+            original_size = len(content)
+
+            # Attempt to shrink the "items" array until under limit using binary search
             if "items" in obj and isinstance(obj["items"], list):
-                while obj["items"] and len(json.dumps(obj, indent=2, default=str)) > limit:
-                    obj["items"].pop()  # remove from end
+                original_items = obj["items"]
+                items_count = len(original_items)
+
+                # Binary search to find max items that fit under limit
+                left, right = 0, items_count
+                while left < right:
+                    mid = (left + right + 1) // 2
+                    obj["items"] = original_items[:mid]
+                    if len(json.dumps(obj, indent=2, default=str)) <= limit:
+                        left = mid
+                    else:
+                        right = mid - 1
+
+                obj["items"] = original_items[:left]
 
             # Add metadata about truncation
             meta = obj.setdefault("_meta", {})
-            meta.update({
-                "truncated": True,
-                "original_size": len(content),
-                "limit": limit,
-                "note": "Response truncated; reduce page/per_page or add filters."
-            })
+            meta.update(
+                {
+                    "truncated": True,
+                    "original_size": original_size,
+                    "limit": limit,
+                    "note": "Response truncated; reduce page/per_page or add filters.",
+                }
+            )
+
+            # Ensure final JSON (including metadata) fits under limit
+            # Iteratively remove items if metadata pushed us over
+            if "items" in obj and isinstance(obj["items"], list):
+                while obj["items"] and len(json.dumps(obj, indent=2, default=str)) > limit:
+                    obj["items"].pop()
+
             return json.dumps(obj, indent=2, default=str)
         except Exception as e:
             # fall back to plaintext truncation if JSON parsing fails
@@ -128,7 +167,8 @@ def _format_tickets_markdown(tickets: list[Ticket], query_info: str = "Search Re
         lines.append(f"## Ticket #{ticket.number} - {ticket.title}")
         lines.append(f"- **State**: {state_name}")
         lines.append(f"- **Priority**: {priority_name}")
-        lines.append(f"- **Created**: {ticket.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        # Use isoformat() to include timezone information if available
+        lines.append(f"- **Created**: {ticket.created_at.isoformat()}")
         lines.append("")
 
     return "\n".join(lines)
@@ -438,75 +478,38 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_search_tickets(
-            query: str | None = None,
-            state: str | None = None,
-            priority: str | None = None,
-            group: str | None = None,
-            owner: str | None = None,
-            customer: str | None = None,
-            page: int = 1,
-            per_page: int = 25,
-            response_format: ResponseFormat = ResponseFormat.MARKDOWN,
-        ) -> str:
+        def zammad_search_tickets(params: TicketSearchParams) -> str:
             """Search for tickets with various filters.
 
             Args:
-                query: Free text search query
-                state: Filter by state (new, open, closed, etc.)
-                priority: Filter by priority (1 low, 2 normal, 3 high)
-                group: Filter by group name
-                owner: Filter by owner login/email
-                customer: Filter by customer email
-                page: Page number (default: 1)
-                per_page: Results per page (default: 25)
-                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
+                params: Search parameters including filters and pagination
 
             Returns:
                 Formatted response in either JSON or Markdown format
-
-            Raises:
-                ValueError: If pagination parameters are invalid
             """
-            # Validate pagination inputs
-            if page < 1:
-                raise ValueError("page must be >= 1")
-            if not 1 <= per_page <= MAX_PER_PAGE:
-                raise ValueError(f"per_page must be between 1 and {MAX_PER_PAGE}")
-
             client = self.get_client()
-            tickets_data = client.search_tickets(
-                query=query,
-                state=state,
-                priority=priority,
-                group=group,
-                owner=owner,
-                customer=customer,
-                page=page,
-                per_page=per_page,
-            )
+
+            # Extract search parameters (exclude response_format for API call)
+            search_params = params.model_dump(exclude={"response_format"}, exclude_none=True)
+            tickets_data = client.search_tickets(**search_params)
 
             tickets = [Ticket(**ticket) for ticket in tickets_data]
 
             # Build query info string
-            filters = []
-            if query:
-                filters.append(f"query='{query}'")
-            if state:
-                filters.append(f"state='{state}'")
-            if priority:
-                filters.append(f"priority='{priority}'")
-            if group:
-                filters.append(f"group='{group}'")
-            if owner:
-                filters.append(f"owner='{owner}'")
-            if customer:
-                filters.append(f"customer='{customer}'")
+            filter_parts = {
+                "query": params.query,
+                "state": params.state,
+                "priority": params.priority,
+                "group": params.group,
+                "owner": params.owner,
+                "customer": params.customer,
+            }
+            filters = [f"{k}='{v}'" for k, v in filter_parts.items() if v]
             query_info = ", ".join(filters) if filters else "All tickets"
 
             # Format response
-            if response_format == ResponseFormat.JSON:
-                result = _format_tickets_json(tickets, None, page, per_page)
+            if params.response_format == ResponseFormat.JSON:
+                result = _format_tickets_json(tickets, None, params.page, params.per_page)
             else:
                 result = _format_tickets_markdown(tickets, query_info)
 
@@ -520,16 +523,11 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_get_ticket(
-            ticket_id: int, include_articles: bool = True, article_limit: int = 10, article_offset: int = 0
-        ) -> Ticket:
+        def zammad_get_ticket(params: GetTicketParams) -> Ticket:
             """Get detailed information about a specific ticket.
 
             Args:
-                ticket_id: The ticket ID
-                include_articles: Whether to include ticket articles/comments
-                article_limit: Maximum number of articles to return (default: 10, use -1 for all)
-                article_offset: Number of articles to skip (for pagination, default: 0)
+                params: Get ticket parameters including ticket_id and article options
 
             Returns:
                 Ticket details including articles if requested
@@ -538,7 +536,12 @@ class ZammadMCPServer:
             to control the response size. Articles are returned in chronological order.
             """
             client = self.get_client()
-            ticket_data = client.get_ticket(ticket_id, include_articles, article_limit, article_offset)
+            ticket_data = client.get_ticket(
+                ticket_id=params.ticket_id,
+                include_articles=params.include_articles,
+                article_limit=params.article_limit,
+                article_offset=params.article_offset,
+            )
             return Ticket(**ticket_data)
 
         @self.mcp.tool(
@@ -549,42 +552,17 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_create_ticket(
-            title: str,
-            group: str,
-            customer: str,
-            article_body: str,
-            state: str = "new",
-            priority: str = "2 normal",
-            article_type: str = "note",
-            article_internal: bool = False,
-        ) -> Ticket:
+        def zammad_create_ticket(params: TicketCreate) -> Ticket:
             """Create a new ticket in Zammad.
 
             Args:
-                title: Ticket title/subject
-                group: Group name or ID
-                customer: Customer email or ID
-                article_body: Initial article/comment body
-                state: State name (default: new)
-                priority: Priority name (default: 2 normal)
-                article_type: Article type (default: note)
-                article_internal: Whether article is internal (default: False)
+                params: Ticket creation parameters
 
             Returns:
                 The created ticket
             """
             client = self.get_client()
-            ticket_data = client.create_ticket(
-                title=title,
-                group=group,
-                customer=customer,
-                article_body=article_body,
-                state=state,
-                priority=priority,
-                article_type=article_type,
-                article_internal=article_internal,
-            )
+            ticket_data = client.create_ticket(**params.model_dump(exclude_none=True, mode="json"))
 
             return Ticket(**ticket_data)
 
@@ -596,36 +574,19 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_update_ticket(
-            ticket_id: int,
-            title: str | None = None,
-            state: str | None = None,
-            priority: str | None = None,
-            owner: str | None = None,
-            group: str | None = None,
-        ) -> Ticket:
+        def zammad_update_ticket(params: TicketUpdateParams) -> Ticket:
             """Update an existing ticket.
 
             Args:
-                ticket_id: The ticket ID to update
-                title: New ticket title
-                state: New state name
-                priority: New priority name
-                owner: New owner login/email
-                group: New group name
+                params: Ticket update parameters including ticket_id and fields to update
 
             Returns:
                 The updated ticket
             """
             client = self.get_client()
-            ticket_data = client.update_ticket(
-                ticket_id=ticket_id,
-                title=title,
-                state=state,
-                priority=priority,
-                owner=owner,
-                group=group,
-            )
+            # Extract ticket_id and update fields separately
+            update_data = params.model_dump(exclude={"ticket_id"}, exclude_none=True)
+            ticket_data = client.update_ticket(ticket_id=params.ticket_id, **update_data)
 
             return Ticket(**ticket_data)
 
@@ -637,43 +598,21 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_add_article(
-            ticket_id: int,
-            body: str,
-            article_type: str = "note",
-            internal: bool = False,
-            sender: str = "Agent",
-        ) -> Article:
+        def zammad_add_article(params: ArticleCreate) -> Article:
             """Add an article (comment/note) to a ticket.
 
             Args:
-                ticket_id: The ticket ID to add article to
-                body: Article body content
-                article_type: Article type (note, email, phone)
-                internal: Whether article is internal
-                sender: Sender type (Agent, Customer, System)
+                params: Article creation parameters
 
             Returns:
                 The created article
-
-            Raises:
-                ValueError: If article_type or sender are invalid
             """
-            # Validate article_type and sender
-            valid_types = {"note", "email", "phone"}
-            if article_type not in valid_types:
-                raise ValueError(f"article_type must be one of {sorted(valid_types)}")
-            valid_senders = {"Agent", "Customer", "System"}
-            if sender not in valid_senders:
-                raise ValueError(f"sender must be one of {sorted(valid_senders)}")
-
             client = self.get_client()
+            # Extract ticket_id and article_type separately to avoid duplicate kwargs
+            # Use mode="json" to convert enums to strings, by_alias=True for API compatibility
+            article_params = params.model_dump(mode="json", by_alias=True, exclude={"ticket_id", "article_type"})
             article_data = client.add_article(
-                ticket_id=ticket_id,
-                body=body,
-                article_type=article_type,
-                internal=internal,
-                sender=sender,
+                ticket_id=params.ticket_id, article_type=params.article_type.value, **article_params
             )
 
             return Article(**article_data)
@@ -686,18 +625,17 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_get_article_attachments(ticket_id: int, article_id: int) -> list[Attachment]:
+        def zammad_get_article_attachments(params: GetArticleAttachmentsParams) -> list[Attachment]:
             """Get list of attachments for a ticket article.
 
             Args:
-                ticket_id: The ticket ID
-                article_id: The article ID
+                params: Article attachments request parameters
 
             Returns:
                 List of attachment information
             """
             client = self.get_client()
-            attachments_data = client.get_article_attachments(ticket_id, article_id)
+            attachments_data = client.get_article_attachments(params.ticket_id, params.article_id)
             return [Attachment(**attachment) for attachment in attachments_data]
 
         @self.mcp.tool(
@@ -708,16 +646,11 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_download_attachment(
-            ticket_id: int, article_id: int, attachment_id: int, max_bytes: int | None = 10_000_000
-        ) -> str:
+        def zammad_download_attachment(params: DownloadAttachmentParams) -> str:
             """Download an attachment from a ticket article.
 
             Args:
-                ticket_id: The ticket ID
-                article_id: The article ID
-                attachment_id: The attachment ID
-                max_bytes: Maximum attachment size in bytes (default: 10MB, None for unlimited)
+                params: Download attachment parameters
 
             Returns:
                 Base64-encoded attachment content
@@ -727,23 +660,23 @@ class ZammadMCPServer:
             """
             client = self.get_client()
             try:
-                attachment_data = client.download_attachment(ticket_id, article_id, attachment_id)
+                attachment_data = client.download_attachment(params.ticket_id, params.article_id, params.attachment_id)
             except (requests.exceptions.RequestException, ValueError, AttachmentDownloadError) as e:
                 raise AttachmentDownloadError(
-                    ticket_id=ticket_id,
-                    article_id=article_id,
-                    attachment_id=attachment_id,
+                    ticket_id=params.ticket_id,
+                    article_id=params.article_id,
+                    attachment_id=params.attachment_id,
                     original_error=e,
                 ) from e
 
             # Guard against very large attachments
-            if max_bytes is not None and len(attachment_data) > max_bytes:
+            if params.max_bytes is not None and len(attachment_data) > params.max_bytes:
                 raise AttachmentDownloadError(
-                    ticket_id=ticket_id,
-                    article_id=article_id,
-                    attachment_id=attachment_id,
+                    ticket_id=params.ticket_id,
+                    article_id=params.article_id,
+                    attachment_id=params.attachment_id,
                     original_error=ValueError(
-                        f"Attachment size {len(attachment_data)} bytes exceeds max_bytes={max_bytes}"
+                        f"Attachment size {len(attachment_data)} bytes exceeds max_bytes={params.max_bytes}"
                     ),
                 )
 
@@ -758,18 +691,17 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_add_ticket_tag(ticket_id: int, tag: str) -> TagOperationResult:
+        def zammad_add_ticket_tag(params: TagOperationParams) -> TagOperationResult:
             """Add a tag to a ticket.
 
             Args:
-                ticket_id: The ticket ID
-                tag: The tag to add
+                params: Tag operation parameters
 
             Returns:
                 Operation result with success status
             """
             client = self.get_client()
-            result = client.add_ticket_tag(ticket_id, tag)
+            result = client.add_ticket_tag(params.ticket_id, params.tag)
             return TagOperationResult(**result)
 
         @self.mcp.tool(
@@ -780,18 +712,17 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_remove_ticket_tag(ticket_id: int, tag: str) -> TagOperationResult:
+        def zammad_remove_ticket_tag(params: TagOperationParams) -> TagOperationResult:
             """Remove a tag from a ticket.
 
             Args:
-                ticket_id: The ticket ID
-                tag: The tag to remove
+                params: Tag operation parameters
 
             Returns:
                 Operation result with success status
             """
             client = self.get_client()
-            result = client.remove_ticket_tag(ticket_id, tag)
+            result = client.remove_ticket_tag(params.ticket_id, params.tag)
             return TagOperationResult(**result)
 
     def _setup_user_org_tools(self) -> None:
@@ -805,17 +736,17 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_get_user(user_id: int) -> User:
+        def zammad_get_user(params: GetUserParams) -> User:
             """Get user information by ID.
 
             Args:
-                user_id: The user ID
+                params: Get user parameters
 
             Returns:
                 User details
             """
             client = self.get_client()
-            user_data = client.get_user(user_id)
+            user_data = client.get_user(params.user_id)
             return User(**user_data)
 
         @self.mcp.tool(
@@ -826,38 +757,24 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_search_users(
-            query: str, page: int = 1, per_page: int = 25, response_format: ResponseFormat = ResponseFormat.MARKDOWN
-        ) -> str:
+        def zammad_search_users(params: SearchUsersParams) -> str:
             """Search for users.
 
             Args:
-                query: Search query (name, email, etc.)
-                page: Page number
-                per_page: Results per page
-                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
+                params: Search users parameters
 
             Returns:
                 Formatted response in either JSON or Markdown format
-
-            Raises:
-                ValueError: If pagination parameters are invalid
             """
-            # Validate pagination inputs
-            if page < 1:
-                raise ValueError("page must be >= 1")
-            if not 1 <= per_page <= MAX_PER_PAGE:
-                raise ValueError(f"per_page must be between 1 and {MAX_PER_PAGE}")
-
             client = self.get_client()
-            users_data = client.search_users(query, page, per_page)
+            users_data = client.search_users(query=params.query, page=params.page, per_page=params.per_page)
             users = [User(**user) for user in users_data]
 
             # Format response
-            if response_format == ResponseFormat.JSON:
-                result = _format_users_json(users, None, page, per_page)
+            if params.response_format == ResponseFormat.JSON:
+                result = _format_users_json(users, None, params.page, params.per_page)
             else:
-                result = _format_users_markdown(users, f"query='{query}'")
+                result = _format_users_markdown(users, f"query='{params.query}'")
 
             return _truncate_response(result)
 
@@ -869,17 +786,17 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_get_organization(org_id: int) -> Organization:
+        def zammad_get_organization(params: GetOrganizationParams) -> Organization:
             """Get organization information by ID.
 
             Args:
-                org_id: The organization ID
+                params: Get organization parameters
 
             Returns:
                 Organization details
             """
             client = self.get_client()
-            org_data = client.get_organization(org_id)
+            org_data = client.get_organization(params.org_id)
             return Organization(**org_data)
 
         @self.mcp.tool(
@@ -890,38 +807,24 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_search_organizations(
-            query: str, page: int = 1, per_page: int = 25, response_format: ResponseFormat = ResponseFormat.MARKDOWN
-        ) -> str:
+        def zammad_search_organizations(params: SearchOrganizationsParams) -> str:
             """Search for organizations.
 
             Args:
-                query: Search query (name, domain, etc.)
-                page: Page number
-                per_page: Results per page
-                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
+                params: Search organizations parameters
 
             Returns:
                 Formatted response in either JSON or Markdown format
-
-            Raises:
-                ValueError: If pagination parameters are invalid
             """
-            # Validate pagination inputs
-            if page < 1:
-                raise ValueError("page must be >= 1")
-            if not 1 <= per_page <= MAX_PER_PAGE:
-                raise ValueError(f"per_page must be between 1 and {MAX_PER_PAGE}")
-
             client = self.get_client()
-            orgs_data = client.search_organizations(query, page, per_page)
+            orgs_data = client.search_organizations(query=params.query, page=params.page, per_page=params.per_page)
             orgs = [Organization(**org) for org in orgs_data]
 
             # Format response
-            if response_format == ResponseFormat.JSON:
-                result = _format_organizations_json(orgs, None, page, per_page)
+            if params.response_format == ResponseFormat.JSON:
+                result = _format_organizations_json(orgs, None, params.page, params.per_page)
             else:
-                result = _format_organizations_markdown(orgs, f"query='{query}'")
+                result = _format_organizations_markdown(orgs, f"query='{params.query}'")
 
             return _truncate_response(result)
 
@@ -1095,7 +998,7 @@ class ZammadMCPServer:
         pending_count = 0
         escalated_count = 0
         page = 1
-        per_page = 100
+        per_page = MAX_PER_PAGE
 
         while True:
             tickets = client.search_tickets(group=group, page=page, per_page=per_page)
@@ -1179,17 +1082,11 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_get_ticket_stats(
-            group: str | None = None,
-            start_date: str | None = None,
-            end_date: str | None = None,
-        ) -> TicketStats:
+        def zammad_get_ticket_stats(params: GetTicketStatsParams) -> TicketStats:
             """Get ticket statistics using pagination for better performance.
 
             Args:
-                group: Filter by group name
-                start_date: Start date (ISO format) - NOT YET IMPLEMENTED
-                end_date: End date (ISO format) - NOT YET IMPLEMENTED
+                params: Ticket statistics parameters
 
             Returns:
                 Ticket statistics
@@ -1200,13 +1097,15 @@ class ZammadMCPServer:
             start_time = time.time()
             client = self.get_client()
 
-            if start_date or end_date:
+            if params.start_date or params.end_date:
                 logger.warning("Date filtering not yet implemented - ignoring date parameters")
 
-            group_filter_msg = f" for group '{group}'" if group else ""
+            group_filter_msg = f" for group '{params.group}'" if params.group else ""
             logger.info("Starting ticket statistics calculation%s", group_filter_msg)
 
-            total, open_count, closed, pending, escalated, pages = self._collect_ticket_stats_paginated(client, group)
+            total, open_count, closed, pending, escalated, pages = self._collect_ticket_stats_paginated(
+                client, params.group
+            )
 
             return self._build_stats_result(
                 total, open_count, closed, pending, escalated, pages, time.time() - start_time
@@ -1220,11 +1119,11 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_list_groups(response_format: ResponseFormat = ResponseFormat.MARKDOWN) -> str:
+        def zammad_list_groups(params: ListParams) -> str:
             """Get all available groups (cached).
 
             Args:
-                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
+                params: List parameters
 
             Returns:
                 Formatted response in either JSON or Markdown format
@@ -1232,7 +1131,7 @@ class ZammadMCPServer:
             groups = self._get_cached_groups()
 
             # Format response
-            if response_format == ResponseFormat.JSON:
+            if params.response_format == ResponseFormat.JSON:
                 result = _format_list_json(groups)
             else:
                 result = _format_list_markdown(groups, "Group")
@@ -1247,11 +1146,11 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_list_ticket_states(response_format: ResponseFormat = ResponseFormat.MARKDOWN) -> str:
+        def zammad_list_ticket_states(params: ListParams) -> str:
             """Get all available ticket states (cached).
 
             Args:
-                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
+                params: List parameters
 
             Returns:
                 Formatted response in either JSON or Markdown format
@@ -1259,7 +1158,7 @@ class ZammadMCPServer:
             states = self._get_cached_states()
 
             # Format response
-            if response_format == ResponseFormat.JSON:
+            if params.response_format == ResponseFormat.JSON:
                 result = _format_list_json(states)
             else:
                 result = _format_list_markdown(states, "Ticket State")
@@ -1274,11 +1173,11 @@ class ZammadMCPServer:
                 "openWorldHint": True,
             }
         )
-        def zammad_list_ticket_priorities(response_format: ResponseFormat = ResponseFormat.MARKDOWN) -> str:
+        def zammad_list_ticket_priorities(params: ListParams) -> str:
             """Get all available ticket priorities (cached).
 
             Args:
-                response_format: Output format - "markdown" for human-readable or "json" for machine-readable
+                params: List parameters
 
             Returns:
                 Formatted response in either JSON or Markdown format
@@ -1286,7 +1185,7 @@ class ZammadMCPServer:
             priorities = self._get_cached_priorities()
 
             # Format response
-            if response_format == ResponseFormat.JSON:
+            if params.response_format == ResponseFormat.JSON:
                 result = _format_list_json(priorities)
             else:
                 result = _format_list_markdown(priorities, "Ticket Priority")

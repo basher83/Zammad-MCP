@@ -1,10 +1,20 @@
 """Pydantic models for Zammad entities."""
 
 import html
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+
+
+class StrictBaseModel(BaseModel):
+    """Base model with strict validation that forbids extra fields.
+
+    This ensures that typos or incorrect field names in request parameters
+    are caught early with clear validation errors rather than being silently ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ResponseFormat(str, Enum):
@@ -17,6 +27,34 @@ class ResponseFormat(str, Enum):
 
     MARKDOWN = "markdown"
     JSON = "json"
+
+
+class ArticleType(str, Enum):
+    """Article type enumeration.
+
+    Attributes:
+        NOTE: Internal note
+        EMAIL: Email communication
+        PHONE: Phone call record
+    """
+
+    NOTE = "note"
+    EMAIL = "email"
+    PHONE = "phone"
+
+
+class ArticleSender(str, Enum):
+    """Article sender type enumeration.
+
+    Attributes:
+        AGENT: Sent by an agent
+        CUSTOMER: Sent by a customer
+        SYSTEM: System-generated
+    """
+
+    AGENT = "Agent"
+    CUSTOMER = "Customer"
+    SYSTEM = "System"
 
 
 class AttachmentDownloadError(Exception):
@@ -164,7 +202,7 @@ class Ticket(BaseModel):
     articles: list[Article] | None = None
 
 
-class TicketCreate(BaseModel):
+class TicketCreate(StrictBaseModel):
     """Create ticket request."""
 
     title: str = Field(description="Ticket title/subject", max_length=200)
@@ -183,7 +221,7 @@ class TicketCreate(BaseModel):
         return html.escape(v)
 
 
-class TicketUpdate(BaseModel):
+class TicketUpdate(StrictBaseModel):
     """Update ticket request."""
 
     title: str | None = Field(None, description="New ticket title", max_length=200)
@@ -199,7 +237,7 @@ class TicketUpdate(BaseModel):
         return html.escape(v) if v else v
 
 
-class TicketSearchParams(BaseModel):
+class TicketSearchParams(StrictBaseModel):
     """Ticket search parameters."""
 
     query: str | None = Field(None, description="Free text search query")
@@ -208,8 +246,9 @@ class TicketSearchParams(BaseModel):
     group: str | None = Field(None, description="Filter by group name")
     owner: str | None = Field(None, description="Filter by owner login/email")
     customer: str | None = Field(None, description="Filter by customer email")
-    page: int = Field(default=1, description="Page number")
-    per_page: int = Field(default=25, description="Results per page")
+    page: int = Field(default=1, ge=1, description="Page number (must be >= 1)")
+    per_page: int = Field(default=25, ge=1, le=100, description="Results per page (1-100)")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
 
 
 class Attachment(BaseModel):
@@ -222,20 +261,141 @@ class Attachment(BaseModel):
     created_at: datetime | None = None
 
 
-class ArticleCreate(BaseModel):
+class ArticleCreate(StrictBaseModel):
     """Create article request."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     ticket_id: int = Field(description="Ticket ID to add article to", gt=0)
     body: str = Field(description="Article body content", max_length=100000)
-    type: str = Field(default="note", description="Article type (note, email, phone)", max_length=50)
+    article_type: ArticleType = Field(
+        default=ArticleType.NOTE, alias="type", description="Article type"
+    )
     internal: bool = Field(default=False, description="Whether the article is internal")
-    sender: str = Field(default="Agent", description="Sender type (Agent, Customer, System)", max_length=50)
+    sender: ArticleSender = Field(default=ArticleSender.AGENT, description="Sender type")
 
     @field_validator("body")
     @classmethod
     def sanitize_body(cls, v: str) -> str:
         """Escape HTML to prevent XSS attacks."""
         return html.escape(v)
+
+
+class GetTicketParams(StrictBaseModel):
+    """Get ticket request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    include_articles: bool = Field(default=True, description="Whether to include ticket articles/comments")
+    article_limit: int = Field(default=10, ge=-1, description="Maximum number of articles to return (-1 for all)")
+    article_offset: int = Field(default=0, ge=0, description="Number of articles to skip for pagination")
+
+
+class TicketUpdateParams(StrictBaseModel):
+    """Update ticket request parameters."""
+
+    ticket_id: int = Field(gt=0, description="The ticket ID to update")
+    title: str | None = Field(None, description="New ticket title", max_length=200)
+    state: str | None = Field(None, description="New state name", max_length=100)
+    priority: str | None = Field(None, description="New priority name", max_length=100)
+    owner: str | None = Field(None, description="New owner login/email", max_length=255)
+    group: str | None = Field(None, description="New group name", max_length=100)
+
+    @field_validator("title")
+    @classmethod
+    def sanitize_title(cls, v: str | None) -> str | None:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v) if v else v
+
+
+class GetArticleAttachmentsParams(StrictBaseModel):
+    """Get article attachments request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    article_id: int = Field(gt=0, description="Article ID")
+
+
+class DownloadAttachmentParams(StrictBaseModel):
+    """Download attachment request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    article_id: int = Field(gt=0, description="Article ID")
+    attachment_id: int = Field(gt=0, description="Attachment ID")
+    max_bytes: int | None = Field(
+        default=10_000_000, ge=1, description="Maximum attachment size in bytes (None for unlimited)"
+    )
+
+
+class TagOperationParams(StrictBaseModel):
+    """Tag operation (add/remove) request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    tag: str = Field(min_length=1, max_length=100, description="Tag name")
+
+
+class GetUserParams(StrictBaseModel):
+    """Get user request parameters."""
+
+    user_id: int = Field(gt=0, description="User ID")
+
+
+class SearchUsersParams(StrictBaseModel):
+    """Search users request parameters."""
+
+    query: str = Field(min_length=1, description="Search query (name, email, etc.)")
+    page: int = Field(default=1, ge=1, description="Page number (must be >= 1)")
+    per_page: int = Field(default=25, ge=1, le=100, description="Results per page (1-100)")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class GetOrganizationParams(StrictBaseModel):
+    """Get organization request parameters."""
+
+    org_id: int = Field(gt=0, description="Organization ID")
+
+
+class SearchOrganizationsParams(StrictBaseModel):
+    """Search organizations request parameters."""
+
+    query: str = Field(min_length=1, description="Search query (name, domain, etc.)")
+    page: int = Field(default=1, ge=1, description="Page number (must be >= 1)")
+    per_page: int = Field(default=25, ge=1, le=100, description="Results per page (1-100)")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class GetTicketStatsParams(StrictBaseModel):
+    """Get ticket statistics request parameters."""
+
+    group: str | None = Field(None, description="Filter by group name")
+    start_date: date | datetime | None = Field(
+        None, description="Start date for filtering tickets (ISO format: YYYY-MM-DD) - NOT YET IMPLEMENTED"
+    )
+    end_date: date | datetime | None = Field(
+        None, description="End date for filtering tickets (ISO format: YYYY-MM-DD) - NOT YET IMPLEMENTED"
+    )
+
+    @field_validator("end_date")
+    @classmethod
+    def validate_date_range(cls, v: date | datetime | None, info: ValidationInfo) -> date | datetime | None:
+        """Validate that end_date is not before start_date.
+
+        TODO: This validation is currently a placeholder since date filtering
+        is not yet implemented in the backend. Once implemented, this will
+        ensure end_date >= start_date.
+        """
+        if v is not None and info.data.get("start_date") is not None:
+            start = info.data["start_date"]
+            # Convert datetime to date for comparison if needed
+            start_date = start.date() if isinstance(start, datetime) else start
+            end_date = v.date() if isinstance(v, datetime) else v
+            if end_date < start_date:
+                raise ValueError("end_date must be greater than or equal to start_date")
+        return v
+
+
+class ListParams(StrictBaseModel):
+    """List resource request parameters."""
+
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
 
 
 class User(BaseModel):
