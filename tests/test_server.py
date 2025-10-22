@@ -1843,8 +1843,9 @@ class TestJSONOutputAndTruncation:
         assert parsed["page"] == 1
         assert parsed["per_page"] == 25
         assert parsed["has_more"] is False
-        assert "tickets" in parsed
-        assert len(parsed["tickets"]) == 1
+        assert "items" in parsed
+        assert len(parsed["items"]) == 1
+        assert "_meta" in parsed  # Pre-allocated for truncation
 
     def test_search_users_json_format(self) -> None:
         """Test search_users with JSON output format."""
@@ -1892,7 +1893,8 @@ class TestJSONOutputAndTruncation:
         parsed = json.loads(result)
         assert parsed["count"] == 1
         assert parsed["total"] is None
-        assert "users" in parsed
+        assert "items" in parsed
+        assert "_meta" in parsed  # Pre-allocated for truncation
 
     def test_json_truncation_preserves_validity(self) -> None:
         """Test that JSON truncation maintains valid JSON."""
@@ -1901,18 +1903,19 @@ class TestJSONOutputAndTruncation:
 
         # Create a large JSON object
         large_json_obj = {
-            "total": None,
-            "count": 100,
-            "page": 1,
-            "per_page": 100,
-            "tickets": [
+            "items": [
                 {
                     "id": i,
                     "title": f"Ticket {i}" * 100,  # Make it large
                     "description": "x" * 1000
                 }
                 for i in range(100)
-            ]
+            ],
+            "total": None,
+            "count": 100,
+            "page": 1,
+            "per_page": 100,
+            "_meta": {},
         }
         large_json_str = json.dumps(large_json_obj, indent=2)
 
@@ -2013,11 +2016,12 @@ class TestJSONOutputAndTruncation:
         assert parsed["has_more"] is False
         assert parsed["next_page"] is None
         assert parsed["next_offset"] is None
-        assert "groups" in parsed
+        assert "items" in parsed
+        assert "_meta" in parsed  # Pre-allocated for truncation
 
         # Verify items are sorted by id (stable ordering)
-        groups = parsed["groups"]
-        assert len(groups) == 3
-        assert groups[0]["id"] == 1  # Should be sorted
-        assert groups[1]["id"] == 2
-        assert groups[2]["id"] == 3
+        items = parsed["items"]
+        assert len(items) == 3
+        assert items[0]["id"] == 1  # Should be sorted
+        assert items[1]["id"] == 2
+        assert items[2]["id"] == 3

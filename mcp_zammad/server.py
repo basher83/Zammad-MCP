@@ -70,11 +70,10 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
     if stripped.startswith("{"):
         try:
             obj = json.loads(content)
-            # Attempt to shrink common list fields until under limit
-            for key in ("tickets", "users", "organizations", "groups", "states", "priorities"):
-                if key in obj and isinstance(obj[key], list):
-                    while obj[key] and len(json.dumps(obj, indent=2, default=str)) > limit:
-                        obj[key].pop()  # remove from end
+            # Attempt to shrink the "items" array until under limit
+            if "items" in obj and isinstance(obj["items"], list):
+                while obj["items"] and len(json.dumps(obj, indent=2, default=str)) > limit:
+                    obj["items"].pop()  # remove from end
 
             # Add metadata about truncation
             meta = obj.setdefault("_meta", {})
@@ -148,6 +147,7 @@ def _format_tickets_json(tickets: list[Ticket], total: int | None, page: int, pe
         JSON-formatted string with pagination metadata
     """
     response = {
+        "items": [ticket.model_dump() for ticket in tickets],
         "total": total,  # None when true total is unknown
         "count": len(tickets),
         "page": page,
@@ -156,7 +156,7 @@ def _format_tickets_json(tickets: list[Ticket], total: int | None, page: int, pe
         "has_more": len(tickets) == per_page,  # heuristic when total unknown
         "next_page": page + 1 if len(tickets) == per_page else None,
         "next_offset": page * per_page if len(tickets) == per_page else None,
-        "tickets": [ticket.model_dump() for ticket in tickets],
+        "_meta": {},  # Pre-allocated for truncation flags
     }
 
     return json.dumps(response, indent=2, default=str)
@@ -201,6 +201,7 @@ def _format_users_json(users: list[User], total: int | None, page: int, per_page
         JSON-formatted string with pagination metadata
     """
     response = {
+        "items": [user.model_dump() for user in users],
         "total": total,  # None when true total is unknown
         "count": len(users),
         "page": page,
@@ -209,7 +210,7 @@ def _format_users_json(users: list[User], total: int | None, page: int, per_page
         "has_more": len(users) == per_page,  # heuristic when total unknown
         "next_page": page + 1 if len(users) == per_page else None,
         "next_offset": page * per_page if len(users) == per_page else None,
-        "users": [user.model_dump() for user in users],
+        "_meta": {},  # Pre-allocated for truncation flags
     }
 
     return json.dumps(response, indent=2, default=str)
@@ -251,6 +252,7 @@ def _format_organizations_json(orgs: list[Organization], total: int | None, page
         JSON-formatted string with pagination metadata
     """
     response = {
+        "items": [org.model_dump() for org in orgs],
         "total": total,  # None when true total is unknown
         "count": len(orgs),
         "page": page,
@@ -259,7 +261,7 @@ def _format_organizations_json(orgs: list[Organization], total: int | None, page
         "has_more": len(orgs) == per_page,  # heuristic when total unknown
         "next_page": page + 1 if len(orgs) == per_page else None,
         "next_offset": page * per_page if len(orgs) == per_page else None,
-        "organizations": [org.model_dump() for org in orgs],
+        "_meta": {},  # Pre-allocated for truncation flags
     }
 
     return json.dumps(response, indent=2, default=str)
@@ -293,7 +295,7 @@ def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriori
 
     Args:
         items: List of items to format
-        item_type: Type of items (e.g., "groups", "states", "priorities")
+        item_type: Type of items (e.g., "groups", "states", "priorities") - deprecated, kept for compatibility
 
     Returns:
         JSON-formatted string with pagination metadata
@@ -308,6 +310,7 @@ def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriori
     offset = 0
 
     response = {
+        "items": [item.model_dump() for item in sorted_items],
         "total": total,
         "count": total,
         "page": page,
@@ -316,7 +319,7 @@ def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriori
         "has_more": False,  # Always false for complete lists
         "next_page": None,
         "next_offset": None,
-        item_type: [item.model_dump() for item in sorted_items],
+        "_meta": {},  # Pre-allocated for truncation flags
     }
 
     return json.dumps(response, indent=2, default=str)
