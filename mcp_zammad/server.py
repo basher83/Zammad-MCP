@@ -86,6 +86,8 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
     if stripped.startswith("{"):
         try:
             obj = json.loads(content)
+            original_size = len(content)
+
             # Attempt to shrink the "items" array until under limit using binary search
             if "items" in obj and isinstance(obj["items"], list):
                 original_items = obj["items"]
@@ -108,11 +110,18 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
             meta.update(
                 {
                     "truncated": True,
-                    "original_size": len(content),
+                    "original_size": original_size,
                     "limit": limit,
                     "note": "Response truncated; reduce page/per_page or add filters.",
                 }
             )
+
+            # Ensure final JSON (including metadata) fits under limit
+            # Iteratively remove items if metadata pushed us over
+            if "items" in obj and isinstance(obj["items"], list):
+                while obj["items"] and len(json.dumps(obj, indent=2, default=str)) > limit:
+                    obj["items"].pop()
+
             return json.dumps(obj, indent=2, default=str)
         except Exception as e:
             # fall back to plaintext truncation if JSON parsing fails
