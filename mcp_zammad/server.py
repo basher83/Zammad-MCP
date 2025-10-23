@@ -58,8 +58,8 @@ class _Dumpable(Protocol):
     id: int
     name: str
 
-    def model_dump(self) -> dict[str, Any]:
-        ...
+    def model_dump(self) -> dict[str, Any]: ...
+
 
 T = TypeVar("T", bound=_Dumpable)
 
@@ -92,7 +92,7 @@ def _brief_field(value: Any, attr: str) -> str:
     Returns:
         The extracted value or "Unknown"
     """
-    if isinstance(value, StateBrief | PriorityBrief | UserBrief):
+    if isinstance(value, (StateBrief, PriorityBrief, UserBrief)):  # noqa: UP038
         v = getattr(value, attr, None)
         return v or "Unknown"
     if isinstance(value, str):

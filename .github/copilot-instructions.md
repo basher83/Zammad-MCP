@@ -20,7 +20,7 @@ This is a Python-based Model Context Protocol (MCP) server that provides integra
    - Type check: `uv run mypy mcp_zammad`
    - Security: `uv run bandit -r mcp_zammad/`
 1. Run tests: `uv run pytest --cov=mcp_zammad`
-1. Ensure coverage target: 80%+ (current: 67%)
+1. Ensure coverage target: 80%+
 
 ## Repository Structure
 
