@@ -165,32 +165,80 @@ Supports three authentication methods with precedence:
 
 ## State Management
 
-### Global Client State
+### Class-Based Client State
+
+The server uses a class-based architecture for managing the Zammad client:
 
 ```python
+class ZammadMCPServer:
+    """Zammad MCP Server with proper client lifecycle management."""
+
+    def __init__(self) -> None:
+        """Initialize the server."""
+        self.client: ZammadClient | None = None
+        # Create FastMCP with lifespan configured
+        self.mcp = FastMCP("Zammad MCP Server", lifespan=self._create_lifespan())
+        self._setup_tools()
+        self._setup_resources()
+        self._setup_prompts()
+
+    def get_client(self) -> ZammadClient:
+        """Get the Zammad client, ensuring it's initialized."""
+        if not self.client:
+            raise RuntimeError("Zammad client not initialized")
+        return self.client
+```
+
+**Key benefits:**
+- **Encapsulation**: Client state is instance-managed, not global
+- **Type safety**: `get_client()` returns typed `ZammadClient`, not `ZammadClient | None`
+- **Testability**: Easy to mock and test individual server instances
+- **Lifecycle**: Proper initialization and cleanup through lifespan context manager
+
+### Initialization Lifecycle
+
+```python
+def _create_lifespan(self) -> Any:
+    """Create the lifespan context manager for the server."""
+
+    @asynccontextmanager
+    async def lifespan(_app: FastMCP) -> AsyncIterator[None]:
+        """Initialize resources on startup and cleanup on shutdown."""
+        await self.initialize()
+        try:
+            yield
+        finally:
+            if self.client is not None:
+                self.client = None
+                logger.info("Zammad client cleaned up")
+
+    return lifespan
+
+async def initialize(self) -> None:
+    """Initialize the Zammad client on server startup."""
+    # Load environment variables, create client, test connection
+    self.client = ZammadClient()
+    logger.info("Zammad client initialized successfully")
+```
+
+**Note**: FastMCP handles its own async event loop. Do not wrap `mcp.run()` in `asyncio.run()`.
+
+### Legacy Pattern (Deprecated)
+
+Earlier versions used module-level globals with a sentinel pattern:
+
+```python
+# Old approach - DO NOT USE
 _UNINITIALIZED: Final = object()
 zammad_client: ZammadClient | object = _UNINITIALIZED
 
 def get_zammad_client() -> ZammadClient:
-    """Type-safe client accessor."""
     if zammad_client is _UNINITIALIZED:
         raise RuntimeError("Zammad client not initialized")
     return cast(ZammadClient, zammad_client)
 ```
 
-### Initialization Lifecycle
-
-```python
-@asynccontextmanager
-async def lifespan(app: FastMCP):
-    """Initialize resources on startup."""
-    await initialize()  # Sets up global client
-    yield
-    # Cleanup if needed
-
-# Note: FastMCP handles its own async event loop
-# Do not wrap mcp.run() in asyncio.run()
-```
+This pattern has been replaced by the class-based approach for better encapsulation and testability.
 
 ## API Integration Details
 
