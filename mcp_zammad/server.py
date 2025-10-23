@@ -58,7 +58,7 @@ class _Dumpable(Protocol):
     id: int
     name: str
 
-    def model_dump(self) -> dict[str, Any]: ...
+    def model_dump(self) -> dict[str, Any]: ...  # codacy: ignore E704
 
 
 T = TypeVar("T", bound=_Dumpable)
