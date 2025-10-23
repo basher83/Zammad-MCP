@@ -113,6 +113,102 @@ def _escape_article_body(article: Article) -> str:
     return html.escape(article.body) if "html" in ct else article.body
 
 
+def _serialize_json(obj: dict[str, Any], use_compact: bool) -> str:
+    """Serialize JSON object with appropriate formatting.
+
+    Args:
+        obj: Dictionary to serialize
+        use_compact: If True, use compact format; otherwise use indented format
+
+    Returns:
+        JSON string
+    """
+    if use_compact:
+        return json.dumps(obj, separators=(",", ":"), default=str)
+    return json.dumps(obj, indent=2, default=str)
+
+
+def _find_max_items_for_limit(obj: dict[str, Any], original_items: list[Any], limit: int, use_compact: bool) -> int:
+    """Binary search to find max items that fit under limit.
+
+    Args:
+        obj: JSON object to truncate
+        original_items: Original items array
+        limit: Character limit
+        use_compact: Whether to use compact JSON format
+
+    Returns:
+        Maximum number of items that fit
+    """
+    left, right = 0, len(original_items)
+    while left < right:
+        mid = (left + right + 1) // 2
+        obj["items"] = original_items[:mid]
+        if len(_serialize_json(obj, use_compact)) <= limit:
+            left = mid
+        else:
+            right = mid - 1
+    return left
+
+
+def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> str:
+    """Truncate JSON response preserving validity.
+
+    Args:
+        content: Original content string
+        obj: Parsed JSON object
+        limit: Character limit
+
+    Returns:
+        Truncated JSON string
+    """
+    original_size = len(content)
+    use_compact = original_size > limit * 1.2
+
+    # Attempt to shrink the "items" array if present
+    if "items" in obj and isinstance(obj["items"], list):
+        original_items = obj["items"]
+        max_items = _find_max_items_for_limit(obj, original_items, limit, use_compact)
+        obj["items"] = original_items[:max_items]
+
+    # Add metadata about truncation
+    meta = obj.setdefault("_meta", {})
+    meta.update(
+        {
+            "truncated": True,
+            "original_size": original_size,
+            "limit": limit,
+            "note": "Response truncated; reduce page/per_page or add filters.",
+        }
+    )
+
+    # Ensure final JSON (including metadata) fits under limit
+    if "items" in obj and isinstance(obj["items"], list):
+        json_str = _serialize_json(obj, use_compact)
+        while obj["items"] and len(json_str) > limit:
+            obj["items"].pop()
+            json_str = _serialize_json(obj, use_compact)
+
+    return _serialize_json(obj, use_compact)
+
+
+def _truncate_text_response(content: str, limit: int) -> str:
+    """Truncate plaintext/markdown response with warning.
+
+    Args:
+        content: Original content
+        limit: Character limit
+
+    Returns:
+        Truncated content with warning message
+    """
+    truncated = content[:limit]
+    truncated += "\n\n⚠️ **Response Truncated**\n"
+    truncated += f"Response size ({len(content)} chars) exceeds limit ({limit} chars).\n"
+    truncated += "Use pagination (page/per_page) or add filters to see more results."
+    return truncated
+
+
 def truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
     """Truncate response with helpful message if over limit.
 
@@ -130,79 +226,16 @@ def truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
         return content
 
     # Try to preserve JSON validity if the content is JSON
-    stripped = content.lstrip()
-    if stripped.startswith("{"):
+    if content.lstrip().startswith("{"):
         try:
             obj = json.loads(content)
-            original_size = len(content)
-
-            # Use compact JSON (no indentation) if significantly over limit to fit more items
-            use_compact = original_size > limit * 1.2
-
-            # Attempt to shrink the "items" array until under limit using binary search
-            if "items" in obj and isinstance(obj["items"], list):
-                original_items = obj["items"]
-                items_count = len(original_items)
-
-                # Binary search to find max items that fit under limit
-                left, right = 0, items_count
-                while left < right:
-                    mid = (left + right + 1) // 2
-                    obj["items"] = original_items[:mid]
-                    json_str = (
-                        json.dumps(obj, separators=(",", ":"), default=str)
-                        if use_compact
-                        else json.dumps(obj, indent=2, default=str)
-                    )
-                    if len(json_str) <= limit:
-                        left = mid
-                    else:
-                        right = mid - 1
-
-                obj["items"] = original_items[:left]
-
-            # Add metadata about truncation
-            meta = obj.setdefault("_meta", {})
-            meta.update(
-                {
-                    "truncated": True,
-                    "original_size": original_size,
-                    "limit": limit,
-                    "note": "Response truncated; reduce page/per_page or add filters.",
-                }
-            )
-
-            # Ensure final JSON (including metadata) fits under limit
-            # Iteratively remove items if metadata pushed us over
-            if "items" in obj and isinstance(obj["items"], list):
-                json_str = (
-                    json.dumps(obj, separators=(",", ":"), default=str)
-                    if use_compact
-                    else json.dumps(obj, indent=2, default=str)
-                )
-                while obj["items"] and len(json_str) > limit:
-                    obj["items"].pop()
-                    json_str = (
-                        json.dumps(obj, separators=(",", ":"), default=str)
-                        if use_compact
-                        else json.dumps(obj, indent=2, default=str)
-                    )
-
-            return (
-                json.dumps(obj, separators=(",", ":"), default=str)
-                if use_compact
-                else json.dumps(obj, indent=2, default=str)
-            )
+            return _truncate_json_response(content, obj, limit)
         except Exception as e:
             # fall back to plaintext truncation if JSON parsing fails
             logger.debug("Failed to parse/truncate JSON response: %s", e, exc_info=True)
 
-    # Plaintext/Markdown truncation with visible warning
-    truncated = content[:limit]
-    truncated += "\n\n⚠️ **Response Truncated**\n"
-    truncated += f"Response size ({len(content)} chars) exceeds limit ({limit} chars).\n"
-    truncated += "Use pagination (page/per_page) or add filters to see more results."
-    return truncated
+    # Plaintext/Markdown truncation
+    return _truncate_text_response(content, limit)
 
 
 def _format_tickets_markdown(tickets: list[Ticket], query_info: str = "Search Results") -> str:
