@@ -80,7 +80,7 @@ STATE_TYPE_PENDING_REMINDER = 4
 STATE_TYPE_PENDING_CLOSE = 5
 
 
-def _brief_field(value: Any, attr: str) -> str:
+def _brief_field(value: object, attr: str) -> str:
     """Extract a field from a Brief model or return Unknown.
 
     Handles StateBrief, PriorityBrief, UserBrief objects or string fallbacks.
@@ -92,7 +92,7 @@ def _brief_field(value: Any, attr: str) -> str:
     Returns:
         The extracted value or "Unknown"
     """
-    if isinstance(value, (StateBrief, PriorityBrief, UserBrief)):  # noqa: UP038
+    if isinstance(value, StateBrief | PriorityBrief | UserBrief):
         v = getattr(value, attr, None)
         return v or "Unknown"
     if isinstance(value, str):
@@ -226,11 +226,11 @@ def truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
         return content
 
     # Try to preserve JSON validity if the content is JSON
-    if content.lstrip().startswith("{"):
+    if content.lstrip().startswith(("{", "[")):
         try:
             obj = json.loads(content)
             return _truncate_json_response(content, obj, limit)
-        except Exception as e:
+        except (json.JSONDecodeError, TypeError) as e:
             # fall back to plaintext truncation if JSON parsing fails
             logger.debug("Failed to parse/truncate JSON response: %s", e, exc_info=True)
 
