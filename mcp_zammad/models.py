@@ -86,6 +86,25 @@ class AttachmentDownloadError(Exception):
         super().__init__(self.message)
 
 
+class TicketIdGuidanceError(ValueError):
+    """Exception raised when ticket is not found to provide ID vs number guidance.
+
+    Attributes:
+        ticket_id: The ticket ID that was not found
+        message: Explanation with guidance
+    """
+
+    def __init__(self, ticket_id: int) -> None:
+        """Initialize the exception with helpful guidance."""
+        self.ticket_id = ticket_id
+        self.message = (
+            f"Ticket ID {ticket_id} not found. "
+            f"Note: Use the internal 'id' field from search results, not the display 'number'. "
+            f"Example: For ticket #65003, search first to find its internal ID."
+        )
+        super().__init__(self.message)
+
+
 class UserBrief(BaseModel):
     """Brief user information."""
 

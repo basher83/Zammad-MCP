@@ -1,6 +1,7 @@
 """Zammad MCP Server implementation."""
 
 import base64
+import html
 import json
 import logging
 import os
@@ -8,11 +9,12 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn, Protocol, TypeVar
 
 import requests
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
+from pydantic import ValidationError
 
 from .client import ZammadClient
 from .models import (
@@ -38,13 +40,28 @@ from .models import (
     TagOperationResult,
     Ticket,
     TicketCreate,
+    TicketIdGuidanceError,
     TicketPriority,
     TicketSearchParams,
     TicketState,
     TicketStats,
     TicketUpdateParams,
     User,
+    UserBrief,
 )
+
+
+# Protocol for items that can be dumped to dict (for type safety)
+class _Dumpable(Protocol):
+    """Protocol for Pydantic models with id, name, and model_dump."""
+
+    id: int
+    name: str
+
+    def model_dump(self) -> dict[str, Any]: ...  # codacy: ignore E704
+
+
+T = TypeVar("T", bound=_Dumpable)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -62,8 +79,176 @@ STATE_TYPE_CLOSED = 3
 STATE_TYPE_PENDING_REMINDER = 4
 STATE_TYPE_PENDING_CLOSE = 5
 
+# Tool annotation constants
+_READ_ONLY_ANNOTATIONS = {
+    "readOnlyHint": True,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": True,
+}
 
-def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
+_WRITE_ANNOTATIONS = {
+    "readOnlyHint": False,
+    "destructiveHint": False,
+    "idempotentHint": False,
+    "openWorldHint": True,
+}
+
+_IDEMPOTENT_WRITE_ANNOTATIONS = {
+    "readOnlyHint": False,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": True,
+}
+
+
+def _handle_ticket_not_found_error(ticket_id: int, error: Exception) -> NoReturn:
+    """Check if an exception is a ticket not found error and raise TicketIdGuidanceError.
+
+    Args:
+        ticket_id: The ticket ID that was not found
+        error: The exception to check
+
+    Raises:
+        TicketIdGuidanceError: If the error is a not found error
+        Exception: Re-raises the original error if not a not found error
+    """
+    error_msg = str(error).lower()
+    if "not found" in error_msg or "couldn't find" in error_msg:
+        raise TicketIdGuidanceError(ticket_id) from error
+    raise error
+
+
+def _brief_field(value: object, attr: str) -> str:
+    """Extract a field from a Brief model or return Unknown.
+
+    Handles StateBrief, PriorityBrief, UserBrief objects or string fallbacks.
+
+    Args:
+        value: The value to extract from (Brief model, string, or None)
+        attr: The attribute name to extract
+
+    Returns:
+        The extracted value or "Unknown"
+    """
+    if isinstance(value, StateBrief | PriorityBrief | UserBrief):
+        v = getattr(value, attr, None)
+        return v or "Unknown"
+    if isinstance(value, str):
+        return value
+    return "Unknown"
+
+
+def _escape_article_body(article: Article) -> str:
+    """Escape HTML in article bodies to prevent injection.
+
+    Args:
+        article: The article to get the body from
+
+    Returns:
+        HTML-escaped body if content type is HTML, otherwise raw body
+    """
+    ct = (getattr(article, "content_type", None) or "").lower()
+    return html.escape(article.body) if "html" in ct else article.body
+
+
+def _serialize_json(obj: dict[str, Any], *, use_compact: bool) -> str:
+    """Serialize JSON object with appropriate formatting.
+
+    Args:
+        obj: Dictionary to serialize
+        use_compact: If True, use compact format; otherwise use indented format
+
+    Returns:
+        JSON string
+    """
+    if use_compact:
+        return json.dumps(obj, separators=(",", ":"), default=str)
+    return json.dumps(obj, indent=2, default=str)
+
+
+def _find_max_items_for_limit(obj: dict[str, Any], original_items: list[Any], limit: int, *, use_compact: bool) -> int:
+    """Binary search to find max items that fit under limit.
+
+    Args:
+        obj: JSON object to truncate
+        original_items: Original items array
+        limit: Character limit
+        use_compact: Whether to use compact JSON format
+
+    Returns:
+        Maximum number of items that fit
+    """
+    left, right = 0, len(original_items)
+    while left < right:
+        mid = (left + right + 1) // 2
+        obj["items"] = original_items[:mid]
+        if len(_serialize_json(obj, use_compact=use_compact)) <= limit:
+            left = mid
+        else:
+            right = mid - 1
+    return left
+
+
+def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> str:
+    """Truncate JSON response preserving validity.
+
+    Args:
+        content: Original content string
+        obj: Parsed JSON object
+        limit: Character limit
+
+    Returns:
+        Truncated JSON string
+    """
+    original_size = len(content)
+    use_compact = original_size > limit * 1.2
+
+    # Attempt to shrink the "items" array if present
+    if "items" in obj and isinstance(obj["items"], list):
+        original_items = obj["items"]
+        max_items = _find_max_items_for_limit(obj, original_items, limit, use_compact=use_compact)
+        obj["items"] = original_items[:max_items]
+
+    # Add metadata about truncation
+    meta = obj.setdefault("_meta", {})
+    meta.update(
+        {
+            "truncated": True,
+            "original_size": original_size,
+            "limit": limit,
+            "note": "Response truncated; reduce page/per_page or add filters.",
+        }
+    )
+
+    # Ensure final JSON (including metadata) fits under limit
+    if "items" in obj and isinstance(obj["items"], list):
+        json_str = _serialize_json(obj, use_compact=use_compact)
+        while obj["items"] and len(json_str) > limit:
+            obj["items"].pop()
+            json_str = _serialize_json(obj, use_compact=use_compact)
+
+    return _serialize_json(obj, use_compact=use_compact)
+
+
+def _truncate_text_response(content: str, limit: int) -> str:
+    """Truncate plaintext/markdown response with warning.
+
+    Args:
+        content: Original content
+        limit: Character limit
+
+    Returns:
+        Truncated content with warning message
+    """
+    truncated = content[:limit]
+    truncated += "\n\n⚠️ **Response Truncated**\n"
+    truncated += f"Response size ({len(content)} chars) exceeds limit ({limit} chars).\n"
+    truncated += "Use pagination (page/per_page) or add filters to see more results."
+    return truncated
+
+
+def truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
     """Truncate response with helpful message if over limit.
 
     For JSON responses, preserves validity by shrinking arrays and adding metadata.
@@ -80,57 +265,16 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
         return content
 
     # Try to preserve JSON validity if the content is JSON
-    stripped = content.lstrip()
-    if stripped.startswith("{"):
+    if content.lstrip().startswith(("{", "[")):
         try:
             obj = json.loads(content)
-            original_size = len(content)
-
-            # Attempt to shrink the "items" array until under limit using binary search
-            if "items" in obj and isinstance(obj["items"], list):
-                original_items = obj["items"]
-                items_count = len(original_items)
-
-                # Binary search to find max items that fit under limit
-                left, right = 0, items_count
-                while left < right:
-                    mid = (left + right + 1) // 2
-                    obj["items"] = original_items[:mid]
-                    if len(json.dumps(obj, indent=2, default=str)) <= limit:
-                        left = mid
-                    else:
-                        right = mid - 1
-
-                obj["items"] = original_items[:left]
-
-            # Add metadata about truncation
-            meta = obj.setdefault("_meta", {})
-            meta.update(
-                {
-                    "truncated": True,
-                    "original_size": original_size,
-                    "limit": limit,
-                    "note": "Response truncated; reduce page/per_page or add filters.",
-                }
-            )
-
-            # Ensure final JSON (including metadata) fits under limit
-            # Iteratively remove items if metadata pushed us over
-            if "items" in obj and isinstance(obj["items"], list):
-                while obj["items"] and len(json.dumps(obj, indent=2, default=str)) > limit:
-                    obj["items"].pop()
-
-            return json.dumps(obj, indent=2, default=str)
-        except Exception as e:
+            return _truncate_json_response(content, obj, limit)
+        except (json.JSONDecodeError, TypeError) as e:
             # fall back to plaintext truncation if JSON parsing fails
             logger.debug("Failed to parse/truncate JSON response: %s", e, exc_info=True)
 
-    # Plaintext/Markdown truncation with visible warning
-    truncated = content[:limit]
-    truncated += "\n\n⚠️ **Response Truncated**\n"
-    truncated += f"Response size ({len(content)} chars) exceeds limit ({limit} chars).\n"
-    truncated += "Use pagination (page/per_page) or add filters to see more results."
-    return truncated
+    # Plaintext/Markdown truncation
+    return _truncate_text_response(content, limit)
 
 
 def _format_tickets_markdown(tickets: list[Ticket], query_info: str = "Search Results") -> str:
@@ -306,11 +450,11 @@ def _format_organizations_json(orgs: list[Organization], total: int | None, page
     return json.dumps(response, indent=2, default=str)
 
 
-def _format_list_markdown(items: list[Group] | list[TicketState] | list[TicketPriority], item_type: str) -> str:
+def _format_list_markdown(items: list[T], item_type: str) -> str:
     """Format a generic list as markdown for human readability.
 
     Args:
-        items: List of items to format
+        items: List of items to format (must have id, name, and model_dump())
         item_type: Type of items (e.g., "Group", "State", "Priority")
 
     Returns:
@@ -324,16 +468,16 @@ def _format_list_markdown(items: list[Group] | list[TicketState] | list[TicketPr
     lines.append("")
 
     for item in sorted_items:
-        lines.append(f"- **{item.name}** (ID: {item.id})")  # type: ignore[attr-defined]
+        lines.append(f"- **{item.name}** (ID: {item.id})")
 
     return "\n".join(lines)
 
 
-def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriority]) -> str:
+def _format_list_json(items: list[T]) -> str:
     """Format a generic list as JSON for programmatic processing.
 
     Args:
-        items: List of items to format
+        items: List of items to format (must have id, name, and model_dump())
 
     Returns:
         JSON-formatted string with pagination metadata
@@ -469,14 +613,7 @@ class ZammadMCPServer:
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_search_tickets(params: TicketSearchParams) -> str:
             """Search for tickets with various filters.
 
@@ -512,16 +649,9 @@ class ZammadMCPServer:
             else:
                 result = _format_tickets_markdown(tickets, query_info)
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_get_ticket(params: GetTicketParams) -> Ticket:
             """Get detailed information about a specific ticket.
 
@@ -547,23 +677,9 @@ class ZammadMCPServer:
                 )
                 return Ticket(**ticket_data)
             except Exception as e:
-                error_msg = str(e).lower()
-                if "not found" in error_msg or "couldn't find" in error_msg:
-                    raise ValueError(
-                        f"Ticket ID {params.ticket_id} not found. "
-                        f"Note: Use the internal 'id' field from search results, not the display 'number'. "
-                        f"Example: For ticket #65003, search first to find its internal ID."
-                    ) from e
-                raise
+                _handle_ticket_not_found_error(params.ticket_id, e)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": False,
-                "destructiveHint": False,
-                "idempotentHint": False,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_WRITE_ANNOTATIONS)
         def zammad_create_ticket(params: TicketCreate) -> Ticket:
             """Create a new ticket in Zammad.
 
@@ -578,14 +694,7 @@ class ZammadMCPServer:
 
             return Ticket(**ticket_data)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": False,
-                "destructiveHint": False,
-                "idempotentHint": False,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_WRITE_ANNOTATIONS)
         def zammad_update_ticket(params: TicketUpdateParams) -> Ticket:
             """Update an existing ticket.
 
@@ -605,23 +714,9 @@ class ZammadMCPServer:
                 ticket_data = client.update_ticket(ticket_id=params.ticket_id, **update_data)
                 return Ticket(**ticket_data)
             except Exception as e:
-                error_msg = str(e).lower()
-                if "not found" in error_msg or "couldn't find" in error_msg:
-                    raise ValueError(
-                        f"Ticket ID {params.ticket_id} not found. "
-                        f"Note: Use the internal 'id' field from search results, not the display 'number'. "
-                        f"Example: For ticket #65003, search first to find its internal ID."
-                    ) from e
-                raise
+                _handle_ticket_not_found_error(params.ticket_id, e)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": False,
-                "destructiveHint": False,
-                "idempotentHint": False,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_WRITE_ANNOTATIONS)
         def zammad_add_article(params: ArticleCreate) -> Article:
             """Add an article (comment/note) to a ticket.
 
@@ -644,14 +739,7 @@ class ZammadMCPServer:
 
             return Article(**article_data)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_get_article_attachments(params: GetArticleAttachmentsParams) -> list[Attachment]:
             """Get list of attachments for a ticket article.
 
@@ -668,14 +756,7 @@ class ZammadMCPServer:
             attachments_data = client.get_article_attachments(params.ticket_id, params.article_id)
             return [Attachment(**attachment) for attachment in attachments_data]
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_download_attachment(params: DownloadAttachmentParams) -> str:
             """Download an attachment from a ticket article.
 
@@ -716,14 +797,7 @@ class ZammadMCPServer:
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": False,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_IDEMPOTENT_WRITE_ANNOTATIONS)
         def zammad_add_ticket_tag(params: TagOperationParams) -> TagOperationResult:
             """Add a tag to a ticket.
 
@@ -740,14 +814,7 @@ class ZammadMCPServer:
             result = client.add_ticket_tag(params.ticket_id, params.tag)
             return TagOperationResult(**result)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": False,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_IDEMPOTENT_WRITE_ANNOTATIONS)
         def zammad_remove_ticket_tag(params: TagOperationParams) -> TagOperationResult:
             """Remove a tag from a ticket.
 
@@ -767,14 +834,7 @@ class ZammadMCPServer:
     def _setup_user_org_tools(self) -> None:
         """Register user and organization tools."""
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_get_user(params: GetUserParams) -> User:
             """Get user information by ID.
 
@@ -788,14 +848,7 @@ class ZammadMCPServer:
             user_data = client.get_user(params.user_id)
             return User(**user_data)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_search_users(params: SearchUsersParams) -> str:
             """Search for users.
 
@@ -815,16 +868,9 @@ class ZammadMCPServer:
             else:
                 result = _format_users_markdown(users, f"query='{params.query}'")
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_get_organization(params: GetOrganizationParams) -> Organization:
             """Get organization information by ID.
 
@@ -838,14 +884,7 @@ class ZammadMCPServer:
             org_data = client.get_organization(params.org_id)
             return Organization(**org_data)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_search_organizations(params: SearchOrganizationsParams) -> str:
             """Search for organizations.
 
@@ -865,16 +904,9 @@ class ZammadMCPServer:
             else:
                 result = _format_organizations_markdown(orgs, f"query='{params.query}'")
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_get_current_user() -> User:
             """Get information about the currently authenticated user.
 
@@ -1113,14 +1145,7 @@ class ZammadMCPServer:
     def _setup_system_tools(self) -> None:
         """Register system information tools."""
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_get_ticket_stats(params: GetTicketStatsParams) -> TicketStats:
             """Get ticket statistics using pagination for better performance.
 
@@ -1150,14 +1175,7 @@ class ZammadMCPServer:
                 total, open_count, closed, pending, escalated, pages, time.time() - start_time
             )
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_list_groups(params: ListParams) -> str:
             """Get all available groups (cached).
 
@@ -1175,16 +1193,9 @@ class ZammadMCPServer:
             else:
                 result = _format_list_markdown(groups, "Group")
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_list_ticket_states(params: ListParams) -> str:
             """Get all available ticket states (cached).
 
@@ -1202,16 +1213,9 @@ class ZammadMCPServer:
             else:
                 result = _format_list_markdown(states, "Ticket State")
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
-        @self.mcp.tool(
-            annotations={
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": True,
-            }
-        )
+        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
         def zammad_list_ticket_priorities(params: ListParams) -> str:
             """Get all available ticket priorities (cached).
 
@@ -1229,7 +1233,7 @@ class ZammadMCPServer:
             else:
                 result = _format_list_markdown(priorities, "Ticket Priority")
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
     def _setup_resources(self) -> None:
         """Register all resources with the MCP server."""
@@ -1247,50 +1251,41 @@ class ZammadMCPServer:
             client = self.get_client()
             try:
                 # Use a reasonable limit for resources to avoid huge responses
-                ticket = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
+                ticket_data = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
+                ticket = Ticket(**ticket_data)
 
-                # Normalize possibly-expanded fields
-                state = ticket.get("state")
-                state_name = (
-                    state.get("name", "Unknown") if isinstance(state, dict) else (str(state) if state else "Unknown")
-                )
-                priority = ticket.get("priority")
-                priority_name = (
-                    priority.get("name", "Unknown")
-                    if isinstance(priority, dict)
-                    else (str(priority) if priority else "Unknown")
-                )
-                customer = ticket.get("customer")
-                customer_email = (
-                    customer.get("email", "Unknown")
-                    if isinstance(customer, dict)
-                    else (str(customer) if customer else "Unknown")
-                )
+                # Normalize possibly-expanded fields using helper
+                state_name = _brief_field(ticket.state, "name")
+                priority_name = _brief_field(ticket.priority, "name")
+                customer_email = _brief_field(ticket.customer, "email")
 
                 # Format ticket data as readable text
                 lines = [
-                    f"Ticket #{ticket.get('number', 'N/A')} - {ticket.get('title', 'No title')}",
-                    f"ID: {ticket.get('id', 'N/A')}",
+                    f"Ticket #{ticket.number} - {ticket.title}",
+                    f"ID: {ticket.id}",
                     f"State: {state_name}",
                     f"Priority: {priority_name}",
                     f"Customer: {customer_email}",
-                    f"Created: {ticket.get('created_at', 'Unknown')}",
+                    f"Created: {ticket.created_at.isoformat()}",
                     "",
                     "Articles:",
                     "",
                 ]
 
-                for article in ticket.get("articles", []):
-                    lines.extend(
-                        [
-                            f"--- {article.get('created_at', 'Unknown')} by {(article.get('created_by') or {}).get('email', 'Unknown')} ---",
-                            article.get("body", ""),
-                            "",
-                        ]
-                    )
+                # Handle articles if present
+                if ticket.articles:
+                    for article in ticket.articles:
+                        created_by_email = _brief_field(article.created_by, "email")
+                        lines.extend(
+                            [
+                                f"--- {article.created_at.isoformat()} by {created_by_email} ---",
+                                _escape_article_body(article),
+                                "",
+                            ]
+                        )
 
-                return _truncate_response("\n".join(lines))
-            except (requests.exceptions.RequestException, ValueError) as e:
+                return truncate_response("\n".join(lines))
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving ticket {ticket_id}")
 
     def _setup_user_resource(self) -> None:
@@ -1314,7 +1309,7 @@ class ZammadMCPServer:
                 ]
 
                 return "\n".join(lines)
-            except (requests.exceptions.RequestException, ValueError) as e:
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving user {user_id}")
 
     def _setup_organization_resource(self) -> None:
@@ -1336,7 +1331,7 @@ class ZammadMCPServer:
                 ]
 
                 return "\n".join(lines)
-            except (requests.exceptions.RequestException, ValueError) as e:
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving organization {org_id}")
 
     def _setup_queue_resource(self) -> None:
@@ -1379,8 +1374,11 @@ class ZammadMCPServer:
                             customer.get("email", "Unknown") if isinstance(customer, dict) else str(customer)
                         )
 
+                        title = str(ticket.get("title", "No title"))
+                        short = title[:50]
+                        suffix = "..." if len(title) > len(short) else ""
                         lines.append(
-                            f"  #{ticket.get('number', 'N/A')} (ID: {ticket.get('id', 'N/A')}) - {ticket.get('title', 'No title')[:50]}..."
+                            f"  #{ticket.get('number', 'N/A')} (ID: {ticket.get('id', 'N/A')}) - {short}{suffix}"
                         )
                         lines.append(f"    Priority: {priority_name}, Customer: {customer_email}")
                         lines.append(f"    Created: {ticket.get('created_at', 'Unknown')}")
@@ -1389,8 +1387,8 @@ class ZammadMCPServer:
                         lines.append(f"    ... and {len(state_tickets) - MAX_TICKETS_PER_STATE_IN_QUEUE} more tickets")
                     lines.append("")
 
-                return _truncate_response("\n".join(lines))
-            except (requests.exceptions.RequestException, ValueError) as e:
+                return truncate_response("\n".join(lines))
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving queue for group '{group}'")
 
     def _setup_prompts(self) -> None:
@@ -1404,7 +1402,8 @@ class ZammadMCPServer:
             Use the 'id' field from search results, not the 'number' field.
             Example: For "Ticket #65003", use the 'id' value from search results.
             """
-            return f"""Please analyze ticket with ID {ticket_id} from Zammad. Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
+            return f"""Please analyze ticket with ID {ticket_id} from Zammad.
+Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
 
 After retrieving the ticket, provide:
 1. A summary of the issue
