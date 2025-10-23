@@ -37,9 +37,9 @@ from mcp_zammad.models import (
 )
 from mcp_zammad.server import (
     ZammadMCPServer,
-    _truncate_response,
     main,
     mcp,
+    truncate_response,
 )
 
 # ==================== FIXTURES ====================
@@ -2355,7 +2355,7 @@ class TestJSONOutputAndTruncation:
         assert len(large_json_str) > 25000
 
         # Truncate it
-        truncated = _truncate_response(large_json_str, limit=25000)
+        truncated = truncate_response(large_json_str, limit=25000)
 
         # Verify it's still valid JSON
         parsed = json.loads(truncated)
@@ -2378,7 +2378,7 @@ class TestJSONOutputAndTruncation:
         assert len(large_markdown) > 25000
 
         # Truncate it
-        truncated = _truncate_response(large_markdown, limit=25000)
+        truncated = truncate_response(large_markdown, limit=25000)
 
         # Verify warning message is present
         assert "Response Truncated" in truncated
@@ -2392,7 +2392,7 @@ class TestJSONOutputAndTruncation:
     def test_truncation_under_limit_unchanged(self) -> None:
         """Test that content under limit is not modified."""
         small_text = "This is a small text that should not be truncated."
-        result = _truncate_response(small_text, limit=1000)
+        result = truncate_response(small_text, limit=1000)
 
         # Should be unchanged
         assert result == small_text

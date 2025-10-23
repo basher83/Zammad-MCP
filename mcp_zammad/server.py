@@ -113,7 +113,7 @@ def _escape_article_body(article: Article) -> str:
     return html.escape(article.body) if "html" in ct else article.body
 
 
-def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
+def truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
     """Truncate response with helpful message if over limit.
 
     For JSON responses, preserves validity by shrinking arrays and adding metadata.
@@ -584,7 +584,7 @@ class ZammadMCPServer:
             else:
                 result = _format_tickets_markdown(tickets, query_info)
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
         @self.mcp.tool(
             annotations={
@@ -879,7 +879,7 @@ class ZammadMCPServer:
             else:
                 result = _format_users_markdown(users, f"query='{params.query}'")
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
         @self.mcp.tool(
             annotations={
@@ -929,7 +929,7 @@ class ZammadMCPServer:
             else:
                 result = _format_organizations_markdown(orgs, f"query='{params.query}'")
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
         @self.mcp.tool(
             annotations={
@@ -1239,7 +1239,7 @@ class ZammadMCPServer:
             else:
                 result = _format_list_markdown(groups, "Group")
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
         @self.mcp.tool(
             annotations={
@@ -1266,7 +1266,7 @@ class ZammadMCPServer:
             else:
                 result = _format_list_markdown(states, "Ticket State")
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
         @self.mcp.tool(
             annotations={
@@ -1293,7 +1293,7 @@ class ZammadMCPServer:
             else:
                 result = _format_list_markdown(priorities, "Ticket Priority")
 
-            return _truncate_response(result)
+            return truncate_response(result)
 
     def _setup_resources(self) -> None:
         """Register all resources with the MCP server."""
@@ -1344,7 +1344,7 @@ class ZammadMCPServer:
                             ]
                         )
 
-                return _truncate_response("\n".join(lines))
+                return truncate_response("\n".join(lines))
             except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving ticket {ticket_id}")
 
@@ -1447,7 +1447,7 @@ class ZammadMCPServer:
                         lines.append(f"    ... and {len(state_tickets) - MAX_TICKETS_PER_STATE_IN_QUEUE} more tickets")
                     lines.append("")
 
-                return _truncate_response("\n".join(lines))
+                return truncate_response("\n".join(lines))
             except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving queue for group '{group}'")
 
