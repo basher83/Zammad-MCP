@@ -14,6 +14,7 @@ from typing import Any, Protocol, TypeVar
 import requests
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
+from pydantic import ValidationError
 
 from .client import ZammadClient
 from .models import (
@@ -377,11 +378,11 @@ def _format_organizations_json(orgs: list[Organization], total: int | None, page
     return json.dumps(response, indent=2, default=str)
 
 
-def _format_list_markdown(items: list[Group] | list[TicketState] | list[TicketPriority], item_type: str) -> str:
+def _format_list_markdown(items: list[T], item_type: str) -> str:
     """Format a generic list as markdown for human readability.
 
     Args:
-        items: List of items to format
+        items: List of items to format (must have id, name, and model_dump())
         item_type: Type of items (e.g., "Group", "State", "Priority")
 
     Returns:
@@ -395,7 +396,7 @@ def _format_list_markdown(items: list[Group] | list[TicketState] | list[TicketPr
     lines.append("")
 
     for item in sorted_items:
-        lines.append(f"- **{item.name}** (ID: {item.id})")  # type: ignore[attr-defined]
+        lines.append(f"- **{item.name}** (ID: {item.id})")
 
     return "\n".join(lines)
 
@@ -1344,7 +1345,7 @@ class ZammadMCPServer:
                         )
 
                 return _truncate_response("\n".join(lines))
-            except (requests.exceptions.RequestException, ValueError) as e:
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving ticket {ticket_id}")
 
     def _setup_user_resource(self) -> None:
@@ -1368,7 +1369,7 @@ class ZammadMCPServer:
                 ]
 
                 return "\n".join(lines)
-            except (requests.exceptions.RequestException, ValueError) as e:
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving user {user_id}")
 
     def _setup_organization_resource(self) -> None:
@@ -1390,7 +1391,7 @@ class ZammadMCPServer:
                 ]
 
                 return "\n".join(lines)
-            except (requests.exceptions.RequestException, ValueError) as e:
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving organization {org_id}")
 
     def _setup_queue_resource(self) -> None:
@@ -1447,7 +1448,7 @@ class ZammadMCPServer:
                     lines.append("")
 
                 return _truncate_response("\n".join(lines))
-            except (requests.exceptions.RequestException, ValueError) as e:
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving queue for group '{group}'")
 
     def _setup_prompts(self) -> None:
