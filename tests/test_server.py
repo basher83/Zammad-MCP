@@ -982,8 +982,8 @@ def test_resource_handlers():
 
     original_resource = server.mcp.resource
 
-    def capture_resource(uri_template):
-        def decorator(func):
+    def capture_resource(uri_template: str) -> Callable[[Callable[..., Any]], Any]:
+        def decorator(func: Callable[..., Any]) -> Any:
             test_resources[uri_template] = func
             return original_resource(uri_template)(func)
 
@@ -1084,8 +1084,8 @@ def test_resource_error_handling():
 
     original_resource = server.mcp.resource
 
-    def capture_resource(uri_template):
-        def decorator(func):
+    def capture_resource(uri_template: str) -> Callable[[Callable[..., Any]], Any]:
+        def decorator(func: Callable[..., Any]) -> Any:
             test_resources[uri_template] = func
             return original_resource(uri_template)(func)
 
@@ -1130,8 +1130,8 @@ def test_prompt_handlers():
 
     original_prompt = server.mcp.prompt
 
-    def capture_prompt(name=None):
-        def decorator(func):
+    def capture_prompt(name: str | None = None) -> Callable[[Callable[..., Any]], Any]:
+        def decorator(func: Callable[..., Any]) -> Any:
             test_prompts[func.__name__ if name is None else name] = func
             return original_prompt(name)(func)
 
@@ -1902,8 +1902,8 @@ class TestResourceHandlers:
 
         original_resource = server_instance.mcp.resource
 
-        def capture_resource(uri_template):
-            def decorator(func):
+        def capture_resource(uri_template: str) -> Callable[[Callable[..., Any]], Any]:
+            def decorator(func: Callable[..., Any]) -> Any:
                 test_resources[uri_template] = func
                 return original_resource(uri_template)(func)
 
@@ -1970,8 +1970,8 @@ class TestResourceHandlers:
 
         original_resource = server_instance.mcp.resource
 
-        def capture_resource(uri_template):
-            def decorator(func):
+        def capture_resource(uri_template: str) -> Callable[[Callable[..., Any]], Any]:
+            def decorator(func: Callable[..., Any]) -> Any:
                 test_resources[uri_template] = func
                 return original_resource(uri_template)(func)
 
@@ -2019,8 +2019,8 @@ class TestResourceHandlers:
 
         original_resource = server_instance.mcp.resource
 
-        def capture_resource(uri_template):
-            def decorator(func):
+        def capture_resource(uri_template: str) -> Callable[[Callable[..., Any]], Any]:
+            def decorator(func: Callable[..., Any]) -> Any:
                 test_resources[uri_template] = func
                 return original_resource(uri_template)(func)
 
@@ -2066,8 +2066,8 @@ class TestResourceHandlers:
 
         original_resource = server_instance.mcp.resource
 
-        def capture_resource(uri_template):
-            def decorator(func):
+        def capture_resource(uri_template: str) -> Callable[[Callable[..., Any]], Any]:
+            def decorator(func: Callable[..., Any]) -> Any:
                 test_resources[uri_template] = func
                 return original_resource(uri_template)(func)
 
@@ -2132,8 +2132,8 @@ class TestResourceHandlers:
 
         original_resource = server_instance.mcp.resource
 
-        def capture_resource(uri_template):
-            def decorator(func):
+        def capture_resource(uri_template: str) -> Callable[[Callable[..., Any]], Any]:
+            def decorator(func: Callable[..., Any]) -> Any:
                 test_resources[uri_template] = func
                 return original_resource(uri_template)(func)
 
