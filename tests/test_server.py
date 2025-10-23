@@ -1,6 +1,7 @@
 """Basic tests for Zammad MCP server."""
 
 import base64
+import json
 import os
 import pathlib
 import tempfile
@@ -10,10 +11,14 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+import requests
 from pydantic import ValidationError
 
 from mcp_zammad.models import (
     Article,
+    ArticleCreate,
+    ArticleSender,
+    ArticleType,
     Attachment,
     GetTicketStatsParams,
     Group,
@@ -32,6 +37,7 @@ from mcp_zammad.models import (
 )
 from mcp_zammad.server import (
     ZammadMCPServer,
+    _truncate_response,
     main,
     mcp,
 )
@@ -477,8 +483,6 @@ def test_add_article_tool(mock_zammad_client, sample_article_data):
     server_inst._setup_tools()
 
     # Test with ArticleCreate params using Enum values
-    from mcp_zammad.models import ArticleCreate, ArticleSender, ArticleType
-
     params = ArticleCreate(ticket_id=1, body="New comment", article_type=ArticleType.NOTE, sender=ArticleSender.AGENT)
     result = test_tools["zammad_add_article"](params)
 
@@ -493,8 +497,6 @@ def test_add_article_tool(mock_zammad_client, sample_article_data):
 
 def test_add_article_invalid_type():
     """Test that ArticleCreate rejects invalid article types."""
-    from mcp_zammad.models import ArticleCreate
-
     # Test invalid article type
     with pytest.raises(ValidationError, match="article_type"):
         ArticleCreate(ticket_id=1, body="test", article_type="invalid_type")
@@ -502,8 +504,6 @@ def test_add_article_invalid_type():
 
 def test_add_article_invalid_sender():
     """Test that ArticleCreate rejects invalid sender types."""
-    from mcp_zammad.models import ArticleCreate
-
     # Test invalid sender
     with pytest.raises(ValidationError, match="sender"):
         ArticleCreate(ticket_id=1, body="test", sender="InvalidSender")
@@ -511,8 +511,6 @@ def test_add_article_invalid_sender():
 
 def test_add_article_backward_compat_alias():
     """Test that ArticleCreate accepts 'type' alias for backward compatibility."""
-    from mcp_zammad.models import ArticleCreate, ArticleType
-
     # Test using alias 'type' instead of 'article_type'
     params = ArticleCreate(ticket_id=1, body="test", type="email")
     assert params.article_type == ArticleType.EMAIL
@@ -1098,8 +1096,6 @@ def test_resource_error_handling():
     server._setup_resources()
 
     # Test ticket resource error
-    import requests
-
     server.client.get_ticket.side_effect = requests.exceptions.RequestException("API Error")
 
     result = test_resources["zammad://ticket/{ticket_id}"](ticket_id="999")
@@ -1852,6 +1848,317 @@ class TestResourceHandlers:
 
         assert "Error retrieving ticket 999: API Error" in result
 
+    def test_ticket_resource_formatted_output_explicit(self, server_instance: ZammadMCPServer) -> None:
+        """Test explicit formatted output of ticket resource handler (issue #100)."""
+        # Create ticket with all field variations to test formatting
+        ticket = Ticket(
+            id=456,
+            number="67890",
+            title="Production Bug - Critical",
+            group_id=2,
+            state_id=2,
+            priority_id=3,
+            customer_id=2,
+            created_by_id=2,
+            updated_by_id=2,
+            created_at=datetime(2024, 3, 15, 14, 30, 45, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 3, 15, 16, 20, 10, tzinfo=timezone.utc),
+            state=StateBrief(id=2, name="in progress", state_type_id=2),
+            priority=PriorityBrief(id=3, name="3 high"),
+            customer=UserBrief(id=2, login="jane.smith", email="jane.smith@company.com"),
+            articles=[
+                Article(
+                    id=10,
+                    ticket_id=456,
+                    type="email",
+                    sender="Customer",
+                    body="System is down, please help!",
+                    created_by_id=2,
+                    updated_by_id=2,
+                    created_at=datetime(2024, 3, 15, 14, 30, 45, tzinfo=timezone.utc),
+                    updated_at=datetime(2024, 3, 15, 14, 30, 45, tzinfo=timezone.utc),
+                    created_by=UserBrief(id=2, login="jane.smith", email="jane.smith@company.com"),
+                ),
+                Article(
+                    id=11,
+                    ticket_id=456,
+                    type="note",
+                    sender="Agent",
+                    body="Working on this now.",
+                    created_by_id=3,
+                    updated_by_id=3,
+                    created_at=datetime(2024, 3, 15, 15, 00, 00, tzinfo=timezone.utc),
+                    updated_at=datetime(2024, 3, 15, 15, 00, 00, tzinfo=timezone.utc),
+                    created_by=UserBrief(id=3, login="support.agent", email="support@company.com"),
+                ),
+            ],
+        )
+
+        server_instance.client.get_ticket.return_value = ticket.model_dump()  # type: ignore[union-attr]
+
+        # Setup the resource and capture it
+        server_instance._setup_resources()
+        test_resources = {}
+
+        original_resource = server_instance.mcp.resource
+
+        def capture_resource(uri_template):
+            def decorator(func):
+                test_resources[uri_template] = func
+                return original_resource(uri_template)(func)
+
+            return decorator
+
+        server_instance.mcp.resource = capture_resource  # type: ignore[method-assign, assignment]
+        server_instance._setup_resources()
+
+        # Call the actual resource handler
+        result = test_resources["zammad://ticket/{ticket_id}"](ticket_id="456")
+
+        # Verify exact format of each line
+        lines = result.split("\n")
+        assert lines[0] == "Ticket #67890 - Production Bug - Critical"
+        assert lines[1] == "ID: 456"
+        assert lines[2] == "State: in progress"
+        assert lines[3] == "Priority: 3 high"
+        assert lines[4] == "Customer: jane.smith@company.com"
+        assert lines[5] == "Created: 2024-03-15T14:30:45+00:00"
+        assert lines[6] == ""
+        assert lines[7] == "Articles:"
+        assert lines[8] == ""
+        # First article
+        assert "2024-03-15T14:30:45+00:00 by jane.smith@company.com" in lines[9]
+        assert lines[10] == "System is down, please help!"
+        assert lines[11] == ""
+        # Second article
+        assert "2024-03-15T15:00:00+00:00 by support@company.com" in lines[12]
+        assert lines[13] == "Working on this now."
+
+    def test_ticket_resource_mcp_integration(self, server_instance: ZammadMCPServer) -> None:
+        """Integration test for ticket resource via MCP protocol (issue #100)."""
+        # Create a ticket with Pydantic models
+        ticket = Ticket(
+            id=789,
+            number="11111",
+            title="Integration Test Ticket",
+            group_id=1,
+            state_id=1,
+            priority_id=1,
+            customer_id=1,
+            created_by_id=1,
+            updated_by_id=1,
+            created_at=datetime(2024, 5, 1, 10, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 5, 1, 10, 0, 0, tzinfo=timezone.utc),
+            state=StateBrief(id=1, name="new", state_type_id=1),
+            priority=PriorityBrief(id=1, name="1 low"),
+            customer=UserBrief(id=1, login="test.user", email="test@example.com"),
+            articles=[],
+        )
+
+        server_instance.client.get_ticket.return_value = ticket.model_dump()  # type: ignore[union-attr]
+
+        # Setup resources
+        server_instance._setup_resources()
+
+        # Use the MCP server to read the resource
+        # This simulates the actual MCP protocol flow
+
+        # Access the registered resources through the MCP server
+        # The mcp.resource decorator registers the handler
+        # We'll call it directly through the captured function
+        test_resources = {}
+
+        original_resource = server_instance.mcp.resource
+
+        def capture_resource(uri_template):
+            def decorator(func):
+                test_resources[uri_template] = func
+                return original_resource(uri_template)(func)
+
+            return decorator
+
+        server_instance.mcp.resource = capture_resource  # type: ignore[method-assign, assignment]
+        server_instance._setup_resources()
+
+        # Call the resource handler as MCP would
+        result = test_resources["zammad://ticket/{ticket_id}"](ticket_id="789")
+
+        # Verify the resource was retrieved successfully and formatted correctly
+        assert "Ticket #11111 - Integration Test Ticket" in result
+        assert "ID: 789" in result
+        assert "State: new" in result
+        assert "Priority: 1 low" in result
+        assert "Customer: test@example.com" in result
+        assert "Created: 2024-05-01T10:00:00+00:00" in result
+
+        # Verify the client was called correctly
+        server_instance.client.get_ticket.assert_called_with(789, include_articles=True, article_limit=20)  # type: ignore[union-attr]
+
+    def test_user_resource_regression(self, server_instance: ZammadMCPServer) -> None:
+        """Regression test: Ensure user resource handler still works with dict access (issue #100)."""
+        # User resources use dict, not Pydantic models
+        user_data = {
+            "id": 999,
+            "firstname": "Alice",
+            "lastname": "Johnson",
+            "email": "alice.johnson@example.com",
+            "login": "ajohnson",
+            "organization": {"name": "Tech Corp"},
+            "active": True,
+            "vip": True,
+            "created_at": "2024-02-20T08:00:00Z",
+        }
+
+        server_instance.client.get_user.return_value = user_data  # type: ignore[union-attr]
+
+        # Setup resources
+        server_instance._setup_resources()
+
+        # Capture the user resource handler
+        test_resources = {}
+
+        original_resource = server_instance.mcp.resource
+
+        def capture_resource(uri_template):
+            def decorator(func):
+                test_resources[uri_template] = func
+                return original_resource(uri_template)(func)
+
+            return decorator
+
+        server_instance.mcp.resource = capture_resource  # type: ignore[method-assign, assignment]
+        server_instance._setup_resources()
+
+        # Call the user resource handler
+        result = test_resources["zammad://user/{user_id}"](user_id="999")
+
+        # Verify the output format
+        assert "User: Alice Johnson" in result
+        assert "Email: alice.johnson@example.com" in result
+        assert "Login: ajohnson" in result
+        assert "Organization: Tech Corp" in result
+        assert "Active: True" in result
+        assert "VIP: True" in result
+        assert "Created: 2024-02-20T08:00:00Z" in result
+
+        # Verify client was called
+        server_instance.client.get_user.assert_called_with(999)  # type: ignore[union-attr]
+
+    def test_organization_resource_regression(self, server_instance: ZammadMCPServer) -> None:
+        """Regression test: Ensure organization resource handler still works (issue #100)."""
+        # Organization resources use dict, not Pydantic models
+        org_data = {
+            "id": 888,
+            "name": "Enterprise Solutions Inc",
+            "domain": "enterprise-solutions.com",
+            "active": True,
+            "note": "VIP customer - handle with priority",
+            "created_at": "2024-01-10T12:00:00Z",
+        }
+
+        server_instance.client.get_organization.return_value = org_data  # type: ignore[union-attr]
+
+        # Setup resources
+        server_instance._setup_resources()
+
+        # Capture the organization resource handler
+        test_resources = {}
+
+        original_resource = server_instance.mcp.resource
+
+        def capture_resource(uri_template):
+            def decorator(func):
+                test_resources[uri_template] = func
+                return original_resource(uri_template)(func)
+
+            return decorator
+
+        server_instance.mcp.resource = capture_resource  # type: ignore[method-assign, assignment]
+        server_instance._setup_resources()
+
+        # Call the organization resource handler
+        result = test_resources["zammad://organization/{org_id}"](org_id="888")
+
+        # Verify the output format
+        assert "Organization: Enterprise Solutions Inc" in result
+        assert "Domain: enterprise-solutions.com" in result
+        assert "Active: True" in result
+        assert "Note: VIP customer - handle with priority" in result
+        assert "Created: 2024-01-10T12:00:00Z" in result
+
+        # Verify client was called
+        server_instance.client.get_organization.assert_called_with(888)  # type: ignore[union-attr]
+
+    def test_queue_resource_regression(self, server_instance: ZammadMCPServer) -> None:
+        """Regression test: Ensure queue resource handler still works with dict access (issue #100)."""
+        # Queue resource uses dicts from search_tickets
+        tickets_data = [
+            {
+                "id": 101,
+                "number": "10001",
+                "title": "First ticket in queue",
+                "state": {"name": "open"},
+                "priority": {"name": "2 normal"},
+                "customer": {"email": "customer1@example.com"},
+                "created_at": "2024-06-01T09:00:00Z",
+            },
+            {
+                "id": 102,
+                "number": "10002",
+                "title": "Second ticket in queue",
+                "state": {"name": "open"},
+                "priority": {"name": "3 high"},
+                "customer": {"email": "customer2@example.com"},
+                "created_at": "2024-06-01T10:00:00Z",
+            },
+            {
+                "id": 103,
+                "number": "10003",
+                "title": "Closed ticket",
+                "state": {"name": "closed"},
+                "priority": {"name": "1 low"},
+                "customer": {"email": "customer3@example.com"},
+                "created_at": "2024-05-30T08:00:00Z",
+            },
+        ]
+
+        server_instance.client.search_tickets.return_value = tickets_data  # type: ignore[union-attr]
+
+        # Setup resources
+        server_instance._setup_resources()
+
+        # Capture the queue resource handler
+        test_resources = {}
+
+        original_resource = server_instance.mcp.resource
+
+        def capture_resource(uri_template):
+            def decorator(func):
+                test_resources[uri_template] = func
+                return original_resource(uri_template)(func)
+
+            return decorator
+
+        server_instance.mcp.resource = capture_resource  # type: ignore[method-assign, assignment]
+        server_instance._setup_resources()
+
+        # Call the queue resource handler
+        result = test_resources["zammad://queue/{group}"](group="Support")
+
+        # Verify the output format
+        assert "Queue for Group: Support" in result
+        assert "Total Tickets: 3" in result
+        assert "Open (2 tickets)" in result or "Open (2 Tickets)" in result
+        assert "Closed (1 tickets)" in result or "Closed (1 Tickets)" in result
+        assert "#10001" in result
+        assert "#10002" in result
+        assert "#10003" in result
+        assert "First ticket in queue" in result
+        assert "customer1@example.com" in result
+
+        # Verify client was called
+        server_instance.client.search_tickets.assert_called_with(group="Support", per_page=50)  # type: ignore[union-attr]
+
 
 class TestAttachmentSupport:
     """Test attachment functionality."""
@@ -1936,8 +2243,6 @@ class TestJSONOutputAndTruncation:
 
     def test_search_tickets_json_format(self) -> None:
         """Test search_tickets with JSON output format."""
-        import json
-
         server_inst = ZammadMCPServer()
         server_inst.client = Mock()
 
@@ -1992,8 +2297,6 @@ class TestJSONOutputAndTruncation:
 
     def test_search_users_json_format(self) -> None:
         """Test search_users with JSON output format."""
-        import json
-
         server_inst = ZammadMCPServer()
         server_inst.client = Mock()
 
@@ -2039,10 +2342,6 @@ class TestJSONOutputAndTruncation:
 
     def test_json_truncation_preserves_validity(self) -> None:
         """Test that JSON truncation maintains valid JSON."""
-        import json
-
-        from mcp_zammad.server import _truncate_response
-
         # Create a large JSON object
         large_json_obj: dict[str, Any] = {
             "items": [
@@ -2081,8 +2380,6 @@ class TestJSONOutputAndTruncation:
 
     def test_markdown_truncation(self) -> None:
         """Test markdown truncation adds warning message."""
-        from mcp_zammad.server import _truncate_response
-
         # Create large markdown content
         large_markdown = "# Test\n" + ("This is a long line\n" * 2000)
 
@@ -2098,15 +2395,11 @@ class TestJSONOutputAndTruncation:
         assert "pagination" in truncated.lower()
 
         # Verify it's not JSON (should fail JSON parsing)
-        import json
-
         with pytest.raises(json.JSONDecodeError):
             json.loads(truncated)
 
     def test_truncation_under_limit_unchanged(self) -> None:
         """Test that content under limit is not modified."""
-        from mcp_zammad.server import _truncate_response
-
         small_text = "This is a small text that should not be truncated."
         result = _truncate_response(small_text, limit=1000)
 
@@ -2115,8 +2408,6 @@ class TestJSONOutputAndTruncation:
 
     def test_list_json_pagination_metadata(self) -> None:
         """Test that list JSON responses include full pagination metadata."""
-        import json
-
         server_inst = ZammadMCPServer()
         server_inst.client = Mock()
 

@@ -1,6 +1,7 @@
 """Zammad MCP Server implementation."""
 
 import base64
+import html
 import json
 import logging
 import os
@@ -8,7 +9,7 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, TypeVar
 
 import requests
 from dotenv import load_dotenv
@@ -38,6 +39,7 @@ from .models import (
     TagOperationResult,
     Ticket,
     TicketCreate,
+    TicketIdGuidanceError,
     TicketPriority,
     TicketSearchParams,
     TicketState,
@@ -46,6 +48,19 @@ from .models import (
     User,
     UserBrief,
 )
+
+
+# Protocol for items that can be dumped to dict (for type safety)
+class _Dumpable(Protocol):
+    """Protocol for Pydantic models with id, name, and model_dump."""
+
+    id: int
+    name: str
+
+    def model_dump(self) -> dict[str, Any]: ...
+
+
+T = TypeVar("T", bound=_Dumpable)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -62,6 +77,39 @@ STATE_TYPE_OPEN = 2
 STATE_TYPE_CLOSED = 3
 STATE_TYPE_PENDING_REMINDER = 4
 STATE_TYPE_PENDING_CLOSE = 5
+
+
+def _brief_field(value: Any, attr: str) -> str:
+    """Extract a field from a Brief model or return Unknown.
+
+    Handles StateBrief, PriorityBrief, UserBrief objects or string fallbacks.
+
+    Args:
+        value: The value to extract from (Brief model, string, or None)
+        attr: The attribute name to extract
+
+    Returns:
+        The extracted value or "Unknown"
+    """
+    if isinstance(value, StateBrief | PriorityBrief | UserBrief):
+        v = getattr(value, attr, None)
+        return v or "Unknown"
+    if isinstance(value, str):
+        return value
+    return "Unknown"
+
+
+def _escape_article_body(article: Article) -> str:
+    """Escape HTML in article bodies to prevent injection.
+
+    Args:
+        article: The article to get the body from
+
+    Returns:
+        HTML-escaped body if content type is HTML, otherwise raw body
+    """
+    ct = (getattr(article, "content_type", None) or "").lower()
+    return html.escape(article.body) if "html" in ct else article.body
 
 
 def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
@@ -87,6 +135,9 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
             obj = json.loads(content)
             original_size = len(content)
 
+            # Use compact JSON (no indentation) if significantly over limit to fit more items
+            use_compact = original_size > limit * 1.2
+
             # Attempt to shrink the "items" array until under limit using binary search
             if "items" in obj and isinstance(obj["items"], list):
                 original_items = obj["items"]
@@ -97,7 +148,12 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
                 while left < right:
                     mid = (left + right + 1) // 2
                     obj["items"] = original_items[:mid]
-                    if len(json.dumps(obj, indent=2, default=str)) <= limit:
+                    json_str = (
+                        json.dumps(obj, separators=(",", ":"), default=str)
+                        if use_compact
+                        else json.dumps(obj, indent=2, default=str)
+                    )
+                    if len(json_str) <= limit:
                         left = mid
                     else:
                         right = mid - 1
@@ -118,10 +174,24 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
             # Ensure final JSON (including metadata) fits under limit
             # Iteratively remove items if metadata pushed us over
             if "items" in obj and isinstance(obj["items"], list):
-                while obj["items"] and len(json.dumps(obj, indent=2, default=str)) > limit:
+                json_str = (
+                    json.dumps(obj, separators=(",", ":"), default=str)
+                    if use_compact
+                    else json.dumps(obj, indent=2, default=str)
+                )
+                while obj["items"] and len(json_str) > limit:
                     obj["items"].pop()
+                    json_str = (
+                        json.dumps(obj, separators=(",", ":"), default=str)
+                        if use_compact
+                        else json.dumps(obj, indent=2, default=str)
+                    )
 
-            return json.dumps(obj, indent=2, default=str)
+            return (
+                json.dumps(obj, separators=(",", ":"), default=str)
+                if use_compact
+                else json.dumps(obj, indent=2, default=str)
+            )
         except Exception as e:
             # fall back to plaintext truncation if JSON parsing fails
             logger.debug("Failed to parse/truncate JSON response: %s", e, exc_info=True)
@@ -330,11 +400,11 @@ def _format_list_markdown(items: list[Group] | list[TicketState] | list[TicketPr
     return "\n".join(lines)
 
 
-def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriority]) -> str:
+def _format_list_json(items: list[T]) -> str:
     """Format a generic list as JSON for programmatic processing.
 
     Args:
-        items: List of items to format
+        items: List of items to format (must have id, name, and model_dump())
 
     Returns:
         JSON-formatted string with pagination metadata
@@ -349,7 +419,7 @@ def _format_list_json(items: list[Group] | list[TicketState] | list[TicketPriori
     offset = 0
 
     response: dict[str, Any] = {
-        "items": [item.model_dump() for item in sorted_items],  # type: ignore[attr-defined]
+        "items": [item.model_dump() for item in sorted_items],
         "total": total,
         "count": total,
         "page": page,
@@ -613,11 +683,7 @@ class TicketIdGuidanceError(ValueError):
             except Exception as e:
                 error_msg = str(e).lower()
                 if "not found" in error_msg or "couldn't find" in error_msg:
-                    raise ValueError(
-                        f"Ticket ID {params.ticket_id} not found. "
-                        f"Note: Use the internal 'id' field from search results, not the display 'number'. "
-                        f"Example: For ticket #65003, search first to find its internal ID."
-                    ) from e
+                    raise TicketIdGuidanceError(params.ticket_id) from e
                 raise
 
         @self.mcp.tool(
@@ -1248,7 +1314,7 @@ class TicketIdGuidanceError(ValueError):
         """Register ticket resource."""
 
         @self.mcp.resource("zammad://ticket/{ticket_id}")
-        def get_ticket_resource(ticket_id: str) -> str:  # noqa: PLR0912
+        def get_ticket_resource(ticket_id: str) -> str:
             """Get a ticket as a resource."""
             client = self.get_client()
             try:
@@ -1256,27 +1322,10 @@ class TicketIdGuidanceError(ValueError):
                 ticket_data = client.get_ticket(int(ticket_id), include_articles=True, article_limit=20)
                 ticket = Ticket(**ticket_data)
 
-                # Normalize possibly-expanded fields (same pattern as _format_tickets_markdown)
-                if isinstance(ticket.state, StateBrief):
-                    state_name = ticket.state.name
-                elif isinstance(ticket.state, str):
-                    state_name = ticket.state
-                else:
-                    state_name = "Unknown"
-
-                if isinstance(ticket.priority, PriorityBrief):
-                    priority_name = ticket.priority.name
-                elif isinstance(ticket.priority, str):
-                    priority_name = ticket.priority
-                else:
-                    priority_name = "Unknown"
-
-                if isinstance(ticket.customer, UserBrief):
-                    customer_email = ticket.customer.email or "Unknown"
-                elif isinstance(ticket.customer, str):
-                    customer_email = ticket.customer
-                else:
-                    customer_email = "Unknown"
+                # Normalize possibly-expanded fields using helper
+                state_name = _brief_field(ticket.state, "name")
+                priority_name = _brief_field(ticket.priority, "name")
+                customer_email = _brief_field(ticket.customer, "email")
 
                 # Format ticket data as readable text
                 lines = [
@@ -1294,18 +1343,11 @@ class TicketIdGuidanceError(ValueError):
                 # Handle articles if present
                 if ticket.articles:
                     for article in ticket.articles:
-                        # Extract created_by email
-                        if isinstance(article.created_by, UserBrief):
-                            created_by_email = article.created_by.email or "Unknown"
-                        elif isinstance(article.created_by, str):
-                            created_by_email = article.created_by
-                        else:
-                            created_by_email = "Unknown"
-
+                        created_by_email = _brief_field(article.created_by, "email")
                         lines.extend(
                             [
                                 f"--- {article.created_at.isoformat()} by {created_by_email} ---",
-                                article.body,
+                                _escape_article_body(article),
                                 "",
                             ]
                         )
@@ -1400,8 +1442,11 @@ class TicketIdGuidanceError(ValueError):
                             customer.get("email", "Unknown") if isinstance(customer, dict) else str(customer)
                         )
 
+                        title = str(ticket.get("title", "No title"))
+                        short = title[:50]
+                        suffix = "..." if len(title) > len(short) else ""
                         lines.append(
-                            f"  #{ticket.get('number', 'N/A')} (ID: {ticket.get('id', 'N/A')}) - {ticket.get('title', 'No title')[:50]}..."
+                            f"  #{ticket.get('number', 'N/A')} (ID: {ticket.get('id', 'N/A')}) - {short}{suffix}"
                         )
                         lines.append(f"    Priority: {priority_name}, Customer: {customer_email}")
                         lines.append(f"    Created: {ticket.get('created_at', 'Unknown')}")
@@ -1425,7 +1470,8 @@ class TicketIdGuidanceError(ValueError):
             Use the 'id' field from search results, not the 'number' field.
             Example: For "Ticket #65003", use the 'id' value from search results.
             """
-            return f"""Please analyze ticket with ID {ticket_id} from Zammad. Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
+            return f"""Please analyze ticket with ID {ticket_id} from Zammad.
+Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
 
 After retrieving the ticket, provide:
 1. A summary of the issue

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Migration required**: Update tool calls to pass parameter models
 
   **Example migration:**
+
   ```python
   # Before
   result = mcp.call_tool("zammad_search_tickets", query="test", page=1, per_page=25)

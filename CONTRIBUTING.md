@@ -8,6 +8,7 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
 
 - Python 3.10 or higher
 - `uv` package manager:
+
   ```bash
   # macOS/Linux
   curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -191,7 +192,7 @@ The repository includes several GitHub Actions workflows that run automatically 
   - Runs Codacy's full analysis suite
   - Uploads results to GitHub Security tab as SARIF
   - Integrates with PR checks
-- **Configuration**: 
+- **Configuration**:
   - Set `CODACY_PROJECT_TOKEN` in repository secrets
   - Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` to avoid Docker Hub rate limits
   - Note: Without Docker Hub authentication, the workflow may fail due to rate limits when pulling analysis images

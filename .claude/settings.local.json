@@ -58,11 +58,7 @@
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "deepwiki",
-    "grep",
-    "github",
-    "zammad",
-    "coderabbitai",
-    "codacy"
+    "github"
   ],
   "hooks": {
     "PostToolUse": [

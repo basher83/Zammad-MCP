@@ -383,17 +383,20 @@ The codebase contains 19 legacy wrapper functions (`server.py:763-1098`) created
 ### Deprecation Strategy
 
 **Phase 1 (Completed)**: Fix correctness issues and add performance optimizations
+
 - ✅ Issue #12: Optimized `get_ticket_stats` with pagination
 - ✅ Added performance metrics and logging
 - ✅ Updated documentation
 
 **Phase 2 (v0.2.0)**: Add deprecation warnings
+
 - Add `DeprecationWarning` to all 19 legacy wrapper functions
 - Create comprehensive migration guide
 - Update documentation with deprecation notices
 - Suppress warnings in existing tests
 
 **Phase 3 (v1.0.0)**: Remove legacy wrappers
+
 - Migrate all tests to `ZammadMCPServer` class
 - Remove legacy functions (~335 lines)
 - Update documentation
@@ -409,6 +412,7 @@ The codebase contains 19 legacy wrapper functions (`server.py:763-1098`) created
 ### Detailed Plan
 
 See [`docs/LEGACY_WRAPPER_DEPRECATION.md`](docs/LEGACY_WRAPPER_DEPRECATION.md) for:
+
 - Complete function inventory
 - Detailed timeline and milestones
 - Migration examples
