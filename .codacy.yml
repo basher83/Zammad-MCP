@@ -10,6 +10,10 @@ engines:
     enabled: true
   prospector:
     enabled: true
+    config:
+      pycodestyle:
+        disable:
+          - E704  # Allow ellipsis on same line for Protocol stub methods
   pydocstyle:
     enabled: false  # Optional: Enable if you want docstring style checking
   radon:
