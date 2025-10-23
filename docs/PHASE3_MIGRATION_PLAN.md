@@ -218,7 +218,7 @@ def reset_client():
 
 #### Lines to Remove: 780-1098
 
-##### Section 1: Module-level globals (lines 780-782)
+**Section 1: Module-level globals (lines 780-782)**
 
 ```python
 # Legacy constants and functions for backward compatibility with tests
@@ -226,7 +226,7 @@ _UNINITIALIZED = None
 zammad_client = None
 ```
 
-##### Section 2: Initialize function (lines 785-790)
+**Section 2: Initialize function (lines 785-790)**
 
 ```python
 async def initialize() -> None:
@@ -236,7 +236,7 @@ async def initialize() -> None:
     globals()["zammad_client"] = server.client
 ```
 
-##### Section 3: All 19 legacy wrapper functions (lines 792-1098)
+**Section 3: All 19 legacy wrapper functions (lines 792-1098)**
 
 - `search_tickets()`
 - `get_ticket()`

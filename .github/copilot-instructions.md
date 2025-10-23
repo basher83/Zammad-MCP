@@ -5,14 +5,12 @@ This is a Python-based Model Context Protocol (MCP) server that provides integra
 ## Code Standards
 
 ### Language and Framework
-
 - Python 3.10+ with modern type annotations (use `list[str]` not `List[str]`)
 - FastMCP framework for MCP server implementation
 - Pydantic for data validation and models
 - UV for dependency management
 
 ### Required Before Each Commit
-
 1. Run quality checks: `./scripts/quality-check.sh`
    - Or individually:
    - Format: `uv run ruff format mcp_zammad tests`
@@ -20,10 +18,9 @@ This is a Python-based Model Context Protocol (MCP) server that provides integra
    - Type check: `uv run mypy mcp_zammad`
    - Security: `uv run bandit -r mcp_zammad/`
 1. Run tests: `uv run pytest --cov=mcp_zammad`
-1. Ensure coverage target: 80%+
+1. Ensure coverage target: 80%+ (current: 67%)
 
 ## Repository Structure
-
 - `mcp_zammad/`: Core MCP server implementation
   - `server.py`: FastMCP server with tools, resources, and prompts
   - `client.py`: Zammad API client wrapper
@@ -37,14 +34,12 @@ This is a Python-based Model Context Protocol (MCP) server that provides integra
 ## Key Guidelines
 
 ### MCP Implementation
-
 1. Tools use `@mcp.tool()` decorator and return Pydantic models
 1. Resources follow URI pattern: `zammad://entity/id`
 1. Always validate input with Pydantic models
 1. Handle errors gracefully with proper MCP error responses
 
 ### Python Best Practices
-
 1. Use modern Python 3.10+ syntax:
    - Union types: `str | None` not `Optional[str]`
    - Type hints for all functions and methods
@@ -54,21 +49,18 @@ This is a Python-based Model Context Protocol (MCP) server that provides integra
 1. Explicit type casts when needed: `cast(ZammadClient, client)`
 
 ### Testing
-
 1. Mock `ZammadClient` in all tests
 1. Test both happy and error paths
 1. Use parametrized tests for multiple scenarios
 1. Group fixtures at top, then basic tests, then error cases
 
 ### Security Considerations
-
 1. Never commit credentials or tokens
 1. Validate all user inputs
 1. Use environment variables for configuration
 1. Run security scans before committing
 
 ### Documentation
-
 1. Update CLAUDE.md for AI-specific guidance
 1. Document new tools/resources in docstrings
 1. Keep README.md updated for new features
@@ -77,7 +69,6 @@ This is a Python-based Model Context Protocol (MCP) server that provides integra
 ## Common Tasks
 
 ### Adding a New Tool
-
 ```python
 @mcp.tool()
 def tool_name(param: str) -> ModelType:
@@ -88,7 +79,6 @@ def tool_name(param: str) -> ModelType:
 ```
 
 ### Adding a New Model
-
 ```python
 class NewModel(BaseModel):
     """Model description."""
@@ -111,7 +101,6 @@ When using GitHub Copilot in this repository:
 1. **Pydantic Models**: When working with API responses, suggest Pydantic model creation
 
 ## Environment Setup
-
 - Use UV for dependency management
 - Python 3.10+ required
 - Set Zammad credentials in `.env` file

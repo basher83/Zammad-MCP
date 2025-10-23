@@ -165,80 +165,32 @@ Supports three authentication methods with precedence:
 
 ## State Management
 
-### Class-Based Client State
-
-The server uses a class-based architecture for managing the Zammad client:
+### Global Client State
 
 ```python
-class ZammadMCPServer:
-    """Zammad MCP Server with proper client lifecycle management."""
-
-    def __init__(self) -> None:
-        """Initialize the server."""
-        self.client: ZammadClient | None = None
-        # Create FastMCP with lifespan configured
-        self.mcp = FastMCP("Zammad MCP Server", lifespan=self._create_lifespan())
-        self._setup_tools()
-        self._setup_resources()
-        self._setup_prompts()
-
-    def get_client(self) -> ZammadClient:
-        """Get the Zammad client, ensuring it's initialized."""
-        if not self.client:
-            raise RuntimeError("Zammad client not initialized")
-        return self.client
-```
-
-**Key benefits:**
-- **Encapsulation**: Client state is instance-managed, not global
-- **Type safety**: `get_client()` returns typed `ZammadClient`, not `ZammadClient | None`
-- **Testability**: Easy to mock and test individual server instances
-- **Lifecycle**: Proper initialization and cleanup through lifespan context manager
-
-### Initialization Lifecycle
-
-```python
-def _create_lifespan(self) -> Any:
-    """Create the lifespan context manager for the server."""
-
-    @asynccontextmanager
-    async def lifespan(_app: FastMCP) -> AsyncIterator[None]:
-        """Initialize resources on startup and cleanup on shutdown."""
-        await self.initialize()
-        try:
-            yield
-        finally:
-            if self.client is not None:
-                self.client = None
-                logger.info("Zammad client cleaned up")
-
-    return lifespan
-
-async def initialize(self) -> None:
-    """Initialize the Zammad client on server startup."""
-    # Load environment variables, create client, test connection
-    self.client = ZammadClient()
-    logger.info("Zammad client initialized successfully")
-```
-
-**Note**: FastMCP handles its own async event loop. Do not wrap `mcp.run()` in `asyncio.run()`.
-
-### Legacy Pattern (Deprecated)
-
-Earlier versions used module-level globals with a sentinel pattern:
-
-```python
-# Old approach - DO NOT USE
 _UNINITIALIZED: Final = object()
 zammad_client: ZammadClient | object = _UNINITIALIZED
 
 def get_zammad_client() -> ZammadClient:
+    """Type-safe client accessor."""
     if zammad_client is _UNINITIALIZED:
         raise RuntimeError("Zammad client not initialized")
     return cast(ZammadClient, zammad_client)
 ```
 
-This pattern has been replaced by the class-based approach for better encapsulation and testability.
+### Initialization Lifecycle
+
+```python
+@asynccontextmanager
+async def lifespan(app: FastMCP):
+    """Initialize resources on startup."""
+    await initialize()  # Sets up global client
+    yield
+    # Cleanup if needed
+
+# Note: FastMCP handles its own async event loop
+# Do not wrap mcp.run() in asyncio.run()
+```
 
 ## API Integration Details
 
@@ -431,20 +383,17 @@ The codebase contains 19 legacy wrapper functions (`server.py:763-1098`) created
 ### Deprecation Strategy
 
 **Phase 1 (Completed)**: Fix correctness issues and add performance optimizations
-
 - ✅ Issue #12: Optimized `get_ticket_stats` with pagination
 - ✅ Added performance metrics and logging
 - ✅ Updated documentation
 
 **Phase 2 (v0.2.0)**: Add deprecation warnings
-
 - Add `DeprecationWarning` to all 19 legacy wrapper functions
 - Create comprehensive migration guide
 - Update documentation with deprecation notices
 - Suppress warnings in existing tests
 
 **Phase 3 (v1.0.0)**: Remove legacy wrappers
-
 - Migrate all tests to `ZammadMCPServer` class
 - Remove legacy functions (~335 lines)
 - Update documentation
@@ -460,7 +409,6 @@ The codebase contains 19 legacy wrapper functions (`server.py:763-1098`) created
 ### Detailed Plan
 
 See [`docs/LEGACY_WRAPPER_DEPRECATION.md`](docs/LEGACY_WRAPPER_DEPRECATION.md) for:
-
 - Complete function inventory
 - Detailed timeline and milestones
 - Migration examples
