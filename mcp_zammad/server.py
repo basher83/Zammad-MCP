@@ -1462,7 +1462,8 @@ class ZammadMCPServer:
             Use the 'id' field from search results, not the 'number' field.
             Example: For "Ticket #65003", use the 'id' value from search results.
             """
-            return f"""Please analyze ticket with ID {ticket_id} from Zammad. Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
+            return f"""Please analyze ticket with ID {ticket_id} from Zammad.
+Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
 
 After retrieving the ticket, provide:
 1. A summary of the issue
