@@ -113,7 +113,7 @@ def _escape_article_body(article: Article) -> str:
     return html.escape(article.body) if "html" in ct else article.body
 
 
-def _serialize_json(obj: dict[str, Any], use_compact: bool) -> str:
+def _serialize_json(obj: dict[str, Any], *, use_compact: bool) -> str:
     """Serialize JSON object with appropriate formatting.
 
     Args:
@@ -128,7 +128,7 @@ def _serialize_json(obj: dict[str, Any], use_compact: bool) -> str:
     return json.dumps(obj, indent=2, default=str)
 
 
-def _find_max_items_for_limit(obj: dict[str, Any], original_items: list[Any], limit: int, use_compact: bool) -> int:
+def _find_max_items_for_limit(obj: dict[str, Any], original_items: list[Any], limit: int, *, use_compact: bool) -> int:
     """Binary search to find max items that fit under limit.
 
     Args:
@@ -144,7 +144,7 @@ def _find_max_items_for_limit(obj: dict[str, Any], original_items: list[Any], li
     while left < right:
         mid = (left + right + 1) // 2
         obj["items"] = original_items[:mid]
-        if len(_serialize_json(obj, use_compact)) <= limit:
+        if len(_serialize_json(obj, use_compact=use_compact)) <= limit:
             left = mid
         else:
             right = mid - 1
@@ -168,7 +168,7 @@ def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> st
     # Attempt to shrink the "items" array if present
     if "items" in obj and isinstance(obj["items"], list):
         original_items = obj["items"]
-        max_items = _find_max_items_for_limit(obj, original_items, limit, use_compact)
+        max_items = _find_max_items_for_limit(obj, original_items, limit, use_compact=use_compact)
         obj["items"] = original_items[:max_items]
 
     # Add metadata about truncation
@@ -184,12 +184,12 @@ def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> st
 
     # Ensure final JSON (including metadata) fits under limit
     if "items" in obj and isinstance(obj["items"], list):
-        json_str = _serialize_json(obj, use_compact)
+        json_str = _serialize_json(obj, use_compact=use_compact)
         while obj["items"] and len(json_str) > limit:
             obj["items"].pop()
-            json_str = _serialize_json(obj, use_compact)
+            json_str = _serialize_json(obj, use_compact=use_compact)
 
-    return _serialize_json(obj, use_compact)
+    return _serialize_json(obj, use_compact=use_compact)
 
 
 def _truncate_text_response(content: str, limit: int) -> str:
