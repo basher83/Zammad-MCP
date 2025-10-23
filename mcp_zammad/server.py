@@ -419,7 +419,7 @@ def _format_list_json(items: list[T]) -> str:
     offset = 0
 
     response: dict[str, Any] = {
-        "items": [item.model_dump() for item in sorted_items],
+        "items": [item.model_dump() for item in sorted_items],  # type: ignore[attr-defined]
         "total": total,
         "count": total,
         "page": page,
@@ -609,16 +609,6 @@ class ZammadMCPServer:
             to control the response size. Articles are returned in chronological order.
             """
             client = self.get_client()
-# At the top of mcp_zammad/server.py (file-scope):
-class TicketIdGuidanceError(ValueError):
-    def __init__(self, ticket_id: int):
-        super().__init__(
-            f"Ticket ID {ticket_id} not found. "
-            "Use the internal 'id' from search results, not the display 'number'. "
-            "Example: For ticket #65003, search first to find its internal ID."
-        )
-
-# …later, inside the MCP tool implementation:
             try:
                 ticket_data = client.get_ticket(
                     ticket_id=params.ticket_id,
@@ -632,6 +622,7 @@ class TicketIdGuidanceError(ValueError):
                 if "not found" in error_msg or "couldn't find" in error_msg:
                     raise TicketIdGuidanceError(params.ticket_id) from e
                 raise
+
         @self.mcp.tool(
             annotations={
                 "readOnlyHint": False,
@@ -1470,8 +1461,7 @@ class TicketIdGuidanceError(ValueError):
             Use the 'id' field from search results, not the 'number' field.
             Example: For "Ticket #65003", use the 'id' value from search results.
             """
-            return f"""Please analyze ticket with ID {ticket_id} from Zammad.
-Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
+            return f"""Please analyze ticket with ID {ticket_id} from Zammad. Use the zammad_get_ticket tool to retrieve the ticket details including all articles.
 
 After retrieving the ticket, provide:
 1. A summary of the issue
