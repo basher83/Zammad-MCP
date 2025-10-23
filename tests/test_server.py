@@ -1897,7 +1897,6 @@ class TestResourceHandlers:
         server_instance.client.get_ticket.return_value = ticket.model_dump()  # type: ignore[union-attr]
 
         # Setup the resource and capture it
-        server_instance._setup_resources()
         test_resources = {}
 
         original_resource = server_instance.mcp.resource
@@ -1958,8 +1957,6 @@ class TestResourceHandlers:
         server_instance.client.get_ticket.return_value = ticket.model_dump()  # type: ignore[union-attr]
 
         # Setup resources
-        server_instance._setup_resources()
-
         # Use the MCP server to read the resource
         # This simulates the actual MCP protocol flow
 
@@ -2012,8 +2009,6 @@ class TestResourceHandlers:
         server_instance.client.get_user.return_value = user_data  # type: ignore[union-attr]
 
         # Setup resources
-        server_instance._setup_resources()
-
         # Capture the user resource handler
         test_resources = {}
 
@@ -2059,8 +2054,6 @@ class TestResourceHandlers:
         server_instance.client.get_organization.return_value = org_data  # type: ignore[union-attr]
 
         # Setup resources
-        server_instance._setup_resources()
-
         # Capture the organization resource handler
         test_resources = {}
 
@@ -2125,8 +2118,6 @@ class TestResourceHandlers:
         server_instance.client.search_tickets.return_value = tickets_data  # type: ignore[union-attr]
 
         # Setup resources
-        server_instance._setup_resources()
-
         # Capture the queue resource handler
         test_resources = {}
 
