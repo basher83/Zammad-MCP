@@ -2323,3 +2323,12 @@ class TestJSONOutputAndTruncation:
         assert items[0]["id"] == 1  # Should be sorted
         assert items[1]["id"] == 2
         assert items[2]["id"] == 3
+
+
+def test_server_name_follows_mcp_convention():
+    """Server name must follow Python MCP convention: {service}_mcp."""
+    server = ZammadMCPServer()
+    # FastMCP stores name in mcp.name
+    assert server.mcp.name == "zammad_mcp", (
+        f"Expected 'zammad_mcp', got '{server.mcp.name}'. " + "Python MCP servers must use lowercase with underscores."
+    )

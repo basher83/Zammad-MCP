@@ -546,7 +546,7 @@ class ZammadMCPServer:
         """Initialize the server."""
         self.client: ZammadClient | None = None
         # Create FastMCP with lifespan configured
-        self.mcp = FastMCP("Zammad MCP Server", lifespan=self._create_lifespan())
+        self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
