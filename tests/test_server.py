@@ -2332,3 +2332,11 @@ def test_server_name_follows_mcp_convention():
     assert server.mcp.name == "zammad_mcp", (
         f"Expected 'zammad_mcp', got '{server.mcp.name}'. " + "Python MCP servers must use lowercase with underscores."
     )
+
+
+def test_character_limit_is_constant():
+    """CHARACTER_LIMIT should be a module constant, not configurable."""
+    from mcp_zammad.server import CHARACTER_LIMIT
+
+    assert CHARACTER_LIMIT == 25000
+    assert isinstance(CHARACTER_LIMIT, int)

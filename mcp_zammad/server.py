@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
 MAX_PER_PAGE = 100  # Maximum results per page for pagination
-CHARACTER_LIMIT = int(os.getenv("ZAMMAD_MCP_CHARACTER_LIMIT", "25000"))  # Maximum response size in characters
+CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
 
 # Zammad state type IDs (from Zammad API)
 STATE_TYPE_NEW = 1
