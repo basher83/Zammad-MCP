@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.12.2",
+    "mcp>=1.21.1",
     "zammad-py>=3.2.0",
     "pydantic>=2.11.7",
     "python-dotenv>=1.0.0",
