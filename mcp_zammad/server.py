@@ -14,6 +14,7 @@ from typing import Any, NoReturn, Protocol, TypeVar
 import requests
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
 from .client import ZammadClient
@@ -82,37 +83,37 @@ STATE_TYPE_PENDING_CLOSE = 5
 
 
 # Tool annotation constants
-def _read_only_annotations(title: str) -> dict[str, Any]:
+def _read_only_annotations(title: str) -> ToolAnnotations:
     """Create read-only tool annotations with title."""
-    return {
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-        "title": title,
-    }
+    return ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+        title=title,
+    )
 
 
-def _write_annotations(title: str) -> dict[str, Any]:
+def _write_annotations(title: str) -> ToolAnnotations:
     """Create write tool annotations with title."""
-    return {
-        "readOnlyHint": False,
-        "destructiveHint": False,
-        "idempotentHint": False,
-        "openWorldHint": True,
-        "title": title,
-    }
+    return ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+        title=title,
+    )
 
 
-def _idempotent_write_annotations(title: str) -> dict[str, Any]:
+def _idempotent_write_annotations(title: str) -> ToolAnnotations:
     """Create idempotent write tool annotations with title."""
-    return {
-        "readOnlyHint": False,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-        "title": title,
-    }
+    return ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+        title=title,
+    )
 
 
 def _handle_ticket_not_found_error(ticket_id: int, error: Exception) -> NoReturn:
