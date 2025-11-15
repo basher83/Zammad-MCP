@@ -35,7 +35,9 @@ from mcp_zammad.models import (
     UserBrief,
 )
 from mcp_zammad.server import (
+    CHARACTER_LIMIT,
     ZammadMCPServer,
+    _format_ticket_detail_markdown,
     main,
     mcp,
     truncate_response,
@@ -2342,8 +2344,6 @@ def test_server_name_follows_mcp_convention():
 
 def test_character_limit_is_constant():
     """CHARACTER_LIMIT should be a module constant, not configurable."""
-    from mcp_zammad.server import CHARACTER_LIMIT
-
     assert CHARACTER_LIMIT == 25000
     assert isinstance(CHARACTER_LIMIT, int)
 
@@ -2367,8 +2367,6 @@ async def test_all_tools_have_title_annotation():
 
 def test_format_ticket_detail_markdown(sample_ticket):
     """Test formatting single ticket as markdown."""
-    from mcp_zammad.server import _format_ticket_detail_markdown
-
     result = _format_ticket_detail_markdown(sample_ticket)
 
     assert f"# Ticket #{sample_ticket.number} - {sample_ticket.title}" in result
@@ -2376,3 +2374,45 @@ def test_format_ticket_detail_markdown(sample_ticket):
     assert "**State**:" in result
     assert "**Priority**:" in result
     assert "**Created**:" in result
+
+
+def test_format_ticket_detail_markdown_with_articles(sample_ticket_data, sample_article_data):
+    """Test formatting ticket with articles included."""
+    # Create a ticket with articles
+    ticket_with_articles = Ticket(
+        **sample_ticket_data,
+        articles=[
+            Article(**sample_article_data),
+            Article(
+                **{
+                    **sample_article_data,
+                    "id": 2,
+                    "body": "Second article",
+                    "from": "agent@example.com",
+                }
+            ),
+        ],
+    )
+
+    result = _format_ticket_detail_markdown(ticket_with_articles)
+
+    # Check that articles section appears
+    assert "## Articles" in result
+    assert "### Article 1" in result
+    assert "### Article 2" in result
+    assert "- **From**:" in result
+    assert "- **Type**: note" in result
+    assert "- **Created**:" in result
+    assert "Test article" in result
+    assert "Second article" in result
+
+
+def test_format_ticket_detail_markdown_with_tags(sample_ticket_data):
+    """Test formatting ticket with tags included."""
+    # Create a ticket with tags
+    ticket_with_tags = Ticket(**sample_ticket_data, tags=["urgent", "customer-request", "bug"])
+
+    result = _format_ticket_detail_markdown(ticket_with_tags)
+
+    # Check that tags section appears
+    assert "**Tags**: urgent, customer-request, bug" in result
