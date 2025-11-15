@@ -625,7 +625,7 @@ class ZammadMCPServer:
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
 
-        @self.mcp.tool(annotations=_read_only_annotations("Search Zammad Tickets"))
+        @self.mcp.tool(annotations=_read_only_annotations("Search Tickets"))
         def zammad_search_tickets(params: TicketSearchParams) -> str:
             """Search for tickets with various filters.
 
