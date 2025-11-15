@@ -82,7 +82,7 @@ select = [
     "TRY",
     "RUF",
 ]
-ignore = ["E501", "PLR0913", "TRY003", "EM101", "EM102"]
+ignore = ["E501", "PLR0913", "TRY003", "EM101", "EM102", "ISC001"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = [
