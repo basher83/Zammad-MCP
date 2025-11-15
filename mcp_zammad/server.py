@@ -638,7 +638,7 @@ class ZammadMCPServer:
                     - owner (Optional[str]): Filter by owner email/login
                     - customer (Optional[str]): Filter by customer email/login
                     - page (int): Page number (default: 1)
-                    - per_page (int): Results per page, 1-100 (default: 20)
+                    - per_page (int): Results per page, 1-100 (default: 25)
                     - response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
@@ -688,8 +688,6 @@ class ZammadMCPServer:
 
             Error Handling:
                 - Returns "Found 0 ticket(s)" if no matches
-                - Returns "Error: Rate limit exceeded" on 429 status
-                - Returns "Error: Invalid authentication" on 401 status
                 - May be truncated if results exceed 25,000 characters (use pagination)
 
             Note:
