@@ -551,11 +551,23 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
         lines.append("")
         for i, article in enumerate(ticket.articles, 1):
             lines.append(f"### Article {i}")
-            lines.append(f"- **From**: {article.get('from', 'Unknown')}")
-            lines.append(f"- **Type**: {article.get('type', 'Unknown')}")
-            lines.append(f"- **Created**: {article.get('created_at', 'Unknown')}")
+            # Handle both Article objects and dicts for defensive coding
+            if isinstance(article, dict):
+                from_field = article.get("from", "Unknown")
+                type_field = article.get("type", "Unknown")
+                created_at = article.get("created_at", "Unknown")
+                body = article.get("body", "")
+            else:
+                # Article object - use attribute access
+                from_field = article.from_ or "Unknown"
+                type_field = article.type
+                created_at = article.created_at
+                body = article.body
+
+            lines.append(f"- **From**: {from_field}")
+            lines.append(f"- **Type**: {type_field}")
+            lines.append(f"- **Created**: {created_at}")
             lines.append("")
-            body = article.get("body", "")
             # Truncate very long bodies
             if len(body) > ARTICLE_BODY_TRUNCATE_LENGTH:
                 body = body[:ARTICLE_BODY_TRUNCATE_LENGTH] + "...\n(truncated)"

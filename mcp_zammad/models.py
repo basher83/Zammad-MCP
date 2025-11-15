@@ -220,6 +220,9 @@ class Ticket(BaseModel):
     # Articles if included
     articles: list[Article] | None = None
 
+    # Tags if included
+    tags: list[str] | None = None
+
 
 class TicketCreate(StrictBaseModel):
     """Create ticket request."""
