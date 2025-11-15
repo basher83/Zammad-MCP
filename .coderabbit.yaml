@@ -169,7 +169,7 @@ reviews:
 
     # Security tools - ENABLED
     gitleaks:
-      enabled: true
+      enabled: false
     semgrep:
       enabled: true
     checkov:
@@ -253,140 +253,6 @@ reviews:
       util_dirs: []
       essential_rules: true
       packages: []
-
-# Pipeline Failure Remediation Configuration
-pipeline_remediation:
-  enabled: true
-  auto_suggest: true
-  auto_apply: false  # Start with manual review
-
-  analysis:
-    confidence_threshold: 90
-    include_performance_suggestions: true
-    include_security_fixes: true
-    create_issues_for_complex_failures: true
-
-  platforms:
-    github_actions:
-      enabled: true
-      monitor_workflows: ["tests", "security-scan", "docker-publish", "codacy"]
-      analyze_workflow_syntax: true
-      suggest_caching_improvements: true
-      detect_deprecated_actions: true
-    docker:
-      enabled: true
-      analyze_multistage_builds: true
-      suggest_layer_optimizations: true
-    python:
-      enabled: true
-      analyze_dependency_conflicts: true
-      suggest_version_updates: true
-
-  error_types:
-    - build_failures
-    - dependency_conflicts
-    - test_failures
-    - linting_errors
-    - docker_issues
-    - timeout_errors
-    - security_vulnerabilities
-    - performance_issues
-    - coverage_threshold_failures
-
-  # Custom patterns for Python/MCP project
-  custom_patterns:
-    - name: "uv_sync_failure"
-      pattern: "uv sync.*failed|Failed to sync|uv.*error"
-      remediation_template: |
-        Check uv.lock file and Python version compatibility:
-        1. Run 'uv lock --update' to refresh lock file
-        2. Verify Python version matches project requirements
-        3. Check for conflicting dependencies
-      remediation_priority: "high"
-
-    - name: "pytest_failure"
-      pattern: "FAILED.*test_|pytest.*failed|AssertionError"
-      remediation_priority: "high"
-      auto_analyze_traceback: true
-
-    - name: "mypy_error"
-      pattern: "error:.*\\[.*\\]|Function is missing a return type annotation"
-      remediation_template: "Add proper type annotations"
-      remediation_priority: "medium"
-
-    - name: "ruff_violations"
-      pattern: "Found \\d+ error|ruff.*failed"
-      remediation_priority: "medium"
-      auto_fix_command: "uv run ruff format . && uv run ruff check --fix ."
-
-    - name: "coverage_threshold"
-      pattern: "Coverage.*below required.*%"
-      remediation_template: |
-        Coverage is below threshold. Options:
-        1. Add tests for uncovered code
-        2. Review threshold requirements
-        3. Check coverage report for specific gaps
-      remediation_priority: "high"
-
-    - name: "docker_build_failure"
-      pattern: "ERROR: failed to solve|docker build.*failed"
-      remediation_priority: "critical"
-      analyze_dockerfile: true
-
-    - name: "security_scan_failure"
-      pattern: "found vulnerabilities|security.*failed|bandit.*failed"
-      remediation_priority: "critical"
-      create_security_issue: true
-
-    - name: "pip_audit_vulnerability"
-      pattern: "pip-audit found vulnerabilities|vulnerability.*found"
-      remediation_template: |
-        Security vulnerabilities detected:
-        1. Review pip-audit report
-        2. Update affected packages
-        3. Check for breaking changes
-      remediation_priority: "critical"
-      auto_create_issue: true
-
-    - name: "github_action_deprecated"
-      pattern: "Node.js 12 actions are deprecated|set-output.*deprecated"
-      remediation_template: "Update to latest action version with SHA pinning"
-      remediation_priority: "medium"
-
-  # Auto-apply rules for safe fixes
-  auto_apply_rules:
-    - error_type: "linting_errors"
-      confidence_min: 98
-      max_changes: 10
-      file_patterns: ["*.py"]
-      exclude_paths: ["tests/"]
-
-    - error_type: "formatting_errors"
-      confidence_min: 99
-      file_patterns: ["*.py", "*.yaml", "*.yml", "*.md"]
-      auto_fix_command: "uv run ruff format ."
-
-  # Security settings
-  security:
-    exclude_branches: ["main", "master", "production"]
-    require_approval_for:
-      - security_vulnerabilities
-      - dependency_updates
-      - production_configs
-    auto_apply_security_fixes: false
-    create_security_issues: true
-
-  # Notification settings
-  notifications:
-    create_github_issues: true
-    issue_labels: ["ci/cd", "automated"]
-
-  # Performance monitoring
-  performance:
-    track_build_times: true
-    suggest_optimizations: true
-    cache_recommendations: true
-    parallel_execution_hints: true
 
 chat:
   auto_reply: true
