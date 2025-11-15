@@ -220,6 +220,9 @@ class Ticket(BaseModel):
     # Articles if included
     articles: list[Article] | None = None
 
+    # Tags if included
+    tags: list[str] | None = None
+
 
 class TicketCreate(StrictBaseModel):
     """Create ticket request."""
@@ -305,6 +308,9 @@ class GetTicketParams(StrictBaseModel):
     include_articles: bool = Field(default=True, description="Whether to include ticket articles/comments")
     article_limit: int = Field(default=10, ge=-1, description="Maximum number of articles to return (-1 for all)")
     article_offset: int = Field(default=0, ge=0, description="Number of articles to skip for pagination")
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN, description="Output format: markdown (default) or json"
+    )
 
 
 class TicketUpdateParams(StrictBaseModel):
@@ -353,6 +359,9 @@ class GetUserParams(StrictBaseModel):
     """Get user request parameters."""
 
     user_id: int = Field(gt=0, description="User ID")
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN, description="Output format: markdown (default) or json"
+    )
 
 
 class SearchUsersParams(StrictBaseModel):
@@ -368,6 +377,9 @@ class GetOrganizationParams(StrictBaseModel):
     """Get organization request parameters."""
 
     org_id: int = Field(gt=0, description="Organization ID")
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN, description="Output format: markdown (default) or json"
+    )
 
 
 class SearchOrganizationsParams(StrictBaseModel):

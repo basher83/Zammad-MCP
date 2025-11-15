@@ -7,46 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### ⚠️ Breaking Changes
-
-- **All MCP tool signatures now use Pydantic request models for input validation**
-  - Tools accept a single `params` argument instead of multiple keyword arguments
-  - Provides early input validation with better error messages
-  - Enforces constraints (e.g., `page >= 1`, `per_page in [1..100]`)
-  - **Migration required**: Update tool calls to pass parameter models
-
-  **Example migration:**
-  ```python
-  # Before
-  result = mcp.call_tool("zammad_search_tickets", query="test", page=1, per_page=25)
-
-  # After
-  from mcp_zammad.models import TicketSearchParams
-  params = TicketSearchParams(query="test", page=1, per_page=25)
-  result = mcp.call_tool("zammad_search_tickets", params=params)
-  ```
-
 ### Added
 
-- Add Pydantic request models for all MCP tools:
-  - `TicketSearchParams` - Enhanced with validation constraints
-  - `GetTicketParams` - For retrieving individual tickets
-  - `TicketUpdateParams` - For updating tickets
-  - `GetArticleAttachmentsParams` - For listing attachments
-  - `DownloadAttachmentParams` - For downloading attachments
-  - `TagOperationParams` - For tag add/remove operations
-  - `SearchUsersParams` - For user search
-  - `GetUserParams` - For retrieving users
-  - `SearchOrganizationsParams` - For organization search
-  - `GetOrganizationParams` - For retrieving organizations
-  - `GetTicketStatsParams` - For ticket statistics
-  - `ListParams` - For list operations (groups, states, priorities)
+- [**breaking**] Add Pydantic request models for MCP tool input validation
+- Add zammad-mcp-quality skill for project QA
+- Add Conductor workspace configuration (#104)
+- **docs**: Add docstring template helper
+- **server**: Add title annotations to all tools
+- **models**: Add response_format to GetTicketParams
+- **server**: Add markdown formatter for ticket details
+- **server**: Add response format support to zammad_get_ticket
+- **server**: Unify response formats for user and org tools
 
-### Changed
+### Dependencies
 
-- All tool signatures updated to accept Pydantic models for input validation
-- Validation errors now occur at the tool boundary before API calls
-- Improved error messages for invalid inputs
+- **deps**: Update github/codeql-action digest to 4e94bd1 (v4) (#107)
+- **deps**: Update actions/upload-artifact digest to 330a01c (v4) (#108)
+- **deps**: Update dependency uv to v0.9.7 (#106)
+- **deps**: Update python:3.13-slim Docker digest to 452ed86 (#105)
+- **deps**: Update github/codeql-action digest to 0499de3 (v4) (#109)
+- **deps**: Update dependency uv to v0.9.9 (#112)
+- **deps**: Update docker/metadata-action digest to 318604b (v5.8.0) (#111)
+
+### Documentation
+
+- **server**: Enhance zammad_search_tickets docstring
+- **server**: Enhance tool docstrings with MCP compliance
+- Add response format section and update MCP version
+
+### Fixed
+
+- Reorganize .gitignore and remove duplicates
+- Prevent duplicate kwargs in add_article tool
+- Use isoformat() for accurate timezone representation
+- Ensure JSON truncation respects limit after adding metadata
+- Resolve ticket ID vs number confusion in UX (issue #99)
+- Remove markdownlint from Codacy config (requires Docker)
+- Resolve Codacy code quality issues
+- Resolve ticket resource handler AttributeError with Pydantic models (#103)
+- **config**: Remove unsupported pipeline_remediation section from CodeRabbit config
+- **server**: Change name to 'zammad_mcp' per MCP convention
+- **docs**: Correct docstring template per plan spec
+- **server**: Remove redundant 'Zammad' from Search Tickets title
+- **docs**: Correct zammad_search_tickets docstring accuracy
+- **docs**: Use modern type syntax in docstrings per CLAUDE.md
+- **server**: Handle Article objects in ticket markdown formatter
+- **tests**: Move imports to top level per CLAUDE.md
+
+### Miscellaneous Tasks
+
+- **ai**: Update claude settings
+- Fix mypy type checking errors
+- Add markdownlint-cli2 integration and reorganize docs
+- Update Codacy configuration with improved exclusions
+- **configs**: Update configs
+- Remove unused setup script and Codacy-related tasks from configuration
+- Update coverage threshold to 86% to match current reality
+
+### Performance
+
+- Optimize code quality and performance
+
+### Refactor
+
+- Move article validation to Pydantic models
+- Use proper date types for GetTicketStatsParams
+- Add strict validation to forbid extra fields
+- Rename ArticleCreate.type to article_type to avoid built-in shadow
+- Add type annotation to validator info parameter
+- Use keyword arguments in get_ticket call
+- Use JSON-safe serialization for create_ticket payload
+- Use JSON-safe serialization with aliases for add_article
+- Use keyword arguments in search_users and search_organizations
+- **server**: Simplify CHARACTER_LIMIT to constant
+
+### Testing
+
+- Add comprehensive tests for add_article tool with params model
+- Use specific ValidationError in negative tests
 
 <!-- generated by git-cliff -->
 

@@ -19,7 +19,10 @@ from mcp_zammad.models import (
     ArticleSender,
     ArticleType,
     Attachment,
+    GetOrganizationParams,
+    GetTicketParams,
     GetTicketStatsParams,
+    GetUserParams,
     Group,
     ListParams,
     Organization,
@@ -35,7 +38,9 @@ from mcp_zammad.models import (
     UserBrief,
 )
 from mcp_zammad.server import (
+    CHARACTER_LIMIT,
     ZammadMCPServer,
+    _format_ticket_detail_markdown,
     main,
     mcp,
     truncate_response,
@@ -133,6 +138,12 @@ def sample_article_data():
         "created_at": "2024-01-01T00:00:00Z",
         "updated_at": "2024-01-01T00:00:00Z",
     }
+
+
+@pytest.fixture
+def sample_ticket(sample_ticket_data):
+    """Provides sample Ticket object for tests."""
+    return Ticket(**sample_ticket_data)
 
 
 @pytest.fixture
@@ -2323,3 +2334,315 @@ class TestJSONOutputAndTruncation:
         assert items[0]["id"] == 1  # Should be sorted
         assert items[1]["id"] == 2
         assert items[2]["id"] == 3
+
+
+def test_server_name_follows_mcp_convention():
+    """Server name must follow Python MCP convention: {service}_mcp."""
+    server = ZammadMCPServer()
+    # FastMCP stores name in mcp.name
+    assert server.mcp.name == "zammad_mcp", (
+        f"Expected 'zammad_mcp', got '{server.mcp.name}'. " + "Python MCP servers must use lowercase with underscores."
+    )
+
+
+def test_character_limit_is_constant():
+    """CHARACTER_LIMIT should be a module constant, not configurable."""
+    assert CHARACTER_LIMIT == 25000
+    assert isinstance(CHARACTER_LIMIT, int)
+
+
+@pytest.mark.asyncio
+async def test_all_tools_have_title_annotation():
+    """All tools must have 'title' annotation for human-readable display."""
+    server = ZammadMCPServer()
+
+    # Get all registered tools from FastMCP
+    tools = await server.mcp.list_tools()
+
+    for tool in tools:
+        assert hasattr(
+            tool.annotations, "title"
+        ), f"Tool '{tool.name}' missing 'title' annotation. Add title for better UX in MCP clients."
+        assert tool.annotations.title, "Title must not be empty"
+        # Title should be human-readable (not snake_case)
+        assert " " in tool.annotations.title, f"Title '{tool.annotations.title}' should be human-readable with spaces"
+
+
+def test_format_ticket_detail_markdown(sample_ticket):
+    """Test formatting single ticket as markdown."""
+    result = _format_ticket_detail_markdown(sample_ticket)
+
+    assert f"# Ticket #{sample_ticket.number} - {sample_ticket.title}" in result
+    assert f"**ID**: {sample_ticket.id}" in result
+    assert "**State**:" in result
+    assert "**Priority**:" in result
+    assert "**Created**:" in result
+
+
+def test_format_ticket_detail_markdown_with_articles(sample_ticket_data, sample_article_data):
+    """Test formatting ticket with articles included."""
+    # Create a ticket with articles
+    ticket_with_articles = Ticket(
+        **sample_ticket_data,
+        articles=[
+            Article(**sample_article_data),
+            Article(
+                **{
+                    **sample_article_data,
+                    "id": 2,
+                    "body": "Second article",
+                    "from": "agent@example.com",
+                }
+            ),
+        ],
+    )
+
+    result = _format_ticket_detail_markdown(ticket_with_articles)
+
+    # Check that articles section appears
+    assert "## Articles" in result
+    assert "### Article 1" in result
+    assert "### Article 2" in result
+    assert "- **From**:" in result
+    assert "- **Type**: note" in result
+    assert "- **Created**:" in result
+    assert "Test article" in result
+    assert "Second article" in result
+
+
+def test_format_ticket_detail_markdown_with_tags(sample_ticket_data):
+    """Test formatting ticket with tags included."""
+    # Create a ticket with tags
+    ticket_with_tags = Ticket(**sample_ticket_data, tags=["urgent", "customer-request", "bug"])
+
+    result = _format_ticket_detail_markdown(ticket_with_tags)
+
+    # Check that tags section appears
+    assert "**Tags**: urgent, customer-request, bug" in result
+
+
+def test_get_ticket_supports_markdown_format(decorator_capturer):
+    """zammad_get_ticket should return markdown when requested."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_ticket return data
+    server_inst.client.get_ticket.return_value = {
+        "id": 123,
+        "number": "65003",
+        "title": "Test Ticket",
+        "state_id": 1,
+        "priority_id": 2,
+        "group_id": 1,
+        "customer_id": 1,
+        "state": {"id": 1, "name": "open", "state_type_id": 2},
+        "priority": {"id": 2, "name": "2 normal"},
+        "group": {"id": 1, "name": "Support"},
+        "customer": {"id": 1, "email": "customer@example.com"},
+        "owner": {"id": 2, "email": "agent@example.com"},
+        "created_by_id": 1,
+        "updated_by_id": 1,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with markdown format
+    params = GetTicketParams(ticket_id=123, response_format=ResponseFormat.MARKDOWN)
+    result = test_tools["zammad_get_ticket"](params)
+
+    assert isinstance(result, str)
+    assert "# Ticket #" in result
+    assert "**ID**: 123" in result
+
+
+def test_get_ticket_supports_json_format(decorator_capturer):
+    """zammad_get_ticket should return JSON when requested."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_ticket return data
+    server_inst.client.get_ticket.return_value = {
+        "id": 123,
+        "number": "65003",
+        "title": "Test Ticket",
+        "state_id": 1,
+        "priority_id": 2,
+        "group_id": 1,
+        "customer_id": 1,
+        "state": {"id": 1, "name": "open", "state_type_id": 2},
+        "priority": {"id": 2, "name": "2 normal"},
+        "group": {"id": 1, "name": "Support"},
+        "customer": {"id": 1, "email": "customer@example.com"},
+        "owner": {"id": 2, "email": "agent@example.com"},
+        "created_by_id": 1,
+        "updated_by_id": 1,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with JSON format
+    params = GetTicketParams(ticket_id=123, response_format=ResponseFormat.JSON)
+    result = test_tools["zammad_get_ticket"](params)
+
+    assert isinstance(result, str)
+    parsed = json.loads(result)
+    assert parsed["id"] == 123
+
+
+def test_get_user_supports_markdown_format(decorator_capturer):
+    """zammad_get_user should return markdown when requested."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_user return data
+    server_inst.client.get_user.return_value = {
+        "id": 5,
+        "login": "jane@example.com",
+        "email": "jane@example.com",
+        "firstname": "Jane",
+        "lastname": "Doe",
+        "active": True,
+        "vip": True,
+        "verified": False,
+        "organization_id": 2,
+        "organization": {"id": 2, "name": "ACME Corp"},
+        "phone": "+1234567890",
+        "created_at": "2023-01-10T08:00:00Z",
+        "updated_at": "2023-01-10T08:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with markdown format (default)
+    params = GetUserParams(user_id=5, response_format=ResponseFormat.MARKDOWN)
+    result = test_tools["zammad_get_user"](params)
+
+    assert isinstance(result, str)
+    assert "# User: Jane Doe" in result
+    assert "**ID**: 5" in result
+    assert "**Email**: jane@example.com" in result
+    assert "**VIP**: True" in result
+
+
+def test_get_user_supports_json_format(decorator_capturer):
+    """zammad_get_user should return JSON when requested."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_user return data
+    server_inst.client.get_user.return_value = {
+        "id": 5,
+        "login": "jane@example.com",
+        "email": "jane@example.com",
+        "firstname": "Jane",
+        "lastname": "Doe",
+        "active": True,
+        "vip": True,
+        "verified": False,
+        "organization_id": 2,
+        "organization": {"id": 2, "name": "ACME Corp"},
+        "created_at": "2023-01-10T08:00:00Z",
+        "updated_at": "2023-01-10T08:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with JSON format
+    params = GetUserParams(user_id=5, response_format=ResponseFormat.JSON)
+    result = test_tools["zammad_get_user"](params)
+
+    assert isinstance(result, str)
+    parsed = json.loads(result)
+    assert parsed["id"] == 5
+    assert parsed["email"] == "jane@example.com"
+    assert parsed["vip"] is True
+
+
+def test_get_organization_supports_markdown_format(decorator_capturer):
+    """zammad_get_organization should return markdown when requested."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_organization return data
+    server_inst.client.get_organization.return_value = {
+        "id": 2,
+        "name": "ACME Corp",
+        "domain": "acme.com",
+        "active": True,
+        "shared": True,
+        "domain_assignment": True,
+        "note": "VIP customer",
+        "created_at": "2022-05-10T12:00:00Z",
+        "updated_at": "2022-05-10T12:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with markdown format (default)
+    params = GetOrganizationParams(org_id=2, response_format=ResponseFormat.MARKDOWN)
+    result = test_tools["zammad_get_organization"](params)
+
+    assert isinstance(result, str)
+    assert "# Organization: ACME Corp" in result
+    assert "**ID**: 2" in result
+    assert "**Domain**: acme.com" in result
+    assert "VIP customer" in result
+
+
+def test_get_organization_supports_json_format(decorator_capturer):
+    """zammad_get_organization should return JSON when requested."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_organization return data
+    server_inst.client.get_organization.return_value = {
+        "id": 2,
+        "name": "ACME Corp",
+        "domain": "acme.com",
+        "active": True,
+        "shared": True,
+        "domain_assignment": True,
+        "note": "VIP customer",
+        "created_at": "2022-05-10T12:00:00Z",
+        "updated_at": "2022-05-10T12:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with JSON format
+    params = GetOrganizationParams(org_id=2, response_format=ResponseFormat.JSON)
+    result = test_tools["zammad_get_organization"](params)
+
+    assert isinstance(result, str)
+    parsed = json.loads(result)
+    assert parsed["id"] == 2
+    assert parsed["name"] == "ACME Corp"
+    assert parsed["domain"] == "acme.com"

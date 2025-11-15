@@ -51,11 +51,22 @@ mise run changelog-bump <version> # Prepare release
 
 **Project Type:** Model Context Protocol (MCP) server for Zammad ticket system
 
+**MCP Version:** 1.21.1 (FastMCP)
+
 **Core Files:**
 
 - `mcp_zammad/server.py` - FastMCP server with 18 tools, 4 resources, 3 prompts
 - `mcp_zammad/client.py` - Zammad API wrapper with authentication & validation
 - `mcp_zammad/models.py` - Pydantic models for type safety
+
+**Response Formats:**
+
+All data-returning tools support two output formats:
+
+- **Markdown** (default): Human-readable text optimized for LLM consumption
+- **JSON**: Complete structured data with all metadata fields
+
+This unification follows MCP best practices for consistent tool output.
 
 **Key Patterns:**
 

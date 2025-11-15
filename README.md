@@ -170,6 +170,23 @@ The server requires Zammad API credentials. The recommended approach is to use a
 
 **Important**: Never commit your `.env` file to version control. It's already included in `.gitignore`.
 
+## Response Formats
+
+All data-returning tools support two output formats:
+
+- **Markdown** (default): Human-readable format optimized for LLM consumption
+- **JSON**: Machine-readable format with complete metadata
+
+Example:
+
+```python
+# Markdown (default)
+zammad_search_tickets(query="network", response_format="markdown")
+
+# JSON
+zammad_search_tickets(query="network", response_format="json")
+```
+
 ## Usage
 
 ### With Claude Desktop

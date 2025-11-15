@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from mcp_zammad.models import ArticleCreate, TicketCreate, TicketUpdate
+from mcp_zammad.models import ArticleCreate, GetTicketParams, ResponseFormat, TicketCreate, TicketUpdate
 
 
 class TestTicketCreate:
@@ -86,3 +86,13 @@ class TestArticleCreate:
                 body="x" * 100001,  # Exceeds 100000 char limit
             )
         assert "String should have at most 100000 characters" in str(exc_info.value)
+
+
+def test_get_ticket_params_has_response_format():
+    """GetTicketParams should support response_format parameter."""
+    params = GetTicketParams(ticket_id=123, response_format=ResponseFormat.JSON)
+    assert params.response_format == ResponseFormat.JSON
+
+    # Test default is MARKDOWN
+    params_default = GetTicketParams(ticket_id=123)
+    assert params_default.response_format == ResponseFormat.MARKDOWN

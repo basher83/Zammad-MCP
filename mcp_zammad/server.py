@@ -14,6 +14,7 @@ from typing import Any, NoReturn, Protocol, TypeVar
 import requests
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
 from .client import ZammadClient
@@ -70,7 +71,8 @@ logger = logging.getLogger(__name__)
 MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
 MAX_PER_PAGE = 100  # Maximum results per page for pagination
-CHARACTER_LIMIT = int(os.getenv("ZAMMAD_MCP_CHARACTER_LIMIT", "25000"))  # Maximum response size in characters
+CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
+ARTICLE_BODY_TRUNCATE_LENGTH = 500  # Maximum length for article body in markdown formatting
 
 # Zammad state type IDs (from Zammad API)
 STATE_TYPE_NEW = 1
@@ -79,27 +81,39 @@ STATE_TYPE_CLOSED = 3
 STATE_TYPE_PENDING_REMINDER = 4
 STATE_TYPE_PENDING_CLOSE = 5
 
+
 # Tool annotation constants
-_READ_ONLY_ANNOTATIONS = {
-    "readOnlyHint": True,
-    "destructiveHint": False,
-    "idempotentHint": True,
-    "openWorldHint": True,
-}
+def _read_only_annotations(title: str) -> ToolAnnotations:
+    """Create read-only tool annotations with title."""
+    return ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+        title=title,
+    )
 
-_WRITE_ANNOTATIONS = {
-    "readOnlyHint": False,
-    "destructiveHint": False,
-    "idempotentHint": False,
-    "openWorldHint": True,
-}
 
-_IDEMPOTENT_WRITE_ANNOTATIONS = {
-    "readOnlyHint": False,
-    "destructiveHint": False,
-    "idempotentHint": True,
-    "openWorldHint": True,
-}
+def _write_annotations(title: str) -> ToolAnnotations:
+    """Create write tool annotations with title."""
+    return ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+        title=title,
+    )
+
+
+def _idempotent_write_annotations(title: str) -> ToolAnnotations:
+    """Create idempotent write tool annotations with title."""
+    return ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+        title=title,
+    )
 
 
 def _handle_ticket_not_found_error(ticket_id: int, error: Exception) -> NoReturn:
@@ -507,6 +521,199 @@ def _format_list_json(items: list[T]) -> str:
     return json.dumps(response, indent=2, default=str)
 
 
+def _format_ticket_detail_markdown(ticket: Ticket) -> str:
+    """Format single ticket with full details as markdown.
+
+    Args:
+        ticket: Ticket object to format
+
+    Returns:
+        Markdown-formatted string
+    """
+    lines = [f"# Ticket #{ticket.number} - {ticket.title}", ""]
+    lines.append(f"**ID**: {ticket.id}")
+    lines.append(f"**State**: {_brief_field(ticket.state, 'name')}")
+    lines.append(f"**Priority**: {_brief_field(ticket.priority, 'name')}")
+    lines.append(f"**Group**: {_brief_field(ticket.group, 'name')}")
+    lines.append(f"**Owner**: {_brief_field(ticket.owner, 'email')}")
+    lines.append(f"**Customer**: {_brief_field(ticket.customer, 'email')}")
+    lines.append(f"**Created**: {ticket.created_at.isoformat()}")
+    lines.append(f"**Updated**: {ticket.updated_at.isoformat()}")
+    lines.append("")
+
+    # Tags
+    if hasattr(ticket, "tags") and ticket.tags:
+        lines.append(f"**Tags**: {', '.join(ticket.tags)}")
+        lines.append("")
+
+    # Articles
+    if hasattr(ticket, "articles") and ticket.articles:
+        lines.append("## Articles")
+        lines.append("")
+        for i, article in enumerate(ticket.articles, 1):
+            lines.append(f"### Article {i}")
+            # Handle both Article objects and dicts for defensive coding
+            if isinstance(article, dict):
+                from_field = article.get("from", "Unknown")
+                type_field = article.get("type", "Unknown")
+                created_at = article.get("created_at", "Unknown")
+                body = article.get("body", "")
+            else:
+                # Article object - use attribute access
+                from_field = article.from_ or "Unknown"
+                type_field = article.type
+                created_at = article.created_at
+                body = article.body
+
+            lines.append(f"- **From**: {from_field}")
+            lines.append(f"- **Type**: {type_field}")
+            lines.append(f"- **Created**: {created_at}")
+            lines.append("")
+            # Truncate very long bodies
+            if len(body) > ARTICLE_BODY_TRUNCATE_LENGTH:
+                body = body[:ARTICLE_BODY_TRUNCATE_LENGTH] + "...\n(truncated)"
+            lines.append(body)
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+def _format_user_contact_section(user: User) -> list[str]:
+    """Build contact information section for user markdown."""
+    fields = []
+    for attr, label in [("phone", "Phone"), ("mobile", "Mobile"), ("fax", "Fax"), ("web", "Web")]:
+        if value := getattr(user, attr, None):
+            fields.append(f"- **{label}**: {value}")
+    return ["## Contact Information", "", *fields, ""] if fields else []
+
+
+def _format_user_address_section(user: User) -> list[str]:
+    """Build address section for user markdown."""
+    fields = []
+    if user.department:
+        fields.append(f"- **Department**: {user.department}")
+    if user.street:
+        fields.append(f"- **Street**: {user.street}")
+    if user.city or user.zip:
+        city_zip = f"{user.city or ''} {user.zip or ''}".strip()
+        fields.append(f"- **City/Zip**: {city_zip}")
+    if user.country:
+        fields.append(f"- **Country**: {user.country}")
+    if user.address:
+        fields.append(f"- **Address**: {user.address}")
+    return ["## Address", "", *fields, ""] if fields else []
+
+
+def _format_user_detail_markdown(user: User) -> str:
+    """Format single user with full details as markdown.
+
+    Args:
+        user: User object to format
+
+    Returns:
+        Markdown-formatted string
+    """
+    # Build full name and basic info
+    name_parts = [p for p in [user.firstname, user.lastname] if p]
+    full_name = " ".join(name_parts) if name_parts else "Unnamed User"
+
+    lines = [f"# User: {full_name}", "", f"**ID**: {user.id}", f"**Login**: {user.login or 'N/A'}"]
+    lines.append(f"**Email**: {user.email or 'N/A'}")
+    lines.append(f"**Active**: {user.active}")
+    if user.vip:
+        lines.append(f"**VIP**: {user.vip}")
+    if user.verified:
+        lines.append(f"**Verified**: {user.verified}")
+    lines.append("")
+
+    # Organization
+    if user.organization:
+        lines.extend([f"**Organization**: {_brief_field(user.organization, 'name')}", ""])
+
+    # Optional sections
+    lines.extend(_format_user_contact_section(user))
+    lines.extend(_format_user_address_section(user))
+
+    # Out of Office
+    if user.out_of_office:
+        lines.extend(["## Out of Office", "", "- **Status**: Active"])
+        if user.out_of_office_start_at:
+            lines.append(f"- **Start**: {user.out_of_office_start_at.isoformat()}")
+        if user.out_of_office_end_at:
+            lines.append(f"- **End**: {user.out_of_office_end_at.isoformat()}")
+        if user.out_of_office_replacement_id:
+            lines.append(f"- **Replacement ID**: {user.out_of_office_replacement_id}")
+        lines.append("")
+
+    # Note and Metadata
+    if user.note:
+        lines.extend(["## Notes", "", user.note, ""])
+
+    lines.extend(["## Metadata", "", f"- **Created**: {user.created_at.isoformat()}"])
+    lines.append(f"- **Updated**: {user.updated_at.isoformat()}")
+    if user.last_login:
+        lines.append(f"- **Last Login**: {user.last_login.isoformat()}")
+
+    return "\n".join(lines)
+
+
+def _format_organization_detail_markdown(org: Organization) -> str:
+    """Format single organization with full details as markdown.
+
+    Args:
+        org: Organization object to format
+
+    Returns:
+        Markdown-formatted string
+    """
+    lines = [f"# Organization: {org.name}", ""]
+    lines.append(f"**ID**: {org.id}")
+    lines.append(f"**Active**: {org.active}")
+    lines.append(f"**Shared**: {org.shared}")
+    lines.append("")
+
+    # Domain Information
+    if org.domain or org.domain_assignment:
+        lines.append("## Domain")
+        lines.append("")
+        if org.domain:
+            lines.append(f"- **Domain**: {org.domain}")
+        lines.append(f"- **Domain Assignment**: {org.domain_assignment}")
+        lines.append("")
+
+    # Members
+    if hasattr(org, "members") and org.members:
+        lines.append("## Members")
+        lines.append("")
+        for member in org.members:
+            if isinstance(member, dict):
+                email = member.get("email", "Unknown")
+                name = f"{member.get('firstname', '')} {member.get('lastname', '')}".strip() or email
+            else:
+                # UserBrief object
+                email = getattr(member, "email", None) or "Unknown"
+                firstname = getattr(member, "firstname", None) or ""
+                lastname = getattr(member, "lastname", None) or ""
+                name = f"{firstname} {lastname}".strip() or email
+            lines.append(f"- {name} ({email})")
+        lines.append("")
+
+    # Note
+    if org.note:
+        lines.append("## Notes")
+        lines.append("")
+        lines.append(org.note)
+        lines.append("")
+
+    # Metadata
+    lines.append("## Metadata")
+    lines.append("")
+    lines.append(f"- **Created**: {org.created_at.isoformat()}")
+    lines.append(f"- **Updated**: {org.updated_at.isoformat()}")
+
+    return "\n".join(lines)
+
+
 def _handle_api_error(e: Exception, context: str = "operation") -> str:
     """Format errors with actionable guidance for LLM agents.
 
@@ -546,7 +753,7 @@ class ZammadMCPServer:
         """Initialize the server."""
         self.client: ZammadClient | None = None
         # Create FastMCP with lifespan configured
-        self.mcp = FastMCP("Zammad MCP Server", lifespan=self._create_lifespan())
+        self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
@@ -613,15 +820,74 @@ class ZammadMCPServer:
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Search Tickets"))
         def zammad_search_tickets(params: TicketSearchParams) -> str:
-            """Search for tickets with various filters.
+            """Search for tickets with filters and pagination.
 
             Args:
-                params: Search parameters including filters and pagination
+                params (TicketSearchParams): Validated search parameters containing:
+                    - query (str | None): Search string (matches title, body, tags)
+                    - state (str | None): Filter by state name (e.g., "open", "closed")
+                    - priority (str | None): Filter by priority name (e.g., "high")
+                    - group (str | None): Filter by group name
+                    - owner (str | None): Filter by owner email/login
+                    - customer (str | None): Filter by customer email/login
+                    - page (int): Page number (default: 1)
+                    - per_page (int): Results per page, 1-100 (default: 25)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
-                Formatted response in either JSON or Markdown format
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                # Ticket Search Results: [filters]
+
+                Found N ticket(s)
+
+                ## Ticket #65003 - Title
+                - **ID**: 123 (use this for get_ticket, NOT number)
+                - **State**: open
+                - **Priority**: high
+                - **Created**: 2024-01-15T10:30:00Z
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "items": [
+                        {
+                            "id": 123,
+                            "number": "65003",
+                            "title": "string",
+                            "state": {"id": 1, "name": "open"},
+                            "priority": {"id": 2, "name": "high"},
+                            "created_at": "2024-01-15T10:30:00Z"
+                        }
+                    ],
+                    "total": null,
+                    "count": 20,
+                    "page": 1,
+                    "per_page": 20,
+                    "has_more": true,
+                    "next_page": 2,
+                    "next_offset": 20
+                }
+                ```
+
+            Examples:
+                - Use when: "Find all open tickets" -> state="open"
+                - Use when: "Search for network issues" -> query="network"
+                - Use when: "Tickets assigned to sarah" -> owner="sarah@company.com"
+                - Don't use when: You have ticket ID (use zammad_get_ticket instead)
+
+            Error Handling:
+                - Returns "Found 0 ticket(s)" if no matches
+                - May be truncated if results exceed 25,000 characters (use pagination)
+
+            Note:
+                Use the 'id' field from results for get_ticket, NOT the 'number' field.
+                Example: Ticket #65003 may have id=123. Use id=123 for API calls.
             """
             client = self.get_client()
 
@@ -651,21 +917,70 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
-        def zammad_get_ticket(params: GetTicketParams) -> Ticket:
-            """Get detailed information about a specific ticket.
+        @self.mcp.tool(annotations=_read_only_annotations("Get Ticket Details"))
+        def zammad_get_ticket(params: GetTicketParams) -> str:
+            """Get detailed information about a specific ticket by ID.
 
             Args:
-                params: Get ticket parameters including ticket_id and article options.
-                       ticket_id must be the internal database ID (NOT the display number).
-                       Use the 'id' field from search results, not the 'number' field.
-                       Example: For "Ticket #65003", use the 'id' value from search results.
+                params (GetTicketParams): Validated parameters containing:
+                    - ticket_id (int): Internal database ID (NOT display number)
+                    - include_articles (bool): Include articles (default: False)
+                    - article_limit (int): Max articles to return (default: 20)
+                    - article_offset (int): Skip first N articles (default: 0)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
-                Ticket details including articles if requested
+                str: Formatted response with the following schema:
 
-            Note: Large tickets with many articles may exceed token limits. Use article_limit
-            to control the response size. Articles are returned in chronological order.
+                Markdown format (default):
+                ```
+                # Ticket #65003 - Server not responding
+
+                **ID**: 123
+                **State**: open
+                **Priority**: high
+                **Group**: Support
+                **Owner**: agent@example.com
+                **Customer**: user@example.com
+                **Created**: 2024-01-15T10:30:00Z
+                **Updated**: 2024-01-15T14:20:00Z
+
+                ## Articles
+                ...
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "id": 123,
+                    "number": "65003",
+                    "title": "Server not responding",
+                    "state": {"id": 1, "name": "open"},
+                    "priority": {"id": 2, "name": "high"},
+                    "customer": {"id": 5, "email": "user@example.com"},
+                    "group": {"id": 3, "name": "Support"},
+                    "created_at": "2024-01-15T10:30:00Z",
+                    "updated_at": "2024-01-15T14:20:00Z",
+                    "articles": [...]
+                }
+                ```
+
+            Examples:
+                - Use when: "Get details for ticket 123" -> ticket_id=123
+                - Use when: "Show ticket with articles" -> ticket_id=123, include_articles=True
+                - Don't use when: Searching for tickets by criteria (use zammad_search_tickets)
+                - Don't use when: You only have ticket number (search first to get ID)
+
+            Error Handling:
+                - Returns TicketIdGuidanceError if ticket not found (suggests using search)
+                - Returns "Error: Permission denied" if no access to ticket
+                - Returns "Error: Invalid authentication" on 401 status
+
+            Note:
+                ticket_id must be the internal database ID, NOT the display number.
+                Use the 'id' field from search results, not the 'number' field.
+                Example: Ticket #65003 may have id=123. Use id=123 for API calls.
+                Large tickets may exceed token limits; use article_limit to control size.
             """
             client = self.get_client()
             try:
@@ -675,37 +990,117 @@ class ZammadMCPServer:
                     article_limit=params.article_limit,
                     article_offset=params.article_offset,
                 )
-                return Ticket(**ticket_data)
+                ticket = Ticket(**ticket_data)
+
+                # Format response based on preference
+                if params.response_format == ResponseFormat.JSON:
+                    result = json.dumps(ticket.model_dump(), indent=2, default=str)
+                else:  # MARKDOWN (default)
+                    result = _format_ticket_detail_markdown(ticket)
+
+                return truncate_response(result)
             except Exception as e:
                 _handle_ticket_not_found_error(params.ticket_id, e)
 
-        @self.mcp.tool(annotations=_WRITE_ANNOTATIONS)
+        @self.mcp.tool(annotations=_write_annotations("Create New Ticket"))
         def zammad_create_ticket(params: TicketCreate) -> Ticket:
-            """Create a new ticket in Zammad.
+            """Create a new ticket in Zammad with initial article.
 
             Args:
-                params: Ticket creation parameters
+                params (TicketCreate): Validated ticket creation parameters containing:
+                    - title (str): Ticket title/subject (required)
+                    - group (str): Group name to assign ticket (required)
+                    - customer (str): Customer email or login (required)
+                    - article (dict): Initial article with body and type (required)
+                    - state (str | None): State name (default: "new")
+                    - priority (str | None): Priority name (default: "2 normal")
+                    - owner (str | None): Owner email or login
+                    - tags (list[str] | None): Initial tags
 
             Returns:
-                The created ticket
+                Ticket: The created ticket object with schema:
+
+                ```json
+                {
+                    "id": 124,
+                    "number": "65004",
+                    "title": "New issue",
+                    "state": {"id": 1, "name": "new"},
+                    "priority": {"id": 2, "name": "2 normal"},
+                    "customer": {"id": 5, "email": "user@example.com"},
+                    "group": {"id": 3, "name": "Support"},
+                    "created_at": "2024-01-15T15:00:00Z"
+                }
+                ```
+
+            Examples:
+                - Use when: "Create ticket for server outage" -> title, group, customer, article
+                - Use when: "New high priority ticket" -> title, group, customer, article, priority="high"
+                - Don't use when: Ticket already exists (use zammad_update_ticket)
+                - Don't use when: Only adding comment to existing ticket (use zammad_add_article)
+
+            Error Handling:
+                - Returns "Error: Validation failed" if required fields missing
+                - Returns "Error: Permission denied" if no create permissions
+                - Returns "Error: Resource not found" if group/customer/state invalid
+                - Validates group, customer, state, priority names before creation
+
+            Note:
+                The article parameter must include 'body' and 'type' (e.g., 'note', 'email').
+                All name-based references (group, customer, state, priority) are validated.
+                Created ticket returns with expanded field objects, not just IDs.
             """
             client = self.get_client()
             ticket_data = client.create_ticket(**params.model_dump(exclude_none=True, mode="json"))
 
             return Ticket(**ticket_data)
 
-        @self.mcp.tool(annotations=_WRITE_ANNOTATIONS)
+        @self.mcp.tool(annotations=_write_annotations("Update Ticket"))
         def zammad_update_ticket(params: TicketUpdateParams) -> Ticket:
-            """Update an existing ticket.
+            """Update an existing ticket's fields.
 
             Args:
-                params: Ticket update parameters including ticket_id and fields to update.
-                       ticket_id must be the internal database ID (NOT the display number).
-                       Use the 'id' field from search results, not the 'number' field.
-                       Example: For "Ticket #65003", use the 'id' value from search results.
+                params (TicketUpdateParams): Validated update parameters containing:
+                    - ticket_id (int): Internal database ID (required, NOT display number)
+                    - title (str | None): New title
+                    - state (str | None): New state name
+                    - priority (str | None): New priority name
+                    - group (str | None): New group name
+                    - owner (str | None): New owner email/login
+                    - customer (str | None): New customer email/login
 
             Returns:
-                The updated ticket
+                Ticket: The updated ticket object with schema:
+
+                ```json
+                {
+                    "id": 123,
+                    "number": "65003",
+                    "title": "Updated title",
+                    "state": {"id": 2, "name": "open"},
+                    "priority": {"id": 3, "name": "high"},
+                    "updated_at": "2024-01-15T16:00:00Z"
+                }
+                ```
+
+            Examples:
+                - Use when: "Change ticket 123 to high priority" -> ticket_id=123, priority="high"
+                - Use when: "Close ticket 123" -> ticket_id=123, state="closed"
+                - Use when: "Reassign ticket to Alice" -> ticket_id=123, owner="alice@company.com"
+                - Don't use when: Adding comments (use zammad_add_article)
+                - Don't use when: Adding tags (use zammad_add_ticket_tag)
+
+            Error Handling:
+                - Returns TicketIdGuidanceError if ticket not found (suggests using search)
+                - Returns "Error: Permission denied" if no update permissions
+                - Returns "Error: Validation failed" if field values invalid
+                - Returns "Error: Resource not found" if group/owner/customer doesn't exist
+
+            Note:
+                ticket_id must be the internal database ID, NOT the display number.
+                Use the 'id' field from search results, not the 'number' field.
+                Example: Ticket #65003 may have id=123. Use id=123 for API calls.
+                Only provided fields are updated; others remain unchanged (partial update).
             """
             client = self.get_client()
             try:
@@ -716,18 +1111,54 @@ class ZammadMCPServer:
             except Exception as e:
                 _handle_ticket_not_found_error(params.ticket_id, e)
 
-        @self.mcp.tool(annotations=_WRITE_ANNOTATIONS)
+        @self.mcp.tool(annotations=_write_annotations("Add Ticket Article"))
         def zammad_add_article(params: ArticleCreate) -> Article:
-            """Add an article (comment/note) to a ticket.
+            """Add an article (comment/note/email) to an existing ticket.
 
             Args:
-                params: Article creation parameters including ticket_id.
-                       ticket_id must be the internal database ID (NOT the display number).
-                       Use the 'id' field from search results, not the 'number' field.
-                       Example: For "Ticket #65003", use the 'id' value from search results.
+                params (ArticleCreate): Validated article creation parameters containing:
+                    - ticket_id (int): Internal database ID (required, NOT display number)
+                    - body (str): Article content/message (required)
+                    - article_type (ArticleType): Type enum - NOTE, EMAIL, etc. (required)
+                    - internal (bool): Internal note vs customer-visible (default: False)
+                    - subject (str | None): Article subject (for emails)
+                    - content_type (str | None): text/plain or text/html (default: text/plain)
+                    - to (str | None): Email recipient (for email type)
+                    - cc (str | None): Email CC recipients
 
             Returns:
-                The created article
+                Article: The created article object with schema:
+
+                ```json
+                {
+                    "id": 456,
+                    "ticket_id": 123,
+                    "body": "Article content",
+                    "type": "note",
+                    "internal": false,
+                    "created_at": "2024-01-15T16:30:00Z",
+                    "created_by": {"id": 2, "email": "agent@company.com"}
+                }
+                ```
+
+            Examples:
+                - Use when: "Add note to ticket 123" -> ticket_id=123, body="text", article_type=NOTE
+                - Use when: "Reply to customer" -> ticket_id=123, body="reply", article_type=EMAIL
+                - Use when: "Internal comment" -> ticket_id=123, body="note", article_type=NOTE, internal=True
+                - Don't use when: Creating new ticket (use zammad_create_ticket with article)
+                - Don't use when: Updating ticket fields (use zammad_update_ticket)
+
+            Error Handling:
+                - Returns "Error: Validation failed" if body or type missing
+                - Returns "Error: Resource not found" if ticket_id invalid
+                - Returns "Error: Permission denied" if no article create permissions
+                - Sanitizes HTML content if content_type is text/html
+
+            Note:
+                ticket_id must be the internal database ID, NOT the display number.
+                Use the 'id' field from search results, not the 'number' field.
+                Example: Ticket #65003 may have id=123. Use id=123 for API calls.
+                Internal articles are only visible to agents, not customers.
             """
             client = self.get_client()
             # Extract ticket_id and article_type separately to avoid duplicate kwargs
@@ -739,38 +1170,85 @@ class ZammadMCPServer:
 
             return Article(**article_data)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Get Article Attachments"))
         def zammad_get_article_attachments(params: GetArticleAttachmentsParams) -> list[Attachment]:
-            """Get list of attachments for a ticket article.
+            """Get list of attachments for a specific article in a ticket.
 
             Args:
-                params: Article attachments request parameters including ticket_id.
-                       ticket_id must be the internal database ID (NOT the display number).
-                       Use the 'id' field from search results, not the 'number' field.
-                       Example: For "Ticket #65003", use the 'id' value from search results.
+                params (GetArticleAttachmentsParams): Validated parameters containing:
+                    - ticket_id (int): Internal database ID (required, NOT display number)
+                    - article_id (int): Article ID within the ticket (required)
 
             Returns:
-                List of attachment information
+                list[Attachment]: List of attachment metadata objects with schema:
+
+                ```json
+                [
+                    {
+                        "id": 789,
+                        "filename": "screenshot.png",
+                        "size": "245678",
+                        "preferences": {
+                            "Content-Type": "image/png"
+                        }
+                    }
+                ]
+                ```
+
+            Examples:
+                - Use when: "List attachments for article 456 in ticket 123" -> ticket_id=123, article_id=456
+                - Use when: "Check if article has attachments" -> ticket_id=123, article_id=456
+                - Don't use when: Downloading attachment content (use zammad_download_attachment)
+                - Don't use when: Article ID unknown (use zammad_get_ticket with include_articles first)
+
+            Error Handling:
+                - Returns empty list if article has no attachments
+                - Returns "Error: Resource not found" if ticket_id or article_id invalid
+                - Returns "Error: Permission denied" if no access to ticket/article
+
+            Note:
+                ticket_id must be the internal database ID, NOT the display number.
+                Use the 'id' field from search results, not the 'number' field.
+                Example: Ticket #65003 may have id=123. Use id=123 for API calls.
+                Returns metadata only; use zammad_download_attachment to get file content.
             """
             client = self.get_client()
             attachments_data = client.get_article_attachments(params.ticket_id, params.article_id)
             return [Attachment(**attachment) for attachment in attachments_data]
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Download Attachment"))
         def zammad_download_attachment(params: DownloadAttachmentParams) -> str:
-            """Download an attachment from a ticket article.
+            """Download attachment file content from a ticket article.
 
             Args:
-                params: Download attachment parameters including ticket_id.
-                       ticket_id must be the internal database ID (NOT the display number).
-                       Use the 'id' field from search results, not the 'number' field.
-                       Example: For "Ticket #65003", use the 'id' value from search results.
+                params (DownloadAttachmentParams): Validated parameters containing:
+                    - ticket_id (int): Internal database ID (required, NOT display number)
+                    - article_id (int): Article ID containing attachment (required)
+                    - attachment_id (int): Attachment ID to download (required)
+                    - max_bytes (int | None): Maximum file size limit (default: None)
 
             Returns:
-                Base64-encoded attachment content
+                str: Base64-encoded binary content of the attachment file.
+                     Decode using base64.b64decode() to get original bytes.
 
-            Raises:
-                AttachmentDownloadError: If attachment download fails or exceeds max_bytes
+            Examples:
+                - Use when: "Download attachment 789 from article 456" -> ticket_id=123, article_id=456, attachment_id=789
+                - Use when: "Get file with size limit" -> ticket_id=123, article_id=456, attachment_id=789, max_bytes=1000000
+                - Don't use when: Only need attachment metadata (use zammad_get_article_attachments)
+                - Don't use when: Attachment IDs unknown (list attachments first)
+
+            Error Handling:
+                - Raises AttachmentDownloadError if download fails
+                - Raises AttachmentDownloadError if file exceeds max_bytes limit
+                - Returns "Error: Resource not found" if ticket_id/article_id/attachment_id invalid
+                - Returns "Error: Permission denied" if no access to attachment
+
+            Note:
+                ticket_id must be the internal database ID, NOT the display number.
+                Use the 'id' field from search results, not the 'number' field.
+                Example: Ticket #65003 may have id=123. Use id=123 for API calls.
+                Large attachments may exceed token limits; use max_bytes to prevent issues.
+                Returns base64-encoded string for safe transmission of binary data.
             """
             client = self.get_client()
             try:
@@ -797,35 +1275,79 @@ class ZammadMCPServer:
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")
 
-        @self.mcp.tool(annotations=_IDEMPOTENT_WRITE_ANNOTATIONS)
+        @self.mcp.tool(annotations=_idempotent_write_annotations("Add Ticket Tag"))
         def zammad_add_ticket_tag(params: TagOperationParams) -> TagOperationResult:
-            """Add a tag to a ticket.
+            """Add a tag to a ticket (idempotent operation).
 
             Args:
-                params: Tag operation parameters including ticket_id.
-                       ticket_id must be the internal database ID (NOT the display number).
-                       Use the 'id' field from search results, not the 'number' field.
-                       Example: For "Ticket #65003", use the 'id' value from search results.
+                params (TagOperationParams): Validated parameters containing:
+                    - ticket_id (int): Internal database ID (required, NOT display number)
+                    - tag (str): Tag name to add (required)
 
             Returns:
-                Operation result with success status
+                TagOperationResult: Operation result with schema:
+
+                ```json
+                {
+                    "success": true
+                }
+                ```
+
+            Examples:
+                - Use when: "Tag ticket 123 as urgent" -> ticket_id=123, tag="urgent"
+                - Use when: "Add follow-up tag" -> ticket_id=123, tag="follow-up"
+                - Don't use when: Removing tags (use zammad_remove_ticket_tag)
+                - Don't use when: Setting ticket priority/state (use zammad_update_ticket)
+
+            Error Handling:
+                - Returns success=true even if tag already exists (idempotent)
+                - Returns "Error: Resource not found" if ticket_id invalid
+                - Returns "Error: Permission denied" if no tagging permissions
+
+            Note:
+                ticket_id must be the internal database ID, NOT the display number.
+                Use the 'id' field from search results, not the 'number' field.
+                Example: Ticket #65003 may have id=123. Use id=123 for API calls.
+                This operation is idempotent - adding same tag twice succeeds both times.
             """
             client = self.get_client()
             result = client.add_ticket_tag(params.ticket_id, params.tag)
             return TagOperationResult(**result)
 
-        @self.mcp.tool(annotations=_IDEMPOTENT_WRITE_ANNOTATIONS)
+        @self.mcp.tool(annotations=_idempotent_write_annotations("Remove Ticket Tag"))
         def zammad_remove_ticket_tag(params: TagOperationParams) -> TagOperationResult:
-            """Remove a tag from a ticket.
+            """Remove a tag from a ticket (idempotent operation).
 
             Args:
-                params: Tag operation parameters including ticket_id.
-                       ticket_id must be the internal database ID (NOT the display number).
-                       Use the 'id' field from search results, not the 'number' field.
-                       Example: For "Ticket #65003", use the 'id' value from search results.
+                params (TagOperationParams): Validated parameters containing:
+                    - ticket_id (int): Internal database ID (required, NOT display number)
+                    - tag (str): Tag name to remove (required)
 
             Returns:
-                Operation result with success status
+                TagOperationResult: Operation result with schema:
+
+                ```json
+                {
+                    "success": true
+                }
+                ```
+
+            Examples:
+                - Use when: "Remove urgent tag from ticket 123" -> ticket_id=123, tag="urgent"
+                - Use when: "Untag ticket" -> ticket_id=123, tag="follow-up"
+                - Don't use when: Adding tags (use zammad_add_ticket_tag)
+                - Don't use when: Changing ticket priority/state (use zammad_update_ticket)
+
+            Error Handling:
+                - Returns success=true even if tag doesn't exist (idempotent)
+                - Returns "Error: Resource not found" if ticket_id invalid
+                - Returns "Error: Permission denied" if no tagging permissions
+
+            Note:
+                ticket_id must be the internal database ID, NOT the display number.
+                Use the 'id' field from search results, not the 'number' field.
+                Example: Ticket #65003 may have id=123. Use id=123 for API calls.
+                This operation is idempotent - removing non-existent tag succeeds.
             """
             client = self.get_client()
             result = client.remove_ticket_tag(params.ticket_id, params.tag)
@@ -834,29 +1356,124 @@ class ZammadMCPServer:
     def _setup_user_org_tools(self) -> None:
         """Register user and organization tools."""
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
-        def zammad_get_user(params: GetUserParams) -> User:
-            """Get user information by ID.
+        @self.mcp.tool(annotations=_read_only_annotations("Get User Details"))
+        def zammad_get_user(params: GetUserParams) -> str:
+            """Get detailed information about a specific user by ID.
 
             Args:
-                params: Get user parameters
+                params (GetUserParams): Validated parameters containing:
+                    - user_id (int): User's internal database ID (required)
+                    - response_format (ResponseFormat): Output format - markdown (default) or json
 
             Returns:
-                User details
+                str: Formatted user information.
+                     - Markdown format: Human-readable with sections for contact info, address, etc.
+                     - JSON format: Complete user object with all fields
+
+                Example JSON response:
+                ```json
+                {
+                    "id": 5,
+                    "login": "user@example.com",
+                    "firstname": "Jane",
+                    "lastname": "Doe",
+                    "email": "user@example.com",
+                    "organization": {"id": 2, "name": "ACME Corp"},
+                    "active": true,
+                    "vip": false,
+                    "created_at": "2023-01-10T08:00:00Z"
+                }
+                ```
+
+            Examples:
+                - Use when: "Get details for user 5" -> user_id=5
+                - Use when: "Show user information" -> user_id=5
+                - Don't use when: Searching by email/name (use zammad_search_users)
+                - Don't use when: Getting current authenticated user (use zammad_get_current_user)
+
+            Error Handling:
+                - Returns "Error: Resource not found" if user_id doesn't exist
+                - Returns "Error: Permission denied" if no access to user data
+                - Returns "Error: Invalid authentication" on 401 status
+
+            Note:
+                Returns full user profile including organization, roles, and preferences.
+                Use zammad_search_users if you need to find users by email or name.
             """
             client = self.get_client()
             user_data = client.get_user(params.user_id)
-            return User(**user_data)
+            user = User(**user_data)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+            # Format response based on preference
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(user.model_dump(), indent=2, default=str)
+            else:  # MARKDOWN (default)
+                result = _format_user_detail_markdown(user)
+
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Search Users"))
         def zammad_search_users(params: SearchUsersParams) -> str:
-            """Search for users.
+            """Search for users by query string with pagination.
 
             Args:
-                params: Search users parameters
+                params (SearchUsersParams): Validated search parameters containing:
+                    - query (str): Search string (matches name, email, login) (required)
+                    - page (int): Page number (default: 1)
+                    - per_page (int): Results per page, 1-100 (default: 25)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
-                Formatted response in either JSON or Markdown format
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                # User Search Results: query='search term'
+
+                Found N user(s)
+
+                ## Jane Doe
+                - **ID**: 5
+                - **Email**: jane@example.com
+                - **Login**: jane@example.com
+                - **Active**: true
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "items": [
+                        {
+                            "id": 5,
+                            "login": "jane@example.com",
+                            "firstname": "Jane",
+                            "lastname": "Doe",
+                            "email": "jane@example.com",
+                            "active": true
+                        }
+                    ],
+                    "total": null,
+                    "count": 10,
+                    "page": 1,
+                    "per_page": 25,
+                    "has_more": false,
+                    "next_page": null
+                }
+                ```
+
+            Examples:
+                - Use when: "Find user Sarah" -> query="Sarah"
+                - Use when: "Search by email" -> query="user@example.com"
+                - Use when: "List users in organization" -> query="@acme.com"
+                - Don't use when: You have user ID (use zammad_get_user instead)
+
+            Error Handling:
+                - Returns "Found 0 user(s)" if no matches
+                - May be truncated if results exceed 25,000 characters (use pagination)
+
+            Note:
+                Use the 'id' field from results for zammad_get_user calls.
+                Search matches firstname, lastname, email, and login fields.
             """
             client = self.get_client()
             users_data = client.search_users(query=params.query, page=params.page, per_page=params.per_page)
@@ -870,29 +1487,117 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
-        def zammad_get_organization(params: GetOrganizationParams) -> Organization:
-            """Get organization information by ID.
+        @self.mcp.tool(annotations=_read_only_annotations("Get Organization Details"))
+        def zammad_get_organization(params: GetOrganizationParams) -> str:
+            """Get detailed information about a specific organization by ID.
 
             Args:
-                params: Get organization parameters
+                params (GetOrganizationParams): Validated parameters containing:
+                    - org_id (int): Organization's internal database ID (required)
+                    - response_format (ResponseFormat): Output format - markdown (default) or json
 
             Returns:
-                Organization details
+                str: Formatted organization information.
+                     - Markdown format: Human-readable with sections for domain, members, notes
+                     - JSON format: Complete organization object with all fields
+
+                Example JSON response:
+                ```json
+                {
+                    "id": 2,
+                    "name": "ACME Corp",
+                    "domain": "acme.com",
+                    "active": true,
+                    "note": "VIP customer",
+                    "created_at": "2022-05-10T12:00:00Z"
+                }
+                ```
+
+            Examples:
+                - Use when: "Get details for organization 2" -> org_id=2
+                - Use when: "Show organization info" -> org_id=2
+                - Don't use when: Searching by name (use zammad_search_organizations)
+                - Don't use when: Getting user's organization (included in zammad_get_user)
+
+            Error Handling:
+                - Returns "Error: Resource not found" if org_id doesn't exist
+                - Returns "Error: Permission denied" if no access to organization data
+                - Returns "Error: Invalid authentication" on 401 status
+
+            Note:
+                Returns full organization profile including custom fields.
+                Use zammad_search_organizations if you need to find by name.
             """
             client = self.get_client()
             org_data = client.get_organization(params.org_id)
-            return Organization(**org_data)
+            org = Organization(**org_data)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+            # Format response based on preference
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(org.model_dump(), indent=2, default=str)
+            else:  # MARKDOWN (default)
+                result = _format_organization_detail_markdown(org)
+
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Search Organizations"))
         def zammad_search_organizations(params: SearchOrganizationsParams) -> str:
-            """Search for organizations.
+            """Search for organizations by query string with pagination.
 
             Args:
-                params: Search organizations parameters
+                params (SearchOrganizationsParams): Validated search parameters containing:
+                    - query (str): Search string (matches name, domain, note) (required)
+                    - page (int): Page number (default: 1)
+                    - per_page (int): Results per page, 1-100 (default: 25)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
-                Formatted response in either JSON or Markdown format
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                # Organization Search Results: query='search term'
+
+                Found N organization(s)
+
+                ## ACME Corp
+                - **ID**: 2
+                - **Active**: true
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "items": [
+                        {
+                            "id": 2,
+                            "name": "ACME Corp",
+                            "domain": "acme.com",
+                            "active": true
+                        }
+                    ],
+                    "total": null,
+                    "count": 5,
+                    "page": 1,
+                    "per_page": 25,
+                    "has_more": false,
+                    "next_page": null
+                }
+                ```
+
+            Examples:
+                - Use when: "Find organization ACME" -> query="ACME"
+                - Use when: "Search by domain" -> query="acme.com"
+                - Use when: "Find VIP organizations" -> query="VIP"
+                - Don't use when: You have org ID (use zammad_get_organization instead)
+
+            Error Handling:
+                - Returns "Found 0 organization(s)" if no matches
+                - May be truncated if results exceed 25,000 characters (use pagination)
+
+            Note:
+                Use the 'id' field from results for zammad_get_organization calls.
+                Search matches name, domain, and note fields.
             """
             client = self.get_client()
             orgs_data = client.search_organizations(query=params.query, page=params.page, per_page=params.per_page)
@@ -906,12 +1611,44 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Get Current User"))
         def zammad_get_current_user() -> User:
             """Get information about the currently authenticated user.
 
+            Args:
+                None (uses authentication token from environment)
+
             Returns:
-                Current user details
+                User: Complete user object for authenticated user with schema:
+
+                ```json
+                {
+                    "id": 2,
+                    "login": "agent@company.com",
+                    "firstname": "Agent",
+                    "lastname": "Smith",
+                    "email": "agent@company.com",
+                    "organization": {"id": 1, "name": "Internal"},
+                    "active": true,
+                    "roles": ["Agent", "Admin"],
+                    "created_at": "2022-01-01T00:00:00Z"
+                }
+                ```
+
+            Examples:
+                - Use when: "Who am I?" -> no parameters needed
+                - Use when: "Show my user info" -> no parameters needed
+                - Use when: "What are my permissions?" -> check roles in response
+                - Don't use when: Getting other users (use zammad_get_user or zammad_search_users)
+
+            Error Handling:
+                - Returns "Error: Invalid authentication" if token invalid/expired
+                - Returns "Error: Permission denied" if token lacks user access
+
+            Note:
+                This is useful for checking authentication status and current user permissions.
+                Uses ZAMMAD_HTTP_TOKEN from environment for authentication.
+                Returns expanded user object including roles and organization.
             """
             client = self.get_client()
             user_data = client.get_current_user()
@@ -1145,18 +1882,49 @@ class ZammadMCPServer:
     def _setup_system_tools(self) -> None:
         """Register system information tools."""
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Get Ticket Statistics"))
         def zammad_get_ticket_stats(params: GetTicketStatsParams) -> TicketStats:
-            """Get ticket statistics using pagination for better performance.
+            """Get aggregated ticket statistics with counts by state.
 
             Args:
-                params: Ticket statistics parameters
+                params (GetTicketStatsParams): Validated parameters containing:
+                    - group (str | None): Filter by group name
+                    - start_date (datetime | None): Start date filter (not yet implemented)
+                    - end_date (datetime | None): End date filter (not yet implemented)
 
             Returns:
-                Ticket statistics
+                TicketStats: Statistics object with schema:
 
-            Note: This implementation uses pagination to avoid loading all tickets
-            into memory at once, improving performance for large datasets.
+                ```json
+                {
+                    "total_count": 1523,
+                    "open_count": 245,
+                    "closed_count": 1200,
+                    "pending_count": 78,
+                    "escalated_count": 12,
+                    "avg_first_response_time": null,
+                    "avg_resolution_time": null
+                }
+                ```
+
+            Examples:
+                - Use when: "Show ticket statistics" -> no parameters
+                - Use when: "Stats for Support group" -> group="Support"
+                - Use when: "How many escalated tickets?" -> check escalated_count
+                - Don't use when: Need individual ticket details (use zammad_search_tickets)
+                - Don't use when: Need real-time counts (this scans all tickets via pagination)
+
+            Error Handling:
+                - Returns counts with warning if max page limit reached (1000 pages)
+                - Returns "Error: Resource not found" if group name invalid
+                - Returns "Error: Permission denied" if no access to tickets
+
+            Note:
+                Uses pagination to scan tickets without loading all into memory.
+                May take several seconds for large ticket databases (>10k tickets).
+                State categorization uses state_type_id: new/open=open, closed=closed, pending=pending.
+                Date filtering (start_date, end_date) not yet implemented - shows warning if provided.
+                Processes up to 100,000 tickets (1000 pages x 100 per page).
             """
             start_time = time.time()
             client = self.get_client()
@@ -1175,15 +1943,58 @@ class ZammadMCPServer:
                 total, open_count, closed, pending, escalated, pages, time.time() - start_time
             )
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("List Groups"))
         def zammad_list_groups(params: ListParams) -> str:
-            """Get all available groups (cached).
+            """Get complete list of all available groups (cached).
 
             Args:
-                params: List parameters
+                params (ListParams): Validated parameters containing:
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
-                Formatted response in either JSON or Markdown format
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                # Group List
+
+                Found N group(s)
+
+                - **Support** (ID: 1)
+                - **Sales** (ID: 2)
+                - **Technical** (ID: 3)
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "items": [
+                        {"id": 1, "name": "Support"},
+                        {"id": 2, "name": "Sales"}
+                    ],
+                    "total": 2,
+                    "count": 2,
+                    "page": 1,
+                    "per_page": 2,
+                    "has_more": false
+                }
+                ```
+
+            Examples:
+                - Use when: "List all groups" -> no search parameters
+                - Use when: "What groups exist?" -> check available groups
+                - Use when: "Show group names for ticket creation" -> get valid group names
+                - Don't use when: Searching specific groups (groups are cached, just list all)
+
+            Error Handling:
+                - Returns empty list if no groups configured (unusual)
+                - Returns "Error: Permission denied" if no group access
+                - Returns "Error: Invalid authentication" on 401 status
+
+            Note:
+                Results are cached in memory for performance (cleared on server restart).
+                All groups are returned in a single response (no pagination needed).
+                Use group 'name' field when creating/updating tickets, not ID.
             """
             groups = self._get_cached_groups()
 
@@ -1195,15 +2006,61 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("List Ticket States"))
         def zammad_list_ticket_states(params: ListParams) -> str:
-            """Get all available ticket states (cached).
+            """Get complete list of all available ticket states (cached).
 
             Args:
-                params: List parameters
+                params (ListParams): Validated parameters containing:
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
-                Formatted response in either JSON or Markdown format
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                # Ticket State List
+
+                Found N ticket state(s)
+
+                - **new** (ID: 1)
+                - **open** (ID: 2)
+                - **closed** (ID: 3)
+                - **pending reminder** (ID: 4)
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "items": [
+                        {"id": 1, "name": "new", "state_type_id": 1},
+                        {"id": 2, "name": "open", "state_type_id": 2},
+                        {"id": 3, "name": "closed", "state_type_id": 3}
+                    ],
+                    "total": 3,
+                    "count": 3,
+                    "page": 1,
+                    "per_page": 3,
+                    "has_more": false
+                }
+                ```
+
+            Examples:
+                - Use when: "List all ticket states" -> no search parameters
+                - Use when: "What states can I use?" -> get valid state names
+                - Use when: "Show state options for ticket update" -> get available states
+                - Don't use when: Searching specific states (states are cached, just list all)
+
+            Error Handling:
+                - Returns empty list if no states configured (should never happen)
+                - Returns "Error: Permission denied" if no state access
+                - Returns "Error: Invalid authentication" on 401 status
+
+            Note:
+                Results are cached in memory for performance (cleared on server restart).
+                All states are returned in a single response (no pagination needed).
+                Use state 'name' field when creating/updating tickets, not ID.
+                State types: 1=new, 2=open, 3=closed, 4=pending reminder, 5=pending close.
             """
             states = self._get_cached_states()
 
@@ -1215,15 +2072,60 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("List Ticket Priorities"))
         def zammad_list_ticket_priorities(params: ListParams) -> str:
-            """Get all available ticket priorities (cached).
+            """Get complete list of all available ticket priorities (cached).
 
             Args:
-                params: List parameters
+                params (ListParams): Validated parameters containing:
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
-                Formatted response in either JSON or Markdown format
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                # Ticket Priority List
+
+                Found N ticket priority/priorities
+
+                - **1 low** (ID: 1)
+                - **2 normal** (ID: 2)
+                - **3 high** (ID: 3)
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "items": [
+                        {"id": 1, "name": "1 low"},
+                        {"id": 2, "name": "2 normal"},
+                        {"id": 3, "name": "3 high"}
+                    ],
+                    "total": 3,
+                    "count": 3,
+                    "page": 1,
+                    "per_page": 3,
+                    "has_more": false
+                }
+                ```
+
+            Examples:
+                - Use when: "List all priorities" -> no search parameters
+                - Use when: "What priorities exist?" -> get valid priority names
+                - Use when: "Show priority options for ticket" -> get available priorities
+                - Don't use when: Searching specific priorities (priorities are cached, just list all)
+
+            Error Handling:
+                - Returns empty list if no priorities configured (should never happen)
+                - Returns "Error: Permission denied" if no priority access
+                - Returns "Error: Invalid authentication" on 401 status
+
+            Note:
+                Results are cached in memory for performance (cleared on server restart).
+                All priorities are returned in a single response (no pagination needed).
+                Use priority 'name' field when creating/updating tickets, not ID.
+                Priority names typically include numbers for sorting (e.g., "1 low", "2 normal", "3 high").
             """
             priorities = self._get_cached_priorities()
 

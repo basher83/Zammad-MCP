@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.12.2",
+    "mcp>=1.21.1",
     "zammad-py>=3.2.0",
     "pydantic>=2.11.7",
     "python-dotenv>=1.0.0",
@@ -82,7 +82,7 @@ select = [
     "TRY",
     "RUF",
 ]
-ignore = ["E501", "PLR0913", "TRY003", "EM101", "EM102"]
+ignore = ["E501", "PLR0913", "TRY003", "EM101", "EM102", "ISC001"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = [
