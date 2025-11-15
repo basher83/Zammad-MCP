@@ -136,6 +136,12 @@ def sample_article_data():
 
 
 @pytest.fixture
+def sample_ticket(sample_ticket_data):
+    """Provides sample Ticket object for tests."""
+    return Ticket(**sample_ticket_data)
+
+
+@pytest.fixture
 def ticket_factory():
     """Factory fixture to create ticket data with custom values."""
 
@@ -2351,9 +2357,22 @@ async def test_all_tools_have_title_annotation():
     tools = await server.mcp.list_tools()
 
     for tool in tools:
-        assert hasattr(tool.annotations, "title"), (
-            f"Tool '{tool.name}' missing 'title' annotation. " "Add title for better UX in MCP clients."
-        )
+        assert hasattr(
+            tool.annotations, "title"
+        ), f"Tool '{tool.name}' missing 'title' annotation. Add title for better UX in MCP clients."
         assert tool.annotations.title, "Title must not be empty"
         # Title should be human-readable (not snake_case)
         assert " " in tool.annotations.title, f"Title '{tool.annotations.title}' should be human-readable with spaces"
+
+
+def test_format_ticket_detail_markdown(sample_ticket):
+    """Test formatting single ticket as markdown."""
+    from mcp_zammad.server import _format_ticket_detail_markdown
+
+    result = _format_ticket_detail_markdown(sample_ticket)
+
+    assert f"# Ticket #{sample_ticket.number} - {sample_ticket.title}" in result
+    assert f"**ID**: {sample_ticket.id}" in result
+    assert "**State**:" in result
+    assert "**Priority**:" in result
+    assert "**Created**:" in result
