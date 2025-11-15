@@ -359,6 +359,9 @@ class GetUserParams(StrictBaseModel):
     """Get user request parameters."""
 
     user_id: int = Field(gt=0, description="User ID")
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN, description="Output format: markdown (default) or json"
+    )
 
 
 class SearchUsersParams(StrictBaseModel):
@@ -374,6 +377,9 @@ class GetOrganizationParams(StrictBaseModel):
     """Get organization request parameters."""
 
     org_id: int = Field(gt=0, description="Organization ID")
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN, description="Output format: markdown (default) or json"
+    )
 
 
 class SearchOrganizationsParams(StrictBaseModel):

@@ -577,6 +577,142 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
     return "\n".join(lines)
 
 
+def _format_user_contact_section(user: User) -> list[str]:
+    """Build contact information section for user markdown."""
+    fields = []
+    for attr, label in [("phone", "Phone"), ("mobile", "Mobile"), ("fax", "Fax"), ("web", "Web")]:
+        if value := getattr(user, attr, None):
+            fields.append(f"- **{label}**: {value}")
+    return ["## Contact Information", "", *fields, ""] if fields else []
+
+
+def _format_user_address_section(user: User) -> list[str]:
+    """Build address section for user markdown."""
+    fields = []
+    if user.department:
+        fields.append(f"- **Department**: {user.department}")
+    if user.street:
+        fields.append(f"- **Street**: {user.street}")
+    if user.city or user.zip:
+        city_zip = f"{user.city or ''} {user.zip or ''}".strip()
+        fields.append(f"- **City/Zip**: {city_zip}")
+    if user.country:
+        fields.append(f"- **Country**: {user.country}")
+    if user.address:
+        fields.append(f"- **Address**: {user.address}")
+    return ["## Address", "", *fields, ""] if fields else []
+
+
+def _format_user_detail_markdown(user: User) -> str:
+    """Format single user with full details as markdown.
+
+    Args:
+        user: User object to format
+
+    Returns:
+        Markdown-formatted string
+    """
+    # Build full name and basic info
+    name_parts = [p for p in [user.firstname, user.lastname] if p]
+    full_name = " ".join(name_parts) if name_parts else "Unnamed User"
+
+    lines = [f"# User: {full_name}", "", f"**ID**: {user.id}", f"**Login**: {user.login or 'N/A'}"]
+    lines.append(f"**Email**: {user.email or 'N/A'}")
+    lines.append(f"**Active**: {user.active}")
+    if user.vip:
+        lines.append(f"**VIP**: {user.vip}")
+    if user.verified:
+        lines.append(f"**Verified**: {user.verified}")
+    lines.append("")
+
+    # Organization
+    if user.organization:
+        lines.extend([f"**Organization**: {_brief_field(user.organization, 'name')}", ""])
+
+    # Optional sections
+    lines.extend(_format_user_contact_section(user))
+    lines.extend(_format_user_address_section(user))
+
+    # Out of Office
+    if user.out_of_office:
+        lines.extend(["## Out of Office", "", "- **Status**: Active"])
+        if user.out_of_office_start_at:
+            lines.append(f"- **Start**: {user.out_of_office_start_at.isoformat()}")
+        if user.out_of_office_end_at:
+            lines.append(f"- **End**: {user.out_of_office_end_at.isoformat()}")
+        if user.out_of_office_replacement_id:
+            lines.append(f"- **Replacement ID**: {user.out_of_office_replacement_id}")
+        lines.append("")
+
+    # Note and Metadata
+    if user.note:
+        lines.extend(["## Notes", "", user.note, ""])
+
+    lines.extend(["## Metadata", "", f"- **Created**: {user.created_at.isoformat()}"])
+    lines.append(f"- **Updated**: {user.updated_at.isoformat()}")
+    if user.last_login:
+        lines.append(f"- **Last Login**: {user.last_login.isoformat()}")
+
+    return "\n".join(lines)
+
+
+def _format_organization_detail_markdown(org: Organization) -> str:
+    """Format single organization with full details as markdown.
+
+    Args:
+        org: Organization object to format
+
+    Returns:
+        Markdown-formatted string
+    """
+    lines = [f"# Organization: {org.name}", ""]
+    lines.append(f"**ID**: {org.id}")
+    lines.append(f"**Active**: {org.active}")
+    lines.append(f"**Shared**: {org.shared}")
+    lines.append("")
+
+    # Domain Information
+    if org.domain or org.domain_assignment:
+        lines.append("## Domain")
+        lines.append("")
+        if org.domain:
+            lines.append(f"- **Domain**: {org.domain}")
+        lines.append(f"- **Domain Assignment**: {org.domain_assignment}")
+        lines.append("")
+
+    # Members
+    if hasattr(org, "members") and org.members:
+        lines.append("## Members")
+        lines.append("")
+        for member in org.members:
+            if isinstance(member, dict):
+                email = member.get("email", "Unknown")
+                name = f"{member.get('firstname', '')} {member.get('lastname', '')}".strip() or email
+            else:
+                # UserBrief object
+                email = getattr(member, "email", None) or "Unknown"
+                firstname = getattr(member, "firstname", None) or ""
+                lastname = getattr(member, "lastname", None) or ""
+                name = f"{firstname} {lastname}".strip() or email
+            lines.append(f"- {name} ({email})")
+        lines.append("")
+
+    # Note
+    if org.note:
+        lines.append("## Notes")
+        lines.append("")
+        lines.append(org.note)
+        lines.append("")
+
+    # Metadata
+    lines.append("## Metadata")
+    lines.append("")
+    lines.append(f"- **Created**: {org.created_at.isoformat()}")
+    lines.append(f"- **Updated**: {org.updated_at.isoformat()}")
+
+    return "\n".join(lines)
+
+
 def _handle_api_error(e: Exception, context: str = "operation") -> str:
     """Format errors with actionable guidance for LLM agents.
 
@@ -1220,16 +1356,20 @@ class ZammadMCPServer:
         """Register user and organization tools."""
 
         @self.mcp.tool(annotations=_read_only_annotations("Get User Details"))
-        def zammad_get_user(params: GetUserParams) -> User:
+        def zammad_get_user(params: GetUserParams) -> str:
             """Get detailed information about a specific user by ID.
 
             Args:
                 params (GetUserParams): Validated parameters containing:
                     - user_id (int): User's internal database ID (required)
+                    - response_format (ResponseFormat): Output format - markdown (default) or json
 
             Returns:
-                User: Complete user object with schema:
+                str: Formatted user information.
+                     - Markdown format: Human-readable with sections for contact info, address, etc.
+                     - JSON format: Complete user object with all fields
 
+                Example JSON response:
                 ```json
                 {
                     "id": 5,
@@ -1261,7 +1401,15 @@ class ZammadMCPServer:
             """
             client = self.get_client()
             user_data = client.get_user(params.user_id)
-            return User(**user_data)
+            user = User(**user_data)
+
+            # Format response based on preference
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(user.model_dump(), indent=2, default=str)
+            else:  # MARKDOWN (default)
+                result = _format_user_detail_markdown(user)
+
+            return truncate_response(result)
 
         @self.mcp.tool(annotations=_read_only_annotations("Search Users"))
         def zammad_search_users(params: SearchUsersParams) -> str:
@@ -1339,16 +1487,20 @@ class ZammadMCPServer:
             return truncate_response(result)
 
         @self.mcp.tool(annotations=_read_only_annotations("Get Organization Details"))
-        def zammad_get_organization(params: GetOrganizationParams) -> Organization:
+        def zammad_get_organization(params: GetOrganizationParams) -> str:
             """Get detailed information about a specific organization by ID.
 
             Args:
                 params (GetOrganizationParams): Validated parameters containing:
                     - org_id (int): Organization's internal database ID (required)
+                    - response_format (ResponseFormat): Output format - markdown (default) or json
 
             Returns:
-                Organization: Complete organization object with schema:
+                str: Formatted organization information.
+                     - Markdown format: Human-readable with sections for domain, members, notes
+                     - JSON format: Complete organization object with all fields
 
+                Example JSON response:
                 ```json
                 {
                     "id": 2,
@@ -1377,7 +1529,15 @@ class ZammadMCPServer:
             """
             client = self.get_client()
             org_data = client.get_organization(params.org_id)
-            return Organization(**org_data)
+            org = Organization(**org_data)
+
+            # Format response based on preference
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(org.model_dump(), indent=2, default=str)
+            else:  # MARKDOWN (default)
+                result = _format_organization_detail_markdown(org)
+
+            return truncate_response(result)
 
         @self.mcp.tool(annotations=_read_only_annotations("Search Organizations"))
         def zammad_search_organizations(params: SearchOrganizationsParams) -> str:
