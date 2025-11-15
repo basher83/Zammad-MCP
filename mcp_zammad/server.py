@@ -79,27 +79,39 @@ STATE_TYPE_CLOSED = 3
 STATE_TYPE_PENDING_REMINDER = 4
 STATE_TYPE_PENDING_CLOSE = 5
 
+
 # Tool annotation constants
-_READ_ONLY_ANNOTATIONS = {
-    "readOnlyHint": True,
-    "destructiveHint": False,
-    "idempotentHint": True,
-    "openWorldHint": True,
-}
+def _read_only_annotations(title: str) -> dict[str, Any]:
+    """Create read-only tool annotations with title."""
+    return {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+        "title": title,
+    }
 
-_WRITE_ANNOTATIONS = {
-    "readOnlyHint": False,
-    "destructiveHint": False,
-    "idempotentHint": False,
-    "openWorldHint": True,
-}
 
-_IDEMPOTENT_WRITE_ANNOTATIONS = {
-    "readOnlyHint": False,
-    "destructiveHint": False,
-    "idempotentHint": True,
-    "openWorldHint": True,
-}
+def _write_annotations(title: str) -> dict[str, Any]:
+    """Create write tool annotations with title."""
+    return {
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": True,
+        "title": title,
+    }
+
+
+def _idempotent_write_annotations(title: str) -> dict[str, Any]:
+    """Create idempotent write tool annotations with title."""
+    return {
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+        "title": title,
+    }
 
 
 def _handle_ticket_not_found_error(ticket_id: int, error: Exception) -> NoReturn:
@@ -613,7 +625,7 @@ class ZammadMCPServer:
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Search Zammad Tickets"))
         def zammad_search_tickets(params: TicketSearchParams) -> str:
             """Search for tickets with various filters.
 
@@ -651,7 +663,7 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Get Ticket Details"))
         def zammad_get_ticket(params: GetTicketParams) -> Ticket:
             """Get detailed information about a specific ticket.
 
@@ -679,7 +691,7 @@ class ZammadMCPServer:
             except Exception as e:
                 _handle_ticket_not_found_error(params.ticket_id, e)
 
-        @self.mcp.tool(annotations=_WRITE_ANNOTATIONS)
+        @self.mcp.tool(annotations=_write_annotations("Create New Ticket"))
         def zammad_create_ticket(params: TicketCreate) -> Ticket:
             """Create a new ticket in Zammad.
 
@@ -694,7 +706,7 @@ class ZammadMCPServer:
 
             return Ticket(**ticket_data)
 
-        @self.mcp.tool(annotations=_WRITE_ANNOTATIONS)
+        @self.mcp.tool(annotations=_write_annotations("Update Ticket"))
         def zammad_update_ticket(params: TicketUpdateParams) -> Ticket:
             """Update an existing ticket.
 
@@ -716,7 +728,7 @@ class ZammadMCPServer:
             except Exception as e:
                 _handle_ticket_not_found_error(params.ticket_id, e)
 
-        @self.mcp.tool(annotations=_WRITE_ANNOTATIONS)
+        @self.mcp.tool(annotations=_write_annotations("Add Ticket Article"))
         def zammad_add_article(params: ArticleCreate) -> Article:
             """Add an article (comment/note) to a ticket.
 
@@ -739,7 +751,7 @@ class ZammadMCPServer:
 
             return Article(**article_data)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Get Article Attachments"))
         def zammad_get_article_attachments(params: GetArticleAttachmentsParams) -> list[Attachment]:
             """Get list of attachments for a ticket article.
 
@@ -756,7 +768,7 @@ class ZammadMCPServer:
             attachments_data = client.get_article_attachments(params.ticket_id, params.article_id)
             return [Attachment(**attachment) for attachment in attachments_data]
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Download Attachment"))
         def zammad_download_attachment(params: DownloadAttachmentParams) -> str:
             """Download an attachment from a ticket article.
 
@@ -797,7 +809,7 @@ class ZammadMCPServer:
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")
 
-        @self.mcp.tool(annotations=_IDEMPOTENT_WRITE_ANNOTATIONS)
+        @self.mcp.tool(annotations=_idempotent_write_annotations("Add Ticket Tag"))
         def zammad_add_ticket_tag(params: TagOperationParams) -> TagOperationResult:
             """Add a tag to a ticket.
 
@@ -814,7 +826,7 @@ class ZammadMCPServer:
             result = client.add_ticket_tag(params.ticket_id, params.tag)
             return TagOperationResult(**result)
 
-        @self.mcp.tool(annotations=_IDEMPOTENT_WRITE_ANNOTATIONS)
+        @self.mcp.tool(annotations=_idempotent_write_annotations("Remove Ticket Tag"))
         def zammad_remove_ticket_tag(params: TagOperationParams) -> TagOperationResult:
             """Remove a tag from a ticket.
 
@@ -834,7 +846,7 @@ class ZammadMCPServer:
     def _setup_user_org_tools(self) -> None:
         """Register user and organization tools."""
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Get User Details"))
         def zammad_get_user(params: GetUserParams) -> User:
             """Get user information by ID.
 
@@ -848,7 +860,7 @@ class ZammadMCPServer:
             user_data = client.get_user(params.user_id)
             return User(**user_data)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Search Users"))
         def zammad_search_users(params: SearchUsersParams) -> str:
             """Search for users.
 
@@ -870,7 +882,7 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Get Organization Details"))
         def zammad_get_organization(params: GetOrganizationParams) -> Organization:
             """Get organization information by ID.
 
@@ -884,7 +896,7 @@ class ZammadMCPServer:
             org_data = client.get_organization(params.org_id)
             return Organization(**org_data)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Search Organizations"))
         def zammad_search_organizations(params: SearchOrganizationsParams) -> str:
             """Search for organizations.
 
@@ -906,7 +918,7 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Get Current User"))
         def zammad_get_current_user() -> User:
             """Get information about the currently authenticated user.
 
@@ -1145,7 +1157,7 @@ class ZammadMCPServer:
     def _setup_system_tools(self) -> None:
         """Register system information tools."""
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("Get Ticket Statistics"))
         def zammad_get_ticket_stats(params: GetTicketStatsParams) -> TicketStats:
             """Get ticket statistics using pagination for better performance.
 
@@ -1175,7 +1187,7 @@ class ZammadMCPServer:
                 total, open_count, closed, pending, escalated, pages, time.time() - start_time
             )
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("List Groups"))
         def zammad_list_groups(params: ListParams) -> str:
             """Get all available groups (cached).
 
@@ -1195,7 +1207,7 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("List Ticket States"))
         def zammad_list_ticket_states(params: ListParams) -> str:
             """Get all available ticket states (cached).
 
@@ -1215,7 +1227,7 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-        @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
+        @self.mcp.tool(annotations=_read_only_annotations("List Ticket Priorities"))
         def zammad_list_ticket_priorities(params: ListParams) -> str:
             """Get all available ticket priorities (cached).
 

@@ -2340,3 +2340,20 @@ def test_character_limit_is_constant():
 
     assert CHARACTER_LIMIT == 25000
     assert isinstance(CHARACTER_LIMIT, int)
+
+
+@pytest.mark.asyncio
+async def test_all_tools_have_title_annotation():
+    """All tools must have 'title' annotation for human-readable display."""
+    server = ZammadMCPServer()
+
+    # Get all registered tools from FastMCP
+    tools = await server.mcp.list_tools()
+
+    for tool in tools:
+        assert hasattr(tool.annotations, "title"), (
+            f"Tool '{tool.name}' missing 'title' annotation. " "Add title for better UX in MCP clients."
+        )
+        assert tool.annotations.title, "Title must not be empty"
+        # Title should be human-readable (not snake_case)
+        assert " " in tool.annotations.title, f"Title '{tool.annotations.title}' should be human-readable with spaces"
