@@ -305,6 +305,9 @@ class GetTicketParams(StrictBaseModel):
     include_articles: bool = Field(default=True, description="Whether to include ticket articles/comments")
     article_limit: int = Field(default=10, ge=-1, description="Maximum number of articles to return (-1 for all)")
     article_offset: int = Field(default=0, ge=0, description="Number of articles to skip for pagination")
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN, description="Output format: markdown (default) or json"
+    )
 
 
 class TicketUpdateParams(StrictBaseModel):
