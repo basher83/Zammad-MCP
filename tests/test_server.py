@@ -19,6 +19,7 @@ from mcp_zammad.models import (
     ArticleSender,
     ArticleType,
     Attachment,
+    GetTicketParams,
     GetTicketStatsParams,
     Group,
     ListParams,
@@ -2420,8 +2421,6 @@ def test_format_ticket_detail_markdown_with_tags(sample_ticket_data):
 
 def test_get_ticket_supports_markdown_format(decorator_capturer):
     """zammad_get_ticket should return markdown when requested."""
-    from mcp_zammad.models import GetTicketParams, ResponseFormat
-
     server_inst = ZammadMCPServer()
     server_inst.client = Mock()
 
@@ -2462,8 +2461,6 @@ def test_get_ticket_supports_markdown_format(decorator_capturer):
 
 def test_get_ticket_supports_json_format(decorator_capturer):
     """zammad_get_ticket should return JSON when requested."""
-    from mcp_zammad.models import GetTicketParams, ResponseFormat
-
     server_inst = ZammadMCPServer()
     server_inst.client = Mock()
 
