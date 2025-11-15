@@ -781,7 +781,7 @@ class ZammadMCPServer:
             return truncate_response(result)
 
         @self.mcp.tool(annotations=_read_only_annotations("Get Ticket Details"))
-        def zammad_get_ticket(params: GetTicketParams) -> Ticket:
+        def zammad_get_ticket(params: GetTicketParams) -> str:
             """Get detailed information about a specific ticket by ID.
 
             Args:
@@ -790,10 +790,29 @@ class ZammadMCPServer:
                     - include_articles (bool): Include articles (default: False)
                     - article_limit (int): Max articles to return (default: 20)
                     - article_offset (int): Skip first N articles (default: 0)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
-                Ticket: Complete ticket object with the following schema:
+                str: Formatted response with the following schema:
 
+                Markdown format (default):
+                ```
+                # Ticket #65003 - Server not responding
+
+                **ID**: 123
+                **State**: open
+                **Priority**: high
+                **Group**: Support
+                **Owner**: agent@example.com
+                **Customer**: user@example.com
+                **Created**: 2024-01-15T10:30:00Z
+                **Updated**: 2024-01-15T14:20:00Z
+
+                ## Articles
+                ...
+                ```
+
+                JSON format:
                 ```json
                 {
                     "id": 123,
@@ -834,7 +853,15 @@ class ZammadMCPServer:
                     article_limit=params.article_limit,
                     article_offset=params.article_offset,
                 )
-                return Ticket(**ticket_data)
+                ticket = Ticket(**ticket_data)
+
+                # Format response based on preference
+                if params.response_format == ResponseFormat.JSON:
+                    result = json.dumps(ticket.model_dump(), indent=2, default=str)
+                else:  # MARKDOWN (default)
+                    result = _format_ticket_detail_markdown(ticket)
+
+                return truncate_response(result)
             except Exception as e:
                 _handle_ticket_not_found_error(params.ticket_id, e)
 

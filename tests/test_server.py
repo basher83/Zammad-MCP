@@ -2416,3 +2416,87 @@ def test_format_ticket_detail_markdown_with_tags(sample_ticket_data):
 
     # Check that tags section appears
     assert "**Tags**: urgent, customer-request, bug" in result
+
+
+def test_get_ticket_supports_markdown_format(decorator_capturer):
+    """zammad_get_ticket should return markdown when requested."""
+    from mcp_zammad.models import GetTicketParams, ResponseFormat
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_ticket return data
+    server_inst.client.get_ticket.return_value = {
+        "id": 123,
+        "number": "65003",
+        "title": "Test Ticket",
+        "state_id": 1,
+        "priority_id": 2,
+        "group_id": 1,
+        "customer_id": 1,
+        "state": {"id": 1, "name": "open", "state_type_id": 2},
+        "priority": {"id": 2, "name": "2 normal"},
+        "group": {"id": 1, "name": "Support"},
+        "customer": {"id": 1, "email": "customer@example.com"},
+        "owner": {"id": 2, "email": "agent@example.com"},
+        "created_by_id": 1,
+        "updated_by_id": 1,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with markdown format
+    params = GetTicketParams(ticket_id=123, response_format=ResponseFormat.MARKDOWN)
+    result = test_tools["zammad_get_ticket"](params)
+
+    assert isinstance(result, str)
+    assert "# Ticket #" in result
+    assert "**ID**: 123" in result
+
+
+def test_get_ticket_supports_json_format(decorator_capturer):
+    """zammad_get_ticket should return JSON when requested."""
+    from mcp_zammad.models import GetTicketParams, ResponseFormat
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_ticket return data
+    server_inst.client.get_ticket.return_value = {
+        "id": 123,
+        "number": "65003",
+        "title": "Test Ticket",
+        "state_id": 1,
+        "priority_id": 2,
+        "group_id": 1,
+        "customer_id": 1,
+        "state": {"id": 1, "name": "open", "state_type_id": 2},
+        "priority": {"id": 2, "name": "2 normal"},
+        "group": {"id": 1, "name": "Support"},
+        "customer": {"id": 1, "email": "customer@example.com"},
+        "owner": {"id": 2, "email": "agent@example.com"},
+        "created_by_id": 1,
+        "updated_by_id": 1,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with JSON format
+    params = GetTicketParams(ticket_id=123, response_format=ResponseFormat.JSON)
+    result = test_tools["zammad_get_ticket"](params)
+
+    assert isinstance(result, str)
+    parsed = json.loads(result)
+    assert parsed["id"] == 123
