@@ -627,13 +627,74 @@ class ZammadMCPServer:
 
         @self.mcp.tool(annotations=_read_only_annotations("Search Tickets"))
         def zammad_search_tickets(params: TicketSearchParams) -> str:
-            """Search for tickets with various filters.
+            """Search for tickets with filters and pagination.
 
             Args:
-                params: Search parameters including filters and pagination
+                params (TicketSearchParams): Validated search parameters containing:
+                    - query (Optional[str]): Search string (matches title, body, tags)
+                    - state (Optional[str]): Filter by state name (e.g., "open", "closed")
+                    - priority (Optional[str]): Filter by priority name (e.g., "high")
+                    - group (Optional[str]): Filter by group name
+                    - owner (Optional[str]): Filter by owner email/login
+                    - customer (Optional[str]): Filter by customer email/login
+                    - page (int): Page number (default: 1)
+                    - per_page (int): Results per page, 1-100 (default: 20)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
-                Formatted response in either JSON or Markdown format
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                # Ticket Search Results: [filters]
+
+                Found N ticket(s)
+
+                ## Ticket #65003 - Title
+                - **ID**: 123 (use this for get_ticket, NOT number)
+                - **State**: open
+                - **Priority**: high
+                - **Created**: 2024-01-15T10:30:00Z
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "items": [
+                        {
+                            "id": 123,
+                            "number": "65003",
+                            "title": "string",
+                            "state": {"id": 1, "name": "open"},
+                            "priority": {"id": 2, "name": "high"},
+                            "created_at": "2024-01-15T10:30:00Z"
+                        }
+                    ],
+                    "total": null,
+                    "count": 20,
+                    "page": 1,
+                    "per_page": 20,
+                    "has_more": true,
+                    "next_page": 2,
+                    "next_offset": 20
+                }
+                ```
+
+            Examples:
+                - Use when: "Find all open tickets" -> state="open"
+                - Use when: "Search for network issues" -> query="network"
+                - Use when: "Tickets assigned to sarah" -> owner="sarah@company.com"
+                - Don't use when: You have ticket ID (use zammad_get_ticket instead)
+
+            Error Handling:
+                - Returns "Found 0 ticket(s)" if no matches
+                - Returns "Error: Rate limit exceeded" on 429 status
+                - Returns "Error: Invalid authentication" on 401 status
+                - May be truncated if results exceed 25,000 characters (use pagination)
+
+            Note:
+                Use the 'id' field from results for get_ticket, NOT the 'number' field.
+                Example: Ticket #65003 may have id=123. Use id=123 for API calls.
             """
             client = self.get_client()
 
