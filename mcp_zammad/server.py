@@ -71,6 +71,7 @@ MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
 MAX_PER_PAGE = 100  # Maximum results per page for pagination
 CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
+ARTICLE_BODY_TRUNCATE_LENGTH = 500  # Maximum length for article body in markdown formatting
 
 # Zammad state type IDs (from Zammad API)
 STATE_TYPE_NEW = 1
@@ -517,6 +518,51 @@ def _format_list_json(items: list[T]) -> str:
     }
 
     return json.dumps(response, indent=2, default=str)
+
+
+def _format_ticket_detail_markdown(ticket: Ticket) -> str:
+    """Format single ticket with full details as markdown.
+
+    Args:
+        ticket: Ticket object to format
+
+    Returns:
+        Markdown-formatted string
+    """
+    lines = [f"# Ticket #{ticket.number} - {ticket.title}", ""]
+    lines.append(f"**ID**: {ticket.id}")
+    lines.append(f"**State**: {_brief_field(ticket.state, 'name')}")
+    lines.append(f"**Priority**: {_brief_field(ticket.priority, 'name')}")
+    lines.append(f"**Group**: {_brief_field(ticket.group, 'name')}")
+    lines.append(f"**Owner**: {_brief_field(ticket.owner, 'email')}")
+    lines.append(f"**Customer**: {_brief_field(ticket.customer, 'email')}")
+    lines.append(f"**Created**: {ticket.created_at.isoformat()}")
+    lines.append(f"**Updated**: {ticket.updated_at.isoformat()}")
+    lines.append("")
+
+    # Tags
+    if hasattr(ticket, "tags") and ticket.tags:
+        lines.append(f"**Tags**: {', '.join(ticket.tags)}")
+        lines.append("")
+
+    # Articles
+    if hasattr(ticket, "articles") and ticket.articles:
+        lines.append("## Articles")
+        lines.append("")
+        for i, article in enumerate(ticket.articles, 1):
+            lines.append(f"### Article {i}")
+            lines.append(f"- **From**: {article.get('from', 'Unknown')}")
+            lines.append(f"- **Type**: {article.get('type', 'Unknown')}")
+            lines.append(f"- **Created**: {article.get('created_at', 'Unknown')}")
+            lines.append("")
+            body = article.get("body", "")
+            # Truncate very long bodies
+            if len(body) > ARTICLE_BODY_TRUNCATE_LENGTH:
+                body = body[:ARTICLE_BODY_TRUNCATE_LENGTH] + "...\n(truncated)"
+            lines.append(body)
+            lines.append("")
+
+    return "\n".join(lines)
 
 
 def _handle_api_error(e: Exception, context: str = "operation") -> str:
