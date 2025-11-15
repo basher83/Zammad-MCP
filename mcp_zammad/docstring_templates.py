@@ -29,7 +29,7 @@ def format_tool_docstring(
     # Args section
     lines.append("Args:")
     for param, desc in args_doc.items():
-        lines.append(f"    {param} (str): {desc}")
+        lines.append(f"    {param}: {desc}")
     lines.append("")
 
     # Returns section with schema
@@ -57,7 +57,7 @@ def format_tool_docstring(
 
     # Error handling section
     if errors:
-        lines.append("Errors:")
+        lines.append("Error Handling:")
         for error in errors:
             lines.append(f"    - {error}")
 

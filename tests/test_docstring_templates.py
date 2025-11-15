@@ -16,5 +16,5 @@ def test_format_tool_docstring_includes_all_sections():
     assert "Args:" in doc
     assert "Returns:" in doc
     assert "Examples:" in doc
-    assert "Errors:" in doc
-    assert "query (str): Search string" in doc
+    assert "Error Handling:" in doc
+    assert "query: Search string" in doc
