@@ -631,12 +631,12 @@ class ZammadMCPServer:
 
             Args:
                 params (TicketSearchParams): Validated search parameters containing:
-                    - query (Optional[str]): Search string (matches title, body, tags)
-                    - state (Optional[str]): Filter by state name (e.g., "open", "closed")
-                    - priority (Optional[str]): Filter by priority name (e.g., "high")
-                    - group (Optional[str]): Filter by group name
-                    - owner (Optional[str]): Filter by owner email/login
-                    - customer (Optional[str]): Filter by customer email/login
+                    - query (str | None): Search string (matches title, body, tags)
+                    - state (str | None): Filter by state name (e.g., "open", "closed")
+                    - priority (str | None): Filter by priority name (e.g., "high")
+                    - group (str | None): Filter by group name
+                    - owner (str | None): Filter by owner email/login
+                    - customer (str | None): Filter by customer email/login
                     - page (int): Page number (default: 1)
                     - per_page (int): Results per page, 1-100 (default: 25)
                     - response_format (ResponseFormat): Output format (default: MARKDOWN)
@@ -790,10 +790,10 @@ class ZammadMCPServer:
                     - group (str): Group name to assign ticket (required)
                     - customer (str): Customer email or login (required)
                     - article (dict): Initial article with body and type (required)
-                    - state (Optional[str]): State name (default: "new")
-                    - priority (Optional[str]): Priority name (default: "2 normal")
-                    - owner (Optional[str]): Owner email or login
-                    - tags (Optional[list[str]]): Initial tags
+                    - state (str | None): State name (default: "new")
+                    - priority (str | None): Priority name (default: "2 normal")
+                    - owner (str | None): Owner email or login
+                    - tags (list[str] | None): Initial tags
 
             Returns:
                 Ticket: The created ticket object with schema:
@@ -840,12 +840,12 @@ class ZammadMCPServer:
             Args:
                 params (TicketUpdateParams): Validated update parameters containing:
                     - ticket_id (int): Internal database ID (required, NOT display number)
-                    - title (Optional[str]): New title
-                    - state (Optional[str]): New state name
-                    - priority (Optional[str]): New priority name
-                    - group (Optional[str]): New group name
-                    - owner (Optional[str]): New owner email/login
-                    - customer (Optional[str]): New customer email/login
+                    - title (str | None): New title
+                    - state (str | None): New state name
+                    - priority (str | None): New priority name
+                    - group (str | None): New group name
+                    - owner (str | None): New owner email/login
+                    - customer (str | None): New customer email/login
 
             Returns:
                 Ticket: The updated ticket object with schema:
@@ -899,10 +899,10 @@ class ZammadMCPServer:
                     - body (str): Article content/message (required)
                     - article_type (ArticleType): Type enum - NOTE, EMAIL, etc. (required)
                     - internal (bool): Internal note vs customer-visible (default: False)
-                    - subject (Optional[str]): Article subject (for emails)
-                    - content_type (Optional[str]): text/plain or text/html (default: text/plain)
-                    - to (Optional[str]): Email recipient (for email type)
-                    - cc (Optional[str]): Email CC recipients
+                    - subject (str | None): Article subject (for emails)
+                    - content_type (str | None): text/plain or text/html (default: text/plain)
+                    - to (str | None): Email recipient (for email type)
+                    - cc (str | None): Email CC recipients
 
             Returns:
                 Article: The created article object with schema:
@@ -1003,7 +1003,7 @@ class ZammadMCPServer:
                     - ticket_id (int): Internal database ID (required, NOT display number)
                     - article_id (int): Article ID containing attachment (required)
                     - attachment_id (int): Attachment ID to download (required)
-                    - max_bytes (Optional[int]): Maximum file size limit (default: None)
+                    - max_bytes (int | None): Maximum file size limit (default: None)
 
             Returns:
                 str: Base64-encoded binary content of the attachment file.
@@ -1642,9 +1642,9 @@ class ZammadMCPServer:
 
             Args:
                 params (GetTicketStatsParams): Validated parameters containing:
-                    - group (Optional[str]): Filter by group name
-                    - start_date (Optional[datetime]): Start date filter (not yet implemented)
-                    - end_date (Optional[datetime]): End date filter (not yet implemented)
+                    - group (str | None): Filter by group name
+                    - start_date (datetime | None): Start date filter (not yet implemented)
+                    - end_date (datetime | None): End date filter (not yet implemented)
 
             Returns:
                 TicketStats: Statistics object with schema:
