@@ -40,7 +40,10 @@ from mcp_zammad.models import (
 from mcp_zammad.server import (
     CHARACTER_LIMIT,
     ZammadMCPServer,
+    _brief_field,
+    _find_max_items_for_limit,
     _format_ticket_detail_markdown,
+    _handle_api_error,
     _idempotent_write_annotations,
     _read_only_annotations,
     _write_annotations,
@@ -2731,3 +2734,178 @@ def test_idempotent_write_annotations():
     assert result.idempotentHint is True
     assert result.destructiveHint is False
     assert result.openWorldHint is True
+
+
+# ==================== BINARY SEARCH TESTS ====================
+
+
+def test_find_max_items_empty_list():
+    """Test _find_max_items_for_limit with empty list."""
+    obj = {"items": [], "metadata": "test"}
+    result = _find_max_items_for_limit(obj, [], limit=1000, use_compact=False)
+
+    assert result == 0
+
+
+def test_find_max_items_single_item_fits():
+    """Test _find_max_items_for_limit with single item that fits."""
+    items = [{"id": 1, "name": "Test"}]
+    obj = {"items": items, "metadata": "test"}
+
+    result = _find_max_items_for_limit(obj, items, limit=1000, use_compact=False)
+
+    assert result == 1
+
+
+def test_find_max_items_single_item_too_large():
+    """Test _find_max_items_for_limit with single item that exceeds limit."""
+    items = [{"id": 1, "description": "x" * 1000}]
+    obj = {"items": items, "metadata": "test"}
+
+    result = _find_max_items_for_limit(obj, items, limit=50, use_compact=False)
+
+    assert result == 0
+
+
+def test_find_max_items_all_fit():
+    """Test _find_max_items_for_limit when all items fit within limit."""
+    items = [{"id": i, "name": f"Item {i}"} for i in range(5)]
+    obj = {"items": items, "metadata": "test"}
+
+    result = _find_max_items_for_limit(obj, items, limit=10000, use_compact=False)
+
+    assert result == 5
+
+
+def test_find_max_items_partial_fit():
+    """Test _find_max_items_for_limit with typical truncation scenario."""
+    items = [{"id": i, "description": "x" * 100} for i in range(20)]
+    obj = {"items": items, "metadata": "test"}
+
+    result = _find_max_items_for_limit(obj, items, limit=1000, use_compact=False)
+
+    # Should fit some but not all items
+    assert 0 < result < 20
+
+
+def test_find_max_items_compact_format():
+    """Test _find_max_items_for_limit with compact JSON format."""
+    items = [{"id": i, "name": f"Item {i}"} for i in range(10)]
+    obj = {"items": items, "metadata": "test"}
+
+    # Compact format should fit more items than pretty format
+    result_compact = _find_max_items_for_limit(obj, items, limit=500, use_compact=True)
+    result_pretty = _find_max_items_for_limit(obj, items, limit=500, use_compact=False)
+
+    assert result_compact >= result_pretty
+
+
+# ==================== ERROR HANDLING TESTS ====================
+
+
+def test_handle_api_error_not_found():
+    """Test _handle_api_error with 404/not found errors."""
+    error = requests.HTTPError("404 Not Found")
+    result = _handle_api_error(error, "ticket retrieval")
+
+    assert "not found" in result.lower()
+    assert "ticket retrieval" in result
+    assert "verify the id" in result.lower()
+
+
+def test_handle_api_error_forbidden():
+    """Test _handle_api_error with 403/forbidden errors."""
+    error = requests.HTTPError("403 Forbidden")
+    result = _handle_api_error(error, "user update")
+
+    assert "permission denied" in result.lower()
+    assert "user update" in result
+    assert "credentials" in result.lower()
+
+
+def test_handle_api_error_unauthorized():
+    """Test _handle_api_error with 401/unauthorized errors."""
+    error = requests.HTTPError("401 Unauthorized")
+    result = _handle_api_error(error, "authentication")
+
+    assert "authentication failed" in result.lower()
+    assert "zammad_http_token" in result.lower()
+
+
+def test_handle_api_error_timeout():
+    """Test _handle_api_error with timeout errors."""
+    error = TimeoutError("Request timeout after 30 seconds")
+    result = _handle_api_error(error, "search")
+
+    assert "timeout" in result.lower()
+    assert "search" in result
+    assert "try again" in result.lower()
+
+
+def test_handle_api_error_network():
+    """Test _handle_api_error with network/connection errors."""
+    error = ConnectionError("Connection refused")
+    result = _handle_api_error(error, "ticket creation")
+
+    assert "network" in result.lower()
+    assert "ticket creation" in result
+    assert "zammad_url" in result.lower()
+
+
+def test_handle_api_error_generic():
+    """Test _handle_api_error with generic errors."""
+    error = ValueError("Invalid parameter format")
+    result = _handle_api_error(error, "data validation")
+
+    assert "data validation" in result
+    assert "ValueError" in result
+    assert "Invalid parameter format" in result
+
+
+# ==================== FORMATTING HELPER TESTS ====================
+
+
+def test_brief_field_with_none():
+    """Test _brief_field handles None values gracefully."""
+    result = _brief_field(None, "name")
+
+    assert result == "Unknown"
+
+
+def test_brief_field_with_string():
+    """Test _brief_field returns string values as-is."""
+    result = _brief_field("TestValue", "any_attr")
+
+    assert result == "TestValue"
+
+
+def test_brief_field_with_user_brief():
+    """Test _brief_field extracts from UserBrief objects."""
+    user = UserBrief(id=1, login="test", email="test@example.com", firstname="John", lastname="Doe")
+    result = _brief_field(user, "email")
+
+    assert result == "test@example.com"
+
+
+def test_brief_field_with_missing_attr():
+    """Test _brief_field returns Unknown for missing attributes."""
+    user = UserBrief(id=1, login="test", email=None)
+    result = _brief_field(user, "email")
+
+    assert result == "Unknown"
+
+
+def test_brief_field_with_state_brief():
+    """Test _brief_field works with StateBrief objects."""
+    state = StateBrief(id=1, name="open", state_type_id=1)
+    result = _brief_field(state, "name")
+
+    assert result == "open"
+
+
+def test_brief_field_with_priority_brief():
+    """Test _brief_field works with PriorityBrief objects."""
+    priority = PriorityBrief(id=2, name="high", ui_icon="!", ui_color="red")
+    result = _brief_field(priority, "name")
+
+    assert result == "high"
