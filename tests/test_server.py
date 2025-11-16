@@ -2464,6 +2464,45 @@ def test_format_ticket_detail_markdown_with_articles(sample_ticket_data, sample_
     assert "Second article" in result
 
 
+def test_format_ticket_detail_markdown_escapes_html_articles(sample_ticket_data, sample_article_data):
+    """Test that HTML content in articles is properly escaped to prevent XSS."""
+    # Create article with HTML/JavaScript content
+    html_article_data = {
+        **sample_article_data,
+        "body": "<script>alert('XSS')</script><b>Bold text</b>",
+        "content_type": "text/html",
+    }
+
+    ticket_with_html = Ticket(**sample_ticket_data, articles=[Article(**html_article_data)])
+
+    result = _format_ticket_detail_markdown(ticket_with_html)
+
+    # HTML should be escaped
+    assert "&lt;script&gt;alert(&#x27;XSS&#x27;)&lt;/script&gt;" in result
+    assert "&lt;b&gt;Bold text&lt;/b&gt;" in result
+    # Raw HTML should NOT appear
+    assert "<script>" not in result
+    assert "<b>" not in result
+
+
+def test_format_ticket_detail_markdown_preserves_plain_text_articles(sample_ticket_data, sample_article_data):
+    """Test that plain text articles are not escaped."""
+    # Create article with plain text content that looks like HTML
+    plain_article_data = {
+        **sample_article_data,
+        "body": "This is <not> HTML code",
+        "content_type": "text/plain",
+    }
+
+    ticket_with_plain = Ticket(**sample_ticket_data, articles=[Article(**plain_article_data)])
+
+    result = _format_ticket_detail_markdown(ticket_with_plain)
+
+    # Plain text should NOT be escaped
+    assert "This is <not> HTML code" in result
+    assert "&lt;not&gt;" not in result
+
+
 def test_format_ticket_detail_markdown_with_tags(sample_ticket_data):
     """Test formatting ticket with tags included."""
     # Create a ticket with tags

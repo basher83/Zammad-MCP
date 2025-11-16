@@ -554,21 +554,27 @@ def _format_ticket_articles_section(articles: list) -> list[str]:
             type_field = article.get("type", "Unknown")
             created_at_raw = article.get("created_at")
             body = article.get("body", "")
+            content_type = article.get("content_type") or article.get("content-type", "text/plain")
         else:
             # Article object - use attribute access
             from_field = article.from_ or "Unknown"
             type_field = article.type
             created_at_raw = article.created_at
             body = article.body
+            content_type = getattr(article, "content_type", "text/plain")
 
         # Normalize created_at to ISO 8601 format
         created_at = _normalize_datetime_to_iso(created_at_raw)
+
+        # Escape HTML content to prevent XSS injection in markdown renderers
+        if content_type and "html" in content_type.lower():
+            body = html.escape(body)
 
         lines.append(f"- **From**: {from_field}")
         lines.append(f"- **Type**: {type_field}")
         lines.append(f"- **Created**: {created_at}")
         lines.append("")
-        # Truncate very long bodies
+        # Truncate very long bodies (after escaping to preserve safety)
         if len(body) > ARTICLE_BODY_TRUNCATE_LENGTH:
             body = body[:ARTICLE_BODY_TRUNCATE_LENGTH] + "...\n(truncated)"
         lines.append(body)
