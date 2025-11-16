@@ -540,6 +540,29 @@ def _normalize_datetime_to_iso(value: object) -> str:
     return "Unknown"
 
 
+def _extract_article_fields(article: dict | Article) -> tuple[str, str, object, str, str]:
+    """Extract fields from article (dict or Article object) with defensive handling.
+
+    Returns:
+        Tuple of (from_field, type_field, created_at_raw, body, content_type)
+    """
+    if isinstance(article, dict):
+        from_field = article.get("from", "Unknown")
+        type_field = article.get("type", "Unknown")
+        created_at_raw = article.get("created_at")
+        body = article.get("body", "")
+        content_type = article.get("content_type") or article.get("content-type", "text/plain")
+    else:
+        # Article object - use attribute access
+        from_field = article.from_ or "Unknown"
+        type_field = article.type
+        created_at_raw = article.created_at
+        body = article.body
+        content_type = getattr(article, "content_type", "text/plain")
+
+    return from_field, type_field, created_at_raw, body, content_type
+
+
 def _format_ticket_articles_section(articles: list) -> list[str]:
     """Build articles section for ticket markdown."""
     if not articles:
@@ -548,26 +571,15 @@ def _format_ticket_articles_section(articles: list) -> list[str]:
     lines = ["## Articles", ""]
     for i, article in enumerate(articles, 1):
         lines.append(f"### Article {i}")
-        # Handle both Article objects and dicts for defensive coding
-        if isinstance(article, dict):
-            from_field = article.get("from", "Unknown")
-            type_field = article.get("type", "Unknown")
-            created_at_raw = article.get("created_at")
-            body = article.get("body", "")
-            content_type = article.get("content_type") or article.get("content-type", "text/plain")
-        else:
-            # Article object - use attribute access
-            from_field = article.from_ or "Unknown"
-            type_field = article.type
-            created_at_raw = article.created_at
-            body = article.body
-            content_type = getattr(article, "content_type", "text/plain")
+
+        # Extract fields with defensive dict/object handling
+        from_field, type_field, created_at_raw, body, content_type = _extract_article_fields(article)
 
         # Normalize created_at to ISO 8601 format
         created_at = _normalize_datetime_to_iso(created_at_raw)
 
         # Escape HTML content to prevent XSS injection in markdown renderers
-        if content_type and "html" in content_type.lower():
+        if "html" in content_type.lower():
             body = html.escape(body)
 
         lines.append(f"- **From**: {from_field}")

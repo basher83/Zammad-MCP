@@ -41,6 +41,7 @@ from mcp_zammad.server import (
     CHARACTER_LIMIT,
     ZammadMCPServer,
     _brief_field,
+    _extract_article_fields,
     _extract_member_info,
     _find_max_items_for_limit,
     _format_ticket_detail_markdown,
@@ -2990,6 +2991,78 @@ def test_extract_member_info_from_dict_no_name():
 
     assert name == "user@example.com"
     assert email == "user@example.com"
+
+
+def test_extract_article_fields_from_dict():
+    """Test _extract_article_fields with dict input."""
+    article_dict = {
+        "from": "customer@example.com",
+        "type": "note",
+        "created_at": "2024-01-15T10:30:00Z",
+        "body": "Test body",
+        "content_type": "text/plain",
+    }
+
+    from_field, type_field, created_at_raw, body, content_type = _extract_article_fields(article_dict)
+
+    assert from_field == "customer@example.com"
+    assert type_field == "note"
+    assert created_at_raw == "2024-01-15T10:30:00Z"
+    assert body == "Test body"
+    assert content_type == "text/plain"
+
+
+def test_extract_article_fields_from_dict_with_hyphenated_content_type():
+    """Test _extract_article_fields with dict using content-type (hyphenated)."""
+    article_dict = {
+        "from": "agent@example.com",
+        "type": "email",
+        "created_at": "2024-01-15T10:30:00Z",
+        "body": "<p>HTML body</p>",
+        "content-type": "text/html",
+    }
+
+    from_field, type_field, created_at_raw, body, content_type = _extract_article_fields(article_dict)
+
+    assert from_field == "agent@example.com"
+    assert type_field == "email"
+    assert created_at_raw == "2024-01-15T10:30:00Z"
+    assert body == "<p>HTML body</p>"
+    assert content_type == "text/html"
+
+
+def test_extract_article_fields_from_dict_missing_fields():
+    """Test _extract_article_fields with dict missing optional fields."""
+    article_dict = {
+        "type": "note",
+        "created_at": "2024-01-15T10:30:00Z",
+    }
+
+    from_field, type_field, created_at_raw, body, content_type = _extract_article_fields(article_dict)
+
+    assert from_field == "Unknown"
+    assert type_field == "note"
+    assert created_at_raw == "2024-01-15T10:30:00Z"
+    assert body == ""
+    assert content_type == "text/plain"
+
+
+def test_extract_article_fields_from_object(sample_article_data):
+    """Test _extract_article_fields with Article object."""
+    article = Article(
+        **{
+            **sample_article_data,
+            "from": "customer@example.com",
+            "content_type": "text/html",
+        }
+    )
+
+    from_field, type_field, created_at_raw, body, content_type = _extract_article_fields(article)
+
+    assert from_field == "customer@example.com"
+    assert type_field == "note"
+    assert body == "Test article"
+    assert content_type == "text/html"
 
 
 def test_extract_member_info_from_object():
