@@ -708,9 +708,10 @@ def _format_user_detail_markdown(user: User) -> str:
     lines.extend(_format_user_address_section(user))
     lines.extend(_format_user_ooo_section(user))
 
-    # Note
+    # Note (escape HTML to prevent XSS in markdown renderers)
     if user.note:
-        lines.extend(["## Notes", "", user.note, ""])
+        escaped_note = html.escape(user.note)
+        lines.extend(["## Notes", "", escaped_note, ""])
 
     lines.extend(_format_user_metadata_section(user))
     return "\n".join(lines)
@@ -788,9 +789,10 @@ def _format_organization_detail_markdown(org: Organization) -> str:
     if hasattr(org, "members") and org.members:
         lines.extend(_format_org_members_section(org.members))
 
-    # Note
+    # Note (escape HTML to prevent XSS in markdown renderers)
     if org.note:
-        lines.extend(["## Notes", "", org.note, ""])
+        escaped_note = html.escape(org.note)
+        lines.extend(["## Notes", "", escaped_note, ""])
 
     lines.extend(_format_org_metadata_section(org))
     return "\n".join(lines)

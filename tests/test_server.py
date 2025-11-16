@@ -2634,6 +2634,76 @@ def test_get_user_supports_markdown_format(decorator_capturer):
     assert "**VIP**: True" in result
 
 
+def test_get_user_escapes_html_in_note(decorator_capturer):
+    """zammad_get_user should escape HTML in note field for markdown output."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_user with HTML/JavaScript in note
+    server_inst.client.get_user.return_value = {
+        "id": 5,
+        "login": "jane@example.com",
+        "email": "jane@example.com",
+        "firstname": "Jane",
+        "lastname": "Doe",
+        "active": True,
+        "note": "<script>alert(1)</script><b>bold</b>",
+        "created_at": "2023-01-10T08:00:00Z",
+        "updated_at": "2023-01-10T08:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with markdown format
+    params = GetUserParams(user_id=5, response_format=ResponseFormat.MARKDOWN)
+    result = test_tools["zammad_get_user"](params)
+
+    # HTML should be escaped
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in result
+    assert "&lt;b&gt;bold&lt;/b&gt;" in result
+    # Raw HTML should NOT appear
+    assert "<script>" not in result
+    assert "<b>" not in result
+
+
+def test_get_user_escapes_all_note_content(decorator_capturer):
+    """zammad_get_user should escape all angle brackets in notes for security."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_user with plain text note containing angle brackets
+    server_inst.client.get_user.return_value = {
+        "id": 5,
+        "login": "jane@example.com",
+        "email": "jane@example.com",
+        "firstname": "Jane",
+        "lastname": "Doe",
+        "active": True,
+        "note": "Contact user if <condition> is met",
+        "created_at": "2023-01-10T08:00:00Z",
+        "updated_at": "2023-01-10T08:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with markdown format
+    params = GetUserParams(user_id=5, response_format=ResponseFormat.MARKDOWN)
+    result = test_tools["zammad_get_user"](params)
+
+    # All angle brackets should be escaped for security
+    assert "Contact user if &lt;condition&gt; is met" in result
+    # Raw angle brackets should NOT appear
+    assert "<condition>" not in result
+
+
 def test_get_user_supports_json_format(decorator_capturer):
     """zammad_get_user should return JSON when requested."""
     server_inst = ZammadMCPServer()
@@ -2705,6 +2775,76 @@ def test_get_organization_supports_markdown_format(decorator_capturer):
     assert "**ID**: 2" in result
     assert "**Domain**: acme.com" in result
     assert "VIP customer" in result
+
+
+def test_get_organization_escapes_html_in_note(decorator_capturer):
+    """zammad_get_organization should escape HTML in note field for markdown output."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_organization with HTML/JavaScript in note
+    server_inst.client.get_organization.return_value = {
+        "id": 2,
+        "name": "ACME Corp",
+        "domain": "acme.com",
+        "active": True,
+        "shared": True,
+        "domain_assignment": True,
+        "note": "<script>alert(1)</script><b>bold</b>",
+        "created_at": "2022-05-10T12:00:00Z",
+        "updated_at": "2022-05-10T12:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with markdown format
+    params = GetOrganizationParams(org_id=2, response_format=ResponseFormat.MARKDOWN)
+    result = test_tools["zammad_get_organization"](params)
+
+    # HTML should be escaped
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in result
+    assert "&lt;b&gt;bold&lt;/b&gt;" in result
+    # Raw HTML should NOT appear
+    assert "<script>" not in result
+    assert "<b>" not in result
+
+
+def test_get_organization_escapes_all_note_content(decorator_capturer):
+    """zammad_get_organization should escape all angle brackets in notes for security."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = Mock()
+
+    # Mock get_organization with plain text note containing angle brackets
+    server_inst.client.get_organization.return_value = {
+        "id": 2,
+        "name": "ACME Corp",
+        "domain": "acme.com",
+        "active": True,
+        "shared": True,
+        "domain_assignment": True,
+        "note": "Contact if <condition> is met",
+        "created_at": "2022-05-10T12:00:00Z",
+        "updated_at": "2022-05-10T12:00:00Z",
+    }
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Call with markdown format
+    params = GetOrganizationParams(org_id=2, response_format=ResponseFormat.MARKDOWN)
+    result = test_tools["zammad_get_organization"](params)
+
+    # All angle brackets should be escaped for security
+    assert "Contact if &lt;condition&gt; is met" in result
+    # Raw angle brackets should NOT appear
+    assert "<condition>" not in result
 
 
 def test_get_organization_supports_json_format(decorator_capturer):
@@ -3057,7 +3197,7 @@ def test_extract_article_fields_from_object(sample_article_data):
         }
     )
 
-    from_field, type_field, created_at_raw, body, content_type = _extract_article_fields(article)
+    from_field, type_field, _created_at_raw, body, content_type = _extract_article_fields(article)
 
     assert from_field == "customer@example.com"
     assert type_field == "note"
