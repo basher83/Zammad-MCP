@@ -41,10 +41,12 @@ from mcp_zammad.server import (
     CHARACTER_LIMIT,
     ZammadMCPServer,
     _brief_field,
+    _extract_member_info,
     _find_max_items_for_limit,
     _format_ticket_detail_markdown,
     _handle_api_error,
     _idempotent_write_annotations,
+    _normalize_datetime_to_iso,
     _read_only_annotations,
     _write_annotations,
     main,
@@ -2909,3 +2911,52 @@ def test_brief_field_with_priority_brief():
     result = _brief_field(priority, "name")
 
     assert result == "high"
+
+
+def test_normalize_datetime_to_iso_with_datetime():
+    """Test _normalize_datetime_to_iso with datetime object."""
+    dt = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+    result = _normalize_datetime_to_iso(dt)
+
+    assert result == "2024-01-15T10:30:00+00:00"
+
+
+def test_normalize_datetime_to_iso_with_string():
+    """Test _normalize_datetime_to_iso with string value."""
+    result = _normalize_datetime_to_iso("2024-01-15")
+
+    assert result == "2024-01-15"
+
+
+def test_normalize_datetime_to_iso_with_none():
+    """Test _normalize_datetime_to_iso with None value."""
+    result = _normalize_datetime_to_iso(None)
+
+    assert result == "Unknown"
+
+
+def test_extract_member_info_from_dict():
+    """Test _extract_member_info with dict input."""
+    member = {"email": "jane@example.com", "firstname": "Jane", "lastname": "Doe"}
+    name, email = _extract_member_info(member)
+
+    assert name == "Jane Doe"
+    assert email == "jane@example.com"
+
+
+def test_extract_member_info_from_dict_no_name():
+    """Test _extract_member_info with dict without name."""
+    member = {"email": "user@example.com"}
+    name, email = _extract_member_info(member)
+
+    assert name == "user@example.com"
+    assert email == "user@example.com"
+
+
+def test_extract_member_info_from_object():
+    """Test _extract_member_info with UserBrief object."""
+    member = UserBrief(id=1, login="jane", email="jane@example.com", firstname="Jane", lastname="Doe")
+    name, email = _extract_member_info(member)
+
+    assert name == "Jane Doe"
+    assert email == "jane@example.com"

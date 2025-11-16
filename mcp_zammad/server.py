@@ -8,6 +8,7 @@ import os
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any, NoReturn, Protocol, TypeVar
 
@@ -530,6 +531,15 @@ def _format_list_json(items: list[T]) -> str:
     return json.dumps(response, indent=2, default=str)
 
 
+def _normalize_datetime_to_iso(value: object) -> str:
+    """Normalize datetime value to ISO 8601 string format."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if value:
+        return str(value)
+    return "Unknown"
+
+
 def _format_ticket_articles_section(articles: list) -> list[str]:
     """Build articles section for ticket markdown."""
     if not articles:
@@ -542,14 +552,17 @@ def _format_ticket_articles_section(articles: list) -> list[str]:
         if isinstance(article, dict):
             from_field = article.get("from", "Unknown")
             type_field = article.get("type", "Unknown")
-            created_at = article.get("created_at", "Unknown")
+            created_at_raw = article.get("created_at")
             body = article.get("body", "")
         else:
             # Article object - use attribute access
             from_field = article.from_ or "Unknown"
             type_field = article.type
-            created_at = article.created_at
+            created_at_raw = article.created_at
             body = article.body
+
+        # Normalize created_at to ISO 8601 format
+        created_at = _normalize_datetime_to_iso(created_at_raw)
 
         lines.append(f"- **From**: {from_field}")
         lines.append(f"- **Type**: {type_field}")
@@ -698,6 +711,22 @@ def _format_org_domain_section(org: Organization) -> list[str]:
     return lines
 
 
+def _extract_member_info(member: dict | object) -> tuple[str, str]:
+    """Extract name and email from member dict or UserBrief object."""
+    if isinstance(member, dict):
+        email = member.get("email", "Unknown")
+        firstname = member.get("firstname", "")
+        lastname = member.get("lastname", "")
+    else:
+        # UserBrief object
+        email = getattr(member, "email", None) or "Unknown"
+        firstname = getattr(member, "firstname", None) or ""
+        lastname = getattr(member, "lastname", None) or ""
+
+    name = f"{firstname} {lastname}".strip()
+    return (name or email, email)
+
+
 def _format_org_members_section(members: list) -> list[str]:
     """Build members section for organization markdown."""
     if not members:
@@ -705,15 +734,7 @@ def _format_org_members_section(members: list) -> list[str]:
 
     lines = ["## Members", ""]
     for member in members:
-        if isinstance(member, dict):
-            email = member.get("email", "Unknown")
-            name = f"{member.get('firstname', '')} {member.get('lastname', '')}".strip() or email
-        else:
-            # UserBrief object
-            email = getattr(member, "email", None) or "Unknown"
-            firstname = getattr(member, "firstname", None) or ""
-            lastname = getattr(member, "lastname", None) or ""
-            name = f"{firstname} {lastname}".strip() or email
+        name, email = _extract_member_info(member)
         lines.append(f"- {name} ({email})")
     lines.append("")
     return lines
