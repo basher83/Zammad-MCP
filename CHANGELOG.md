@@ -23,15 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
-- **deps**: Update github/codeql-action digest to 4e94bd1 (v4) (#107)
+- **deps**: Update GitHub/codeql-action digest to 4e94bd1 (v4) (#107)
 - **deps**: Update actions/upload-artifact digest to 330a01c (v4) (#108)
 - **deps**: Update dependency uv to v0.9.7 (#106)
 - **deps**: Update python:3.13-slim Docker digest to 452ed86 (#105)
-- **deps**: Update github/codeql-action digest to 0499de3 (v4) (#109)
+- **deps**: Update GitHub/codeql-action digest to 0499de3 (v4) (#109)
 - **deps**: Update dependency uv to v0.9.9 (#112)
 - **deps**: Update docker/metadata-action digest to 318604b (v5.8.0) (#111)
 - **deps**: Update astral-sh/setup-uv digest to 5a7eac6 (v7.1.1) (#110)
-- **deps**: Update github/codeql-action digest to 014f16e (v4) (#117)
+- **deps**: Update GitHub/codeql-action digest to 014f16e (v4) (#117)
 
 ### Documentation
 

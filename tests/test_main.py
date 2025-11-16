@@ -2,6 +2,8 @@
 
 from unittest.mock import Mock, patch
 
+import pytest
+
 import mcp_zammad.__main__ as main_module
 from mcp_zammad.__main__ import main
 
@@ -48,7 +50,7 @@ class TestMain:
             mock_run.assert_not_called()
 
 
-def test_main_with_http_transport(monkeypatch):
+def test_main_with_http_transport(monkeypatch) -> None:
     """Test main entry point with HTTP transport."""
     monkeypatch.setenv("MCP_TRANSPORT", "http")
     monkeypatch.setenv("MCP_HOST", "127.0.0.1")
@@ -61,7 +63,7 @@ def test_main_with_http_transport(monkeypatch):
         mock_mcp.run.assert_called_once_with(transport="streamable-http")
 
 
-def test_main_with_stdio_transport_default(monkeypatch):
+def test_main_with_stdio_transport_default(monkeypatch) -> None:
     """Test main entry point defaults to stdio transport."""
     # Ensure no transport env vars are set
     monkeypatch.delenv("MCP_TRANSPORT", raising=False)
@@ -75,15 +77,12 @@ def test_main_with_stdio_transport_default(monkeypatch):
         mock_mcp.run.assert_called_once_with()
 
 
-def test_main_validates_http_config(monkeypatch):
+def test_main_validates_http_config(monkeypatch) -> None:
     """Test main validates HTTP configuration."""
     monkeypatch.setenv("MCP_TRANSPORT", "http")
     # Don't set port - should fail validation
     monkeypatch.delenv("MCP_PORT", raising=False)
 
-    try:
+    with pytest.raises(ValueError) as excinfo:
         main()
-        msg = "Should have raised ValueError"
-        raise AssertionError(msg)
-    except ValueError as e:
-        assert "HTTP transport requires MCP_PORT" in str(e)
+    assert "HTTP transport requires MCP_PORT" in str(excinfo.value)
