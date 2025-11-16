@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **server**: Add markdown formatter for ticket details
 - **server**: Add response format support to zammad_get_ticket
 - **server**: Unify response formats for user and org tools
+- **config**: Add transport configuration model with env support
+- **main**: Add HTTP transport support via environment config
 
 ### Dependencies
 
@@ -28,12 +30,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **deps**: Update github/codeql-action digest to 0499de3 (v4) (#109)
 - **deps**: Update dependency uv to v0.9.9 (#112)
 - **deps**: Update docker/metadata-action digest to 318604b (v5.8.0) (#111)
+- **deps**: Update astral-sh/setup-uv digest to 5a7eac6 (v7.1.1) (#110)
+- **deps**: Update github/codeql-action digest to 014f16e (v4) (#117)
 
 ### Documentation
 
 - **server**: Enhance zammad_search_tickets docstring
 - **server**: Enhance tool docstrings with MCP compliance
 - Add response format section and update MCP version
+- **changelog**: Update for MCP audit fixes
+- **plan**: Add HTTP transport implementation plan and exclude plans from linting
+- **readme**: Add HTTP transport documentation and update stdio note
+- **deployment**: Add comprehensive HTTP transport deployment guide
+- **env**: Add HTTP transport configuration examples
 
 ### Fixed
 
@@ -53,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **docs**: Use modern type syntax in docstrings per CLAUDE.md
 - **server**: Handle Article objects in ticket markdown formatter
 - **tests**: Move imports to top level per CLAUDE.md
+- **config**: Add port validation and improve error messages
 
 ### Miscellaneous Tasks
 
