@@ -4,6 +4,10 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 
+# Port validation constants
+MIN_PORT = 1
+MAX_PORT = 65535
+
 
 class TransportType(str, Enum):
     """Supported transport types."""
@@ -52,7 +56,12 @@ class TransportConfig:
 
         host = os.getenv("MCP_HOST")
         port_str = os.getenv("MCP_PORT")
-        port = int(port_str) if port_str else None
+        port = None
+        if port_str:
+            try:
+                port = int(port_str)
+            except ValueError:
+                raise ValueError(f"MCP_PORT must be a valid integer, got: {port_str}") from None
 
         return cls(transport=transport, host=host, port=port)
 
@@ -65,6 +74,10 @@ class TransportConfig:
         if self.transport == TransportType.HTTP:
             if self.port is None:
                 raise ValueError("HTTP transport requires MCP_PORT environment variable")
+
+            # Validate port range
+            if not (MIN_PORT <= self.port <= MAX_PORT):
+                raise ValueError(f"Port must be between {MIN_PORT} and {MAX_PORT}, got: {self.port}")
 
             # Default host to localhost for HTTP if not specified
             if self.host is None:

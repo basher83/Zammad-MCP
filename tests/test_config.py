@@ -58,3 +58,33 @@ def test_transport_config_http_defaults_host():
     config = TransportConfig(transport=TransportType.HTTP, port=8000)
     config.validate()
     assert config.host == "127.0.0.1"
+
+
+def test_transport_config_port_non_numeric(monkeypatch):
+    """Test non-numeric port string raises error."""
+    monkeypatch.setenv("MCP_TRANSPORT", "http")
+    monkeypatch.setenv("MCP_PORT", "not_a_number")
+
+    with pytest.raises(ValueError, match="MCP_PORT must be a valid integer"):
+        TransportConfig.from_env()
+
+
+def test_transport_config_port_below_range():
+    """Test port below valid range raises error."""
+    config = TransportConfig(transport=TransportType.HTTP, port=0)
+    with pytest.raises(ValueError, match="Port must be between 1 and 65535"):
+        config.validate()
+
+
+def test_transport_config_port_above_range():
+    """Test port above valid range raises error."""
+    config = TransportConfig(transport=TransportType.HTTP, port=65536)
+    with pytest.raises(ValueError, match="Port must be between 1 and 65535"):
+        config.validate()
+
+
+def test_transport_config_port_negative():
+    """Test negative port raises error."""
+    config = TransportConfig(transport=TransportType.HTTP, port=-1)
+    with pytest.raises(ValueError, match="Port must be between 1 and 65535"):
+        config.validate()
