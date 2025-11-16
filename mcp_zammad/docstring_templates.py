@@ -23,20 +23,17 @@ def _build_examples_section(
     examples: list[str], use_when: list[str] | None, dont_use_when: list[str] | None
 ) -> list[str]:
     """Build the Examples section."""
-    # Early return if no examples to add
-    has_content = bool(use_when) or bool(dont_use_when) or bool(examples)
-    if not has_content:
+    # Collect all example lines
+    all_examples: list[str] = []
+    all_examples.extend(f"    - Use when: {ex}" for ex in (use_when or []))
+    all_examples.extend(f"    - Don't use when: {ex}" for ex in (dont_use_when or []))
+    all_examples.extend(f"    - {ex}" for ex in examples)
+
+    # Return empty if no examples
+    if not all_examples:
         return []
 
-    lines = ["Examples:"]
-    if use_when:
-        lines.extend(f"    - Use when: {ex}" for ex in use_when)
-    if dont_use_when:
-        lines.extend(f"    - Don't use when: {ex}" for ex in dont_use_when)
-    if examples:
-        lines.extend(f"    - {ex}" for ex in examples)
-    lines.append("")
-    return lines
+    return ["Examples:", *all_examples, ""]
 
 
 def _build_errors_section(errors: list[str]) -> list[str]:
