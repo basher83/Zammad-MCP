@@ -262,8 +262,8 @@ def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> st
         # Convert to plaintext summary to avoid producing invalid JSON fragments
         try:
             plaintext_repr = json.dumps(obj, ensure_ascii=False)
-        except Exception:
-            # Fall back to str() if JSON serialization fails
+        except (TypeError, ValueError, OverflowError):
+            # Fall back to str() if JSON serialization fails (non-serializable types, circular refs, etc.)
             plaintext_repr = str(obj)
         return _truncate_text_response(plaintext_repr, limit)
 
