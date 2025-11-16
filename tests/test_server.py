@@ -2320,6 +2320,23 @@ class TestJSONOutputAndTruncation:
         assert "_meta" in parsed
         assert parsed["_meta"]["truncated"] is True
 
+        # Verify metadata includes original_size and limit fields
+        assert "original_size" in parsed["_meta"]
+        assert "limit" in parsed["_meta"]
+
+        # Verify metadata field types are integers
+        assert isinstance(parsed["_meta"]["original_size"], int)
+        assert isinstance(parsed["_meta"]["limit"], int)
+
+        # Verify limit matches what was requested
+        assert parsed["_meta"]["limit"] == 25000
+
+        # Verify original_size matches the input length
+        assert parsed["_meta"]["original_size"] == len(large_json_str)
+
+        # Verify original_size exceeds limit (confirming truncation was necessary)
+        assert parsed["_meta"]["original_size"] > parsed["_meta"]["limit"]
+
         # Verify result is under limit
         assert len(truncated) <= 25000
 

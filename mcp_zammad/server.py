@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -252,6 +252,11 @@ def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> st
         while obj[largest_key] and len(json_str) > limit:  # type: ignore[index]
             obj[largest_key].pop()  # type: ignore[index]
             json_str = _serialize_json(obj, use_compact=use_compact)
+
+    # Hard-cap fallback: ensure we never exceed limit even if array trimming failed
+    if len(json_str) > limit:
+        json_str = json_str[:limit]
+
     return json_str
 
 
@@ -563,7 +568,7 @@ def _extract_article_fields(article: dict | Article) -> tuple[str, str, object, 
     return from_field, type_field, created_at_raw, body, content_type
 
 
-def _format_ticket_articles_section(articles: list) -> list[str]:
+def _format_ticket_articles_section(articles: Sequence[dict[str, Any] | Article]) -> list[str]:
     """Build articles section for ticket markdown."""
     if not articles:
         return []
@@ -1058,11 +1063,11 @@ class ZammadMCPServer:
                     - title (str): Ticket title/subject (required)
                     - group (str): Group name to assign ticket (required)
                     - customer (str): Customer email or login (required)
-                    - article (dict): Initial article with body and type (required)
-                    - state (str | None): State name (default: "new")
-                    - priority (str | None): Priority name (default: "2 normal")
-                    - owner (str | None): Owner email or login
-                    - tags (list[str] | None): Initial tags
+                    - article_body (str): Initial article/comment body (required)
+                    - state (str): State name (default: "new")
+                    - priority (str): Priority name (default: "2 normal")
+                    - article_type (str): Article type - note, email, phone (default: "note")
+                    - article_internal (bool): Whether article is internal (default: False)
 
             Returns:
                 Ticket: The created ticket object with schema:
@@ -1081,8 +1086,8 @@ class ZammadMCPServer:
                 ```
 
             Examples:
-                - Use when: "Create ticket for server outage" -> title, group, customer, article
-                - Use when: "New high priority ticket" -> title, group, customer, article, priority="high"
+                - Use when: "Create ticket for server outage" -> title, group, customer, article_body
+                - Use when: "New high priority ticket" -> title, group, customer, article_body, priority="3 high"
                 - Don't use when: Ticket already exists (use zammad_update_ticket)
                 - Don't use when: Only adding comment to existing ticket (use zammad_add_article)
 
@@ -1093,7 +1098,7 @@ class ZammadMCPServer:
                 - Validates group, customer, state, priority names before creation
 
             Note:
-                The article parameter must include 'body' and 'type' (e.g., 'note', 'email').
+                Article fields (article_body, article_type, article_internal) are separate flat fields.
                 All name-based references (group, customer, state, priority) are validated.
                 Created ticket returns with expanded field objects, not just IDs.
             """
@@ -1272,7 +1277,7 @@ class ZammadMCPServer:
                     - ticket_id (int): Internal database ID (required, NOT display number)
                     - article_id (int): Article ID containing attachment (required)
                     - attachment_id (int): Attachment ID to download (required)
-                    - max_bytes (int | None): Maximum file size limit (default: None)
+                    - max_bytes (int | None): Maximum file size limit (default: 10_000_000 bytes / 10 MB)
 
             Returns:
                 str: Base64-encoded binary content of the attachment file.
