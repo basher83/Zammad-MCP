@@ -73,7 +73,8 @@ MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
 MAX_PER_PAGE = 100  # Maximum results per page for pagination
 CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
-ARTICLE_BODY_TRUNCATE_LENGTH = 500  # Maximum length for article body in markdown formatting
+# Maximum length for article body in markdown formatting
+ARTICLE_BODY_TRUNCATE_LENGTH = 500
 
 # Zammad state type IDs (from Zammad API)
 STATE_TYPE_NEW = 1
@@ -259,7 +260,11 @@ def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> st
     # Hard-cap fallback: if still over limit, convert to plaintext to avoid invalid JSON
     if len(json_str) > limit:
         # Convert to plaintext summary to avoid producing invalid JSON fragments
-        plaintext_repr = str(obj)
+        try:
+            plaintext_repr = json.dumps(obj, ensure_ascii=False)
+        except Exception:
+            # Fall back to str() if JSON serialization fails
+            plaintext_repr = str(obj)
         return _truncate_text_response(plaintext_repr, limit)
 
     return json_str
@@ -526,7 +531,8 @@ def _format_list_json(items: list[T]) -> str:
     offset = 0
 
     response: dict[str, Any] = {
-        "items": [item.model_dump() for item in sorted_items],  # type: ignore[attr-defined]
+        # type: ignore[attr-defined]
+        "items": [item.model_dump() for item in sorted_items],
         "total": total,
         "count": total,
         "page": page,
@@ -589,7 +595,11 @@ def _format_ticket_articles_section(articles: Sequence[dict[str, Any] | Article]
         created_at = _normalize_datetime_to_iso(created_at_raw)
 
         # Escape HTML content to prevent XSS injection in markdown renderers
-        if "html" in content_type.lower():
+        if isinstance(article, Article):
+            # Use helper for Article objects to de-duplicate escaping logic
+            body = _escape_article_body(article)
+        elif isinstance(article, dict) and "html" in content_type.lower():
+            # Keep dict-based behavior unchanged
             body = html.escape(body)
 
         lines.append(f"- **From**: {from_field}")
@@ -1297,10 +1307,10 @@ class ZammadMCPServer:
                 - Don't use when: Attachment IDs unknown (list attachments first)
 
             Error Handling:
-                - Raises AttachmentDownloadError if download fails
+                - Raises AttachmentDownloadError if download fails (includes network errors, API errors, invalid IDs)
                 - Raises AttachmentDownloadError if file exceeds max_bytes limit
-                - Returns "Error: Resource not found" if ticket_id/article_id/attachment_id invalid
-                - Returns "Error: Permission denied" if no access to attachment
+                - Permission errors (403) and not found errors (404) are wrapped in AttachmentDownloadError
+                  with the original exception available via the original_error attribute
 
             Note:
                 ticket_id must be the internal database ID, NOT the display number.
@@ -2306,7 +2316,8 @@ class ZammadMCPServer:
                 # Add summary by state
                 for state, state_tickets in sorted(ticket_states.items()):
                     lines.append(f"{state.title()} ({len(state_tickets)} tickets):")
-                    for ticket in state_tickets[:MAX_TICKETS_PER_STATE_IN_QUEUE]:  # Show first N tickets per state
+                    # Show first N tickets per state
+                    for ticket in state_tickets[:MAX_TICKETS_PER_STATE_IN_QUEUE]:
                         priority = ticket.get("priority", {})
                         priority_name = priority.get("name", "Unknown") if isinstance(priority, dict) else str(priority)
                         customer = ticket.get("customer", {})
