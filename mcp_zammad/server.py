@@ -749,11 +749,16 @@ def _handle_api_error(e: Exception, context: str = "operation") -> str:
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
 
-    def __init__(self) -> None:
-        """Initialize the server."""
+    def __init__(self, host: str = "127.0.0.1", port: int = 8000) -> None:
+        """Initialize the server.
+
+        Args:
+            host: Host to bind for HTTP transport (default: 127.0.0.1)
+            port: Port to bind for HTTP transport (default: 8000)
+        """
         self.client: ZammadClient | None = None
         # Create FastMCP with lifespan configured
-        self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
+        self.mcp = FastMCP("zammad_mcp", host=host, port=port, lifespan=self._create_lifespan())
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
@@ -2349,11 +2354,30 @@ Use zammad_search_tickets to find tickets with escalation times set. For each es
 Organize the results by urgency and provide actionable recommendations."""
 
 
-# Create the server instance
-server = ZammadMCPServer()
+# Create the server instance with host/port from environment
+# This allows HTTP transport to bind to the configured address
+_host = os.getenv("MCP_HOST", "127.0.0.1")
+_port = int(os.getenv("MCP_PORT", "8000"))
+server = ZammadMCPServer(host=_host, port=_port)
 
 # Export the MCP server instance
 mcp = server.mcp
+
+
+# Health check endpoint for HTTP transport
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request):  # noqa: ARG001
+    """Health check endpoint for HTTP transport.
+
+    Args:
+        request: The incoming HTTP request (required by FastMCP).
+
+    Returns:
+        JSONResponse with health status.
+    """
+    from starlette.responses import JSONResponse
+
+    return JSONResponse({"status": "healthy", "transport": "http"})
 
 
 def _configure_logging() -> None:

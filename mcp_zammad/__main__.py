@@ -17,8 +17,9 @@ def main() -> None:
     config.validate()
 
     # FastMCP handles its own async loop
+    # Host and port are already configured during server initialization
     if config.transport == TransportType.HTTP:
-        mcp.run(transport="http", host=config.host, port=config.port)  # type: ignore[func-returns-value,call-arg,arg-type]
+        mcp.run(transport="streamable-http")  # type: ignore[func-returns-value]
     else:
         mcp.run()  # type: ignore[func-returns-value]
 

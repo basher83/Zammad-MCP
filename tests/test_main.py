@@ -57,7 +57,8 @@ def test_main_with_http_transport(monkeypatch):
     with patch("mcp_zammad.__main__.mcp") as mock_mcp:
         main()
 
-        mock_mcp.run.assert_called_once_with(transport="http", host="127.0.0.1", port=8000)
+        # Host and port are configured during server initialization, not passed to run()
+        mock_mcp.run.assert_called_once_with(transport="streamable-http")
 
 
 def test_main_with_stdio_transport_default(monkeypatch):
