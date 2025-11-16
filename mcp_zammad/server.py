@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
+from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .client import ZammadClient
@@ -2367,7 +2368,7 @@ mcp = server.mcp
 
 # Health check endpoint for HTTP transport
 @mcp.custom_route("/health", methods=["GET"])
-async def health_check(request: Any) -> JSONResponse:  # noqa: ARG001
+async def health_check(request: Request) -> JSONResponse:  # noqa: ARG001
     """Health check endpoint for HTTP transport.
 
     Args:
