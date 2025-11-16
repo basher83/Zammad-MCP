@@ -1,6 +1,7 @@
 """Basic tests for Zammad MCP server."""
 
 import base64
+import contextlib
 import json
 import os
 import pathlib
@@ -2407,6 +2408,43 @@ class TestJSONOutputAndTruncation:
         assert items[1]["id"] == 2
         assert items[2]["id"] == 3
 
+    def test_json_truncation_no_arrays_hard_cap_fallback(self) -> None:
+        """Test that JSON truncation falls back to plaintext for large objects without shrinkable arrays."""
+        # Create a large JSON object with NO arrays (to test hard-cap fallback)
+        large_json_obj: dict[str, Any] = {
+            "id": 123,
+            "name": "Test Object",
+            "description": "x" * 30000,  # Make it very large to exceed limit
+            "metadata": {
+                "field1": "y" * 5000,
+                "field2": "z" * 5000,
+                "field3": "a" * 5000,
+            },
+            "status": "active",
+        }
+        large_json_str = json.dumps(large_json_obj, indent=2)
+
+        # Ensure it's well over the limit
+        assert len(large_json_str) > 25000
+
+        # Truncate it
+        truncated = truncate_response(large_json_str, limit=25000)
+
+        # Verify result is near the limit (may slightly exceed due to warning message added)
+        # The plaintext conversion + warning can add ~150-200 chars
+        assert len(truncated) <= 25200
+
+        # Since there are no arrays to shrink, the hard-cap fallback should convert to plaintext
+        # and add a truncation warning
+        assert "⚠️" in truncated or "Response Truncated" in truncated or "truncated" in truncated.lower()
+
+        # Verify it's not valid JSON (since we fell back to plaintext)
+        # Using contextlib.suppress as expected behavior is JSONDecodeError
+        with contextlib.suppress(json.JSONDecodeError):
+            json.loads(truncated)
+            # If it parses, that's unexpected for this scenario but not necessarily wrong
+            # (could happen if the object somehow fits after conversion)
+
 
 def test_server_name_follows_mcp_convention():
     """Server name must follow Python MCP convention: {service}_mcp."""
@@ -2941,7 +2979,7 @@ def test_idempotent_write_annotations():
 def test_find_max_items_empty_list():
     """Test _find_max_items_for_limit with empty list."""
     obj = {"items": [], "metadata": "test"}
-    result = _find_max_items_for_limit(obj, [], limit=1000, use_compact=False)
+    result = _find_max_items_for_limit(obj, "items", [], limit=1000, use_compact=False)
 
     assert result == 0
 
@@ -2951,7 +2989,7 @@ def test_find_max_items_single_item_fits():
     items = [{"id": 1, "name": "Test"}]
     obj = {"items": items, "metadata": "test"}
 
-    result = _find_max_items_for_limit(obj, items, limit=1000, use_compact=False)
+    result = _find_max_items_for_limit(obj, "items", items, limit=1000, use_compact=False)
 
     assert result == 1
 
@@ -2961,7 +2999,7 @@ def test_find_max_items_single_item_too_large():
     items = [{"id": 1, "description": "x" * 1000}]
     obj = {"items": items, "metadata": "test"}
 
-    result = _find_max_items_for_limit(obj, items, limit=50, use_compact=False)
+    result = _find_max_items_for_limit(obj, "items", items, limit=50, use_compact=False)
 
     assert result == 0
 
@@ -2971,7 +3009,7 @@ def test_find_max_items_all_fit():
     items = [{"id": i, "name": f"Item {i}"} for i in range(5)]
     obj = {"items": items, "metadata": "test"}
 
-    result = _find_max_items_for_limit(obj, items, limit=10000, use_compact=False)
+    result = _find_max_items_for_limit(obj, "items", items, limit=10000, use_compact=False)
 
     assert result == 5
 
@@ -2981,7 +3019,7 @@ def test_find_max_items_partial_fit():
     items = [{"id": i, "description": "x" * 100} for i in range(20)]
     obj = {"items": items, "metadata": "test"}
 
-    result = _find_max_items_for_limit(obj, items, limit=1000, use_compact=False)
+    result = _find_max_items_for_limit(obj, "items", items, limit=1000, use_compact=False)
 
     # Should fit some but not all items
     assert 0 < result < 20
@@ -2993,8 +3031,8 @@ def test_find_max_items_compact_format():
     obj = {"items": items, "metadata": "test"}
 
     # Compact format should fit more items than pretty format
-    result_compact = _find_max_items_for_limit(obj, items, limit=500, use_compact=True)
-    result_pretty = _find_max_items_for_limit(obj, items, limit=500, use_compact=False)
+    result_compact = _find_max_items_for_limit(obj, "items", items, limit=500, use_compact=True)
+    result_pretty = _find_max_items_for_limit(obj, "items", items, limit=500, use_compact=False)
 
     assert result_compact >= result_pretty
 

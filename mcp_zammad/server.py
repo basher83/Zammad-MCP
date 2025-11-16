@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import time
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -182,11 +182,14 @@ def _serialize_json(obj: dict[str, Any], *, use_compact: bool) -> str:
     return json.dumps(obj, indent=2, default=str)
 
 
-def _find_max_items_for_limit(obj: dict[str, Any], original_items: list[Any], limit: int, *, use_compact: bool) -> int:
+def _find_max_items_for_limit(
+    obj: dict[str, Any], key: str, original_items: list[Any], limit: int, *, use_compact: bool
+) -> int:
     """Binary search to find max items that fit under limit.
 
     Args:
         obj: JSON object to truncate
+        key: Field name being truncated
         original_items: Original items array
         limit: Character limit
         use_compact: Whether to use compact JSON format
@@ -197,7 +200,7 @@ def _find_max_items_for_limit(obj: dict[str, Any], original_items: list[Any], li
     left, right = 0, len(original_items)
     while left < right:
         mid = (left + right + 1) // 2
-        obj["items"] = original_items[:mid]
+        obj[key] = original_items[:mid]
         if len(_serialize_json(obj, use_compact=use_compact)) <= limit:
             left = mid
         else:
@@ -224,7 +227,7 @@ def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> st
     for key in candidate_arrays:
         if key in obj and isinstance(obj[key], list):
             original_items = obj[key]
-            max_items = _find_max_items_for_limit(obj, original_items, limit, use_compact=use_compact)
+            max_items = _find_max_items_for_limit(obj, key, original_items, limit, use_compact=use_compact)
             obj[key] = original_items[:max_items]
 
     # Add metadata about truncation
@@ -253,9 +256,11 @@ def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> st
             obj[largest_key].pop()  # type: ignore[index]
             json_str = _serialize_json(obj, use_compact=use_compact)
 
-    # Hard-cap fallback: ensure we never exceed limit even if array trimming failed
+    # Hard-cap fallback: if still over limit, convert to plaintext to avoid invalid JSON
     if len(json_str) > limit:
-        json_str = json_str[:limit]
+        # Convert to plaintext summary to avoid producing invalid JSON fragments
+        plaintext_repr = str(obj)
+        return _truncate_text_response(plaintext_repr, limit)
 
     return json_str
 
@@ -735,8 +740,11 @@ def _format_org_domain_section(org: Organization) -> list[str]:
     return lines
 
 
-def _extract_member_info(member: dict | object) -> tuple[str, str]:
-    """Extract name and email from member dict or UserBrief object."""
+def _extract_member_info(member: dict | object | str) -> tuple[str, str]:
+    """Extract name and email from member dict, UserBrief object, or string ID."""
+    if isinstance(member, str):
+        # Member is just a string (likely an ID or email)
+        return (member, member)
     if isinstance(member, dict):
         email = member.get("email", "Unknown")
         firstname = member.get("firstname", "")
@@ -751,14 +759,15 @@ def _extract_member_info(member: dict | object) -> tuple[str, str]:
     return (name or email, email)
 
 
-def _format_org_members_section(members: list) -> list[str]:
+def _format_org_members_section(members: Sequence[Mapping[str, Any] | UserBrief | str]) -> list[str]:
     """Build members section for organization markdown."""
     if not members:
         return []
 
     lines = ["## Members", ""]
     for member in members:
-        name, email = _extract_member_info(member)
+        member_item: Mapping[str, Any] | UserBrief | str = member
+        name, email = _extract_member_info(member_item)
         lines.append(f"- {name} ({email})")
     lines.append("")
     return lines
@@ -1170,13 +1179,10 @@ class ZammadMCPServer:
             Args:
                 params (ArticleCreate): Validated article creation parameters containing:
                     - ticket_id (int): Internal database ID (required, NOT display number)
-                    - body (str): Article content/message (required)
+                    - body (str): Article content/message (required, automatically sanitized)
                     - article_type (ArticleType): Type enum - NOTE, EMAIL, etc. (required)
                     - internal (bool): Internal note vs customer-visible (default: False)
-                    - subject (str | None): Article subject (for emails)
-                    - content_type (str | None): text/plain or text/html (default: text/plain)
-                    - to (str | None): Email recipient (for email type)
-                    - cc (str | None): Email CC recipients
+                    - sender (ArticleSender): Sender type - AGENT, CUSTOMER, SYSTEM (default: AGENT)
 
             Returns:
                 Article: The created article object with schema:
@@ -1204,13 +1210,14 @@ class ZammadMCPServer:
                 - Returns "Error: Validation failed" if body or type missing
                 - Returns "Error: Resource not found" if ticket_id invalid
                 - Returns "Error: Permission denied" if no article create permissions
-                - Sanitizes HTML content if content_type is text/html
 
             Note:
                 ticket_id must be the internal database ID, NOT the display number.
                 Use the 'id' field from search results, not the 'number' field.
                 Example: Ticket #65003 may have id=123. Use id=123 for API calls.
                 Internal articles are only visible to agents, not customers.
+                Article body is always sanitized to HTML-safe plain text (HTML characters
+                are escaped to prevent XSS attacks, e.g., < becomes &lt;).
             """
             client = self.get_client()
             # Extract ticket_id and article_type separately to avoid duplicate kwargs
