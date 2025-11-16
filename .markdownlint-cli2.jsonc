@@ -29,6 +29,9 @@
     // Developer personal notes (not relevant to codebase)
     "docs/dev/**",
 
+    // Implementation plans (internal working documents)
+    "docs/plans/**",
+
     // Git and cache directories
     ".git/**",
     "**/__pycache__/**",
