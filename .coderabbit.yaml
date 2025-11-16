@@ -5,7 +5,7 @@ early_access: true
 enable_free_tier: true
 
 reviews:
-  profile: assertive  # Comprehensive code quality checks
+  profile: assertive # Comprehensive code quality checks
   request_changes_workflow: false
   high_level_summary: true
   high_level_summary_placeholder: "@coderabbitai summary"
@@ -17,7 +17,7 @@ reviews:
   fail_commit_status: false
   collapse_walkthrough: false
   changed_files_summary: true
-  sequence_diagrams: true
+  sequence_diagrams: false
   estimate_code_review_effort: true
   assess_linked_issues: true
   related_issues: true
@@ -55,30 +55,30 @@ reviews:
       instructions: "Apply when PR addresses security vulnerabilities or improves security"
 
   path_filters:
-    - "**/*"                   # Include all files by default
-    - "!**/.claude/**"         # Exclude .claude directory
-    - "!**/venv/**"            # Exclude non-dotted virtualenvs
-    - "!**/htmlcov/**"         # Exclude HTML coverage reports
-    - "!**/.venv/**"           # Exclude virtual environment
-    - "!**/dist/**"            # Exclude distribution/build artifacts
-    - "!**/build/**"           # Exclude build directories
-    - "!**/.pytest_cache/**"   # Exclude pytest cache
-    - "!**/.cache/**"          # Exclude generic cache dirs
-    - "!**/__pycache__/**"     # Exclude Python bytecode cache
-    - "!**/*.pyc"              # Exclude compiled Python files
-    - "!**/.coverage"          # Exclude coverage data files
-    - "!**/.coverage.*"        # Exclude sharded coverage data files
-    - "!**/coverage.xml"       # Exclude coverage XML reports
-    - "!**/coverage-*/**"      # Exclude additional coverage artifacts
-    - "!**/.mypy_cache/**"     # Exclude mypy type checking cache
-    - "!**/.ruff_cache/**"     # Exclude ruff linter cache
-    - "!**/node_modules/**"    # Exclude npm dependencies (if any)
-    - "!**/.eggs/**"           # Exclude Python egg files
-    - "!**/*.egg-info/**"      # Exclude Python package info
-    - "!**/wheelhouse/**"      # Exclude wheel build directory
-    - "!**/.tox/**"            # Exclude tox test environments
-    - "!**/.nox/**"            # Exclude nox test environments
-    - "!**/.hypothesis/**"     # Exclude hypothesis test data
+    - "**/*" # Include all files by default
+    - "!**/.claude/**" # Exclude .claude directory
+    - "!**/venv/**" # Exclude non-dotted virtualenvs
+    - "!**/htmlcov/**" # Exclude HTML coverage reports
+    - "!**/.venv/**" # Exclude virtual environment
+    - "!**/dist/**" # Exclude distribution/build artifacts
+    - "!**/build/**" # Exclude build directories
+    - "!**/.pytest_cache/**" # Exclude pytest cache
+    - "!**/.cache/**" # Exclude generic cache dirs
+    - "!**/__pycache__/**" # Exclude Python bytecode cache
+    - "!**/*.pyc" # Exclude compiled Python files
+    - "!**/.coverage" # Exclude coverage data files
+    - "!**/.coverage.*" # Exclude sharded coverage data files
+    - "!**/coverage.xml" # Exclude coverage XML reports
+    - "!**/coverage-*/**" # Exclude additional coverage artifacts
+    - "!**/.mypy_cache/**" # Exclude mypy type checking cache
+    - "!**/.ruff_cache/**" # Exclude ruff linter cache
+    - "!**/node_modules/**" # Exclude npm dependencies (if any)
+    - "!**/.eggs/**" # Exclude Python egg files
+    - "!**/*.egg-info/**" # Exclude Python package info
+    - "!**/wheelhouse/**" # Exclude wheel build directory
+    - "!**/.tox/**" # Exclude tox test environments
+    - "!**/.nox/**" # Exclude nox test environments
+    - "!**/.hypothesis/**" # Exclude hypothesis test data
   path_instructions:
     - path: "mcp_zammad/server.py"
       instructions: |
@@ -192,7 +192,7 @@ reviews:
     # GitHub integration - ENHANCED
     github-checks:
       enabled: true
-      timeout_ms: 180000  # Increased for complex pipelines
+      timeout_ms: 180000 # Increased for complex pipelines
 
     # Language/documentation tools
     languagetool:

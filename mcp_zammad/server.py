@@ -927,13 +927,12 @@ class ZammadMCPServer:
         def zammad_get_ticket(params: GetTicketParams) -> str:
             """Get detailed information about a specific ticket by ID.
 
-            Args:
-                params (GetTicketParams): Validated parameters containing:
-                    - ticket_id (int): Internal database ID (NOT display number)
-                    - include_articles (bool): Include articles (default: False)
-                    - article_limit (int): Max articles to return (default: 20)
-                    - article_offset (int): Skip first N articles (default: 0)
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+            Parameters:
+                ticket_id (int): Internal database ID (NOT display number) (required)
+                include_articles (bool): Include ticket articles/comments (default: True)
+                article_limit (int): Maximum articles to return, -1 for all (default: 10)
+                article_offset (int): Number of articles to skip for pagination (default: 0)
+                response_format (ResponseFormat): Output format - MARKDOWN or JSON (default: MARKDOWN)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -1366,15 +1365,16 @@ class ZammadMCPServer:
         def zammad_get_user(params: GetUserParams) -> str:
             """Get detailed information about a specific user by ID.
 
-            Args:
-                params (GetUserParams): Validated parameters containing:
-                    - user_id (int): User's internal database ID (required)
-                    - response_format (ResponseFormat): Output format - markdown (default) or json
+            Parameters:
+                user_id (int): User's internal database ID (required)
+                response_format (ResponseFormat): Output format - MARKDOWN or JSON (default: MARKDOWN)
 
             Returns:
-                str: Formatted user information.
+                str: Formatted user information with the following schema:
                      - Markdown format: Human-readable with sections for contact info, address, etc.
-                     - JSON format: Complete user object with all fields
+                     - JSON format: Complete user object with all fields (id, login, firstname, lastname,
+                       email, organization, active, vip, contact_info, address, out_of_office, created_at,
+                       updated_at)
 
                 Example JSON response:
                 ```json
