@@ -7,11 +7,15 @@
 
 ## Summary
 
-The mcp-zammad server demonstrates solid engineering. The implementation follows most MCP protocol standards and Python best practices. The codebase shows thoughtful attention to security, error handling, and organization.
+The mcp-zammad server demonstrates solid engineering. The
+implementation follows most MCP protocol standards and Python best
+practices. The codebase shows thoughtful attention to security, error
+handling, and organization.
 
 **Overall Assessment:** ⭐⭐⭐⭐ (Strong)
 
 **Metrics:**
+
 - 18 tools, 4 resources, 3 prompts
 - 90.08% test coverage
 - 85% MCP compliance
@@ -20,36 +24,59 @@ The mcp-zammad server demonstrates solid engineering. The implementation follows
 ## Strengths
 
 ### Code Organization
-The class-based `ZammadMCPServer` architecture excels. The server separates concerns cleanly across `client.py`, `models.py`, and `server.py`. Shared utilities extract common functionality. Module-level constants define limits and annotations clearly.
+
+The class-based `ZammadMCPServer` architecture excels. The server
+separates concerns cleanly across `client.py`, `models.py`, and
+`server.py`. Shared utilities extract common functionality.
+Module-level constants define limits and annotations clearly.
 
 ### Security
+
 Four security layers protect the server:
+
 - URL validation prevents SSRF attacks (client.py:70-100)
 - HTML sanitization blocks XSS in `_escape_article_body()`
 - Pydantic models validate all input with `extra="forbid"`
 - Docker secrets support secure credential management
 
 ### Pagination and Truncation
-The server enforces a 25,000-character limit. Binary search optimizes JSON truncation. Clear metadata guides users to reduce results. The `truncate_response()` function handles both JSON and markdown gracefully.
+
+The server enforces a 25,000-character limit. Binary search optimizes
+JSON truncation. Clear metadata guides users to reduce results. The
+`truncate_response()` function handles both JSON and markdown
+gracefully.
 
 ### Response Formats
-All list tools support both JSON and markdown. Formatters maintain consistency across tickets, users, and organizations. Timestamps use `isoformat()` for human readability. Pagination metadata includes `has_more`, `next_page`, and `next_offset`.
+
+All list tools support both JSON and markdown. Formatters maintain
+consistency across tickets, users, and organizations. Timestamps use
+`isoformat()` for human readability. Pagination metadata includes
+`has_more`, `next_page`, and `next_offset`.
 
 ### Error Handling
-Custom exceptions (`TicketIdGuidanceError`, `AttachmentDownloadError`) provide helpful context. Error messages guide users toward correct usage. Exception chaining preserves error context.
+
+Custom exceptions (`TicketIdGuidanceError`, `AttachmentDownloadError`)
+provide helpful context. Error messages guide users toward correct
+usage. Exception chaining preserves error context.
 
 ### Tool Annotations
-Annotation constants (`_READ_ONLY_ANNOTATIONS`, `_WRITE_ANNOTATIONS`, `_IDEMPOTENT_WRITE_ANNOTATIONS`) promote reusability. Tools categorize properly as read-only, write, or idempotent write.
+
+Annotation constants (`_READ_ONLY_ANNOTATIONS`, `_WRITE_ANNOTATIONS`,
+`_IDEMPOTENT_WRITE_ANNOTATIONS`) promote reusability. Tools categorize
+properly as read-only, write, or idempotent write.
 
 ## Critical Issues
 
 ### Server Name Violates Convention
+
 **Current:** `"Zammad MCP Server"` (server.py:549)
 **Required:** `"zammad_mcp"`
 
-Python MCP servers must use `{service}_mcp` format. This affects discoverability and ecosystem integration.
+Python MCP servers must use `{service}_mcp` format. This affects
+discoverability and ecosystem integration.
 
 **Fix:**
+
 ```python
 # Change line 549
 self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
@@ -58,9 +85,12 @@ self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
 ## High-Priority Issues
 
 ### Tool Docstrings Lack Complete Schemas
-Tool docstrings omit return type schemas. LLMs rely on docstrings to understand capabilities.
+
+Tool docstrings omit return type schemas. LLMs rely on docstrings to
+understand capabilities.
 
 **Required Pattern:**
+
 ```python
 """
 Search for users in Zammad.
@@ -100,14 +130,17 @@ Errors:
 **Impact:** High - Affects LLM tool selection and usage
 
 ### Missing Title Annotations
+
 Tools lack `title` annotations for human-readable display.
 
 **Current:**
+
 ```python
 @self.mcp.tool(annotations=_READ_ONLY_ANNOTATIONS)
 ```
 
 **Should be:**
+
 ```python
 @self.mcp.tool(
     annotations={
@@ -120,18 +153,24 @@ Tools lack `title` annotations for human-readable display.
 **Impact:** Low - Improves client UX
 
 ### Response Format Not Universal
-Some tools return Pydantic objects (`zammad_get_ticket`, `zammad_get_user`) instead of formatted strings. MCP best practices recommend markdown as default, JSON as option.
 
-**Required:** Add `response_format` parameter to all data-returning tools. Format markdown by default, JSON when requested.
+Some tools return Pydantic objects (`zammad_get_ticket`,
+`zammad_get_user`) instead of formatted strings. MCP best practices
+recommend markdown as default, JSON as option.
+
+**Required:** Add `response_format` parameter to all data-returning
+tools. Format markdown by default, JSON when requested.
 
 **Impact:** Medium - Reduces human readability
 
 ## Medium-Priority Issues
 
 ### Pagination Metadata Naming
+
 The server uses `total` but best practices specify `total_count`.
 
 **Current:**
+
 ```python
 response = {
     "total": total,  # Should be total_count
@@ -142,14 +181,17 @@ response = {
 **Impact:** Low - Minor API inconsistency
 
 ### Error Messages Could Guide Better
+
 Error handling exists but lacks actionable guidance.
 
 **Current:**
+
 ```python
 "Error: Resource not found. Please check the ID is correct."
 ```
 
 **Better:**
+
 ```python
 "Error: Ticket ID {ticket_id} not found.\n"
 "Tips:\n"
@@ -161,14 +203,18 @@ Error handling exists but lacks actionable guidance.
 **Impact:** Medium - Improves LLM self-correction
 
 ### CHARACTER_LIMIT Configuration
-The limit accepts environment variable override but lacks clear rationale.
+
+The limit accepts environment variable override but lacks clear
+rationale.
 
 **Current:**
+
 ```python
 CHARACTER_LIMIT = int(os.getenv("ZAMMAD_MCP_CHARACTER_LIMIT", "25000"))
 ```
 
 **Better:**
+
 ```python
 CHARACTER_LIMIT = 25000  # MCP best practice
 ```
@@ -178,7 +224,9 @@ CHARACTER_LIMIT = 25000  # MCP best practice
 ## Low-Priority Opportunities
 
 ### Lifespan Caching
-The server could cache static data (groups, states, priorities) in lifespan state.
+
+The server could cache static data (groups, states, priorities) in
+lifespan state.
 
 **Current:** Fetches on every request
 **Enhancement:** Pre-fetch during initialization
@@ -205,24 +253,24 @@ The server could cache static data (groups, states, priorities) in lifespan stat
 
 ### Soon (Next Sprint)
 
-4. **Add title annotations** (30 minutes)
+1. **Add title annotations** (30 minutes)
    - Include `"title"` in all tool decorators
 
-5. **Enhance error messages** (1-2 hours)
+2. **Enhance error messages** (1-2 hours)
    - Add actionable guidance to common errors
    - Include "Try this:" suggestions
 
-6. **Simplify CHARACTER_LIMIT** (5 minutes)
+3. **Simplify CHARACTER_LIMIT** (5 minutes)
    - Remove environment variable
    - Use module constant
 
 ### Later (Future Enhancements)
 
-7. **Implement lifespan caching** (1-2 hours)
+1. **Implement lifespan caching** (1-2 hours)
    - Cache groups, states, priorities
    - Reduce API calls
 
-8. **Create evaluation suite** (4-6 hours)
+2. **Create evaluation suite** (4-6 hours)
    - Build 10 complex questions
    - Test LLM effectiveness
    - Use mcp-builder evaluation framework
@@ -277,13 +325,19 @@ After update:
 
 ## Conclusion
 
-The mcp-zammad server shows strong engineering fundamentals. The implementation handles security, pagination, and error cases well. Three quick fixes (server name, docstrings, response formats) will bring the server to full MCP compliance.
+The mcp-zammad server shows strong engineering fundamentals. The
+implementation handles security, pagination, and error cases well.
+Three quick fixes (server name, docstrings, response formats) will
+bring the server to full MCP compliance.
 
-The 90% test coverage and clean architecture provide confidence for the MCP package update. Address the high-priority issues first, then update dependencies.
+The 90% test coverage and clean architecture provide confidence for the
+MCP package update. Address the high-priority issues first, then update
+dependencies.
 
 ---
 
 **Next Steps:**
+
 1. Fix server name
 2. Enhance docstrings
 3. Add response format support
