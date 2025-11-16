@@ -2273,6 +2273,52 @@ class TestJSONOutputAndTruncation:
         # Should be unchanged
         assert result == small_text
 
+    def test_json_truncation_multiple_array_types(self) -> None:
+        """Test that JSON truncation handles articles and members arrays."""
+        # Create a large JSON object with multiple array types
+        large_json_obj: dict[str, Any] = {
+            "articles": [
+                {
+                    "id": i,
+                    "body": "x" * 1000,  # Make it large
+                    "subject": f"Article {i}",
+                }
+                for i in range(50)
+            ],
+            "members": [
+                {
+                    "id": i,
+                    "name": f"Member {i}",
+                    "details": "y" * 500,
+                }
+                for i in range(50)
+            ],
+            "name": "Test Organization",
+            "_meta": {},
+        }
+        large_json_str = json.dumps(large_json_obj, indent=2)
+
+        # Ensure it's over the limit
+        assert len(large_json_str) > 25000
+
+        # Truncate it
+        truncated = truncate_response(large_json_str, limit=25000)
+
+        # Verify it's still valid JSON
+        parsed = json.loads(truncated)
+
+        # Verify truncation metadata is present
+        assert "_meta" in parsed
+        assert parsed["_meta"]["truncated"] is True
+
+        # Verify result is under limit
+        assert len(truncated) <= 25000
+
+        # Verify that arrays were truncated (should have fewer items than original)
+        assert ("articles" not in parsed or len(parsed.get("articles", [])) < 50) or (
+            "members" not in parsed or len(parsed.get("members", [])) < 50
+        )
+
     def test_list_json_pagination_metadata(self, decorator_capturer) -> None:
         """Test that list JSON responses include full pagination metadata."""
         server_inst = ZammadMCPServer()

@@ -218,11 +218,13 @@ def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> st
     original_size = len(content)
     use_compact = original_size > limit * 1.2
 
-    # Attempt to shrink the "items" array if present
-    if "items" in obj and isinstance(obj["items"], list):
-        original_items = obj["items"]
-        max_items = _find_max_items_for_limit(obj, original_items, limit, use_compact=use_compact)
-        obj["items"] = original_items[:max_items]
+    # Attempt to shrink common list fields if present
+    candidate_arrays: tuple[str, ...] = ("items", "articles", "members")
+    for key in candidate_arrays:
+        if key in obj and isinstance(obj[key], list):
+            original_items = obj[key]
+            max_items = _find_max_items_for_limit(obj, original_items, limit, use_compact=use_compact)
+            obj[key] = original_items[:max_items]
 
     # Add metadata about truncation
     meta = obj.setdefault("_meta", {})
@@ -235,14 +237,21 @@ def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> st
         }
     )
 
-    # Ensure final JSON (including metadata) fits under limit
-    if "items" in obj and isinstance(obj["items"], list):
-        json_str = _serialize_json(obj, use_compact=use_compact)
-        while obj["items"] and len(json_str) > limit:
-            obj["items"].pop()
+    # Ensure final JSON fits under limit by trimming the largest list field
+    json_str = _serialize_json(obj, use_compact=use_compact)
+    if len(json_str) <= limit:
+        return json_str
+    # Identify the largest list among candidates and trim further
+    largest_key = max(
+        (k for k in candidate_arrays if isinstance(obj.get(k), list)),
+        key=lambda k: len(obj.get(k, [])),  # type: ignore[arg-type]
+        default=None,
+    )
+    if largest_key:
+        while obj[largest_key] and len(json_str) > limit:  # type: ignore[index]
+            obj[largest_key].pop()  # type: ignore[index]
             json_str = _serialize_json(obj, use_compact=use_compact)
-
-    return _serialize_json(obj, use_compact=use_compact)
+    return json_str
 
 
 def _truncate_text_response(content: str, limit: int) -> str:
