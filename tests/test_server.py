@@ -41,6 +41,9 @@ from mcp_zammad.server import (
     CHARACTER_LIMIT,
     ZammadMCPServer,
     _format_ticket_detail_markdown,
+    _idempotent_write_annotations,
+    _read_only_annotations,
+    _write_annotations,
     main,
     mcp,
     truncate_response,
@@ -2692,3 +2695,39 @@ def test_get_organization_supports_json_format(decorator_capturer):
     assert parsed["id"] == 2
     assert parsed["name"] == "ACME Corp"
     assert parsed["domain"] == "acme.com"
+
+
+# ==================== ANNOTATION FACTORY TESTS ====================
+
+
+def test_read_only_annotations():
+    """Test _read_only_annotations factory creates correct annotations."""
+    result = _read_only_annotations("Test Read Tool")
+
+    assert result.title == "Test Read Tool"
+    assert result.readOnlyHint is True
+    assert result.idempotentHint is True  # Read operations are idempotent
+    assert result.destructiveHint is False
+    assert result.openWorldHint is True
+
+
+def test_write_annotations():
+    """Test _write_annotations factory creates correct annotations."""
+    result = _write_annotations("Test Write Tool")
+
+    assert result.title == "Test Write Tool"
+    assert result.readOnlyHint is False
+    assert result.idempotentHint is False
+    assert result.destructiveHint is False
+    assert result.openWorldHint is True
+
+
+def test_idempotent_write_annotations():
+    """Test _idempotent_write_annotations factory creates correct annotations."""
+    result = _idempotent_write_annotations("Test Idempotent Tool")
+
+    assert result.title == "Test Idempotent Tool"
+    assert result.readOnlyHint is False
+    assert result.idempotentHint is True
+    assert result.destructiveHint is False
+    assert result.openWorldHint is True
