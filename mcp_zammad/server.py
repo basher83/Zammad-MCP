@@ -985,15 +985,18 @@ class ZammadMCPServer:
         def zammad_get_ticket(params: GetTicketParams) -> str:
             """Get detailed information about a specific ticket by ID.
 
-            Args:
-                params (GetTicketParams): ticket_id (int - internal DB ID, NOT number),
-                    include_articles (bool), article_limit (int), article_offset (int),
-                    response_format (ResponseFormat: MARKDOWN or JSON)
+            Parameters:
+                ticket_id (int): Internal database ID (required, must be > 0).
+                    NOTE: This is the 'id' field from search results, NOT the display 'number'.
+                include_articles (bool): Include ticket articles/comments (default: True)
+                article_limit (int): Maximum articles to return (default: 10, use -1 for all)
+                article_offset (int): Articles to skip for pagination (default: 0)
+                response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
                 str: Ticket details in markdown (default) or JSON format with fields:
                     id, number, title, state, priority, group, owner, customer,
-                    created_at, updated_at, articles (if requested)
+                    created_at, updated_at, articles (if include_articles=True)
 
             Examples:
                 - Use when: "Get details for ticket 123" -> ticket_id=123
@@ -1002,9 +1005,9 @@ class ZammadMCPServer:
                 - Don't use when: Only have ticket number (search first to get ID)
 
             Note:
-                ticket_id is the internal database ID (from 'id' field in search),
-                NOT the display number (from 'number' field). Example: Ticket #65003
-                may have id=123; use id=123 for this tool.
+                ticket_id must be the internal database ID from the 'id' field in search
+                results, NOT the display number. Example: Ticket #65003 may have id=123;
+                use id=123 for this tool.
             """
             client = self.get_client()
             try:
@@ -1384,14 +1387,16 @@ class ZammadMCPServer:
         def zammad_get_user(params: GetUserParams) -> str:
             """Get detailed information about a specific user by ID.
 
-            Args:
-                params (GetUserParams): user_id (int - required),
-                    response_format (ResponseFormat: MARKDOWN or JSON)
+            Parameters:
+                user_id (int): User's internal database ID (required, must be > 0)
+                response_format (ResponseFormat): Output format (default: MARKDOWN)
 
             Returns:
                 str: User details in markdown (default) or JSON format with fields:
                     id, login, firstname, lastname, email, organization, active, vip,
-                    contact info, address, out-of-office status, created_at, updated_at
+                    phone, mobile, fax, web, department, street, city, zip, country,
+                    address, out_of_office, out_of_office_start_at, out_of_office_end_at,
+                    out_of_office_replacement_id, note, created_at, updated_at, last_login
 
             Examples:
                 - Use when: "Get details for user 5" -> user_id=5
