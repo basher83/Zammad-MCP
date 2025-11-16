@@ -530,6 +530,39 @@ def _format_list_json(items: list[T]) -> str:
     return json.dumps(response, indent=2, default=str)
 
 
+def _format_ticket_articles_section(articles: list) -> list[str]:
+    """Build articles section for ticket markdown."""
+    if not articles:
+        return []
+
+    lines = ["## Articles", ""]
+    for i, article in enumerate(articles, 1):
+        lines.append(f"### Article {i}")
+        # Handle both Article objects and dicts for defensive coding
+        if isinstance(article, dict):
+            from_field = article.get("from", "Unknown")
+            type_field = article.get("type", "Unknown")
+            created_at = article.get("created_at", "Unknown")
+            body = article.get("body", "")
+        else:
+            # Article object - use attribute access
+            from_field = article.from_ or "Unknown"
+            type_field = article.type
+            created_at = article.created_at
+            body = article.body
+
+        lines.append(f"- **From**: {from_field}")
+        lines.append(f"- **Type**: {type_field}")
+        lines.append(f"- **Created**: {created_at}")
+        lines.append("")
+        # Truncate very long bodies
+        if len(body) > ARTICLE_BODY_TRUNCATE_LENGTH:
+            body = body[:ARTICLE_BODY_TRUNCATE_LENGTH] + "...\n(truncated)"
+        lines.append(body)
+        lines.append("")
+    return lines
+
+
 def _format_ticket_detail_markdown(ticket: Ticket) -> str:
     """Format single ticket with full details as markdown.
 
@@ -557,32 +590,7 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
 
     # Articles
     if hasattr(ticket, "articles") and ticket.articles:
-        lines.append("## Articles")
-        lines.append("")
-        for i, article in enumerate(ticket.articles, 1):
-            lines.append(f"### Article {i}")
-            # Handle both Article objects and dicts for defensive coding
-            if isinstance(article, dict):
-                from_field = article.get("from", "Unknown")
-                type_field = article.get("type", "Unknown")
-                created_at = article.get("created_at", "Unknown")
-                body = article.get("body", "")
-            else:
-                # Article object - use attribute access
-                from_field = article.from_ or "Unknown"
-                type_field = article.type
-                created_at = article.created_at
-                body = article.body
-
-            lines.append(f"- **From**: {from_field}")
-            lines.append(f"- **Type**: {type_field}")
-            lines.append(f"- **Created**: {created_at}")
-            lines.append("")
-            # Truncate very long bodies
-            if len(body) > ARTICLE_BODY_TRUNCATE_LENGTH:
-                body = body[:ARTICLE_BODY_TRUNCATE_LENGTH] + "...\n(truncated)"
-            lines.append(body)
-            lines.append("")
+        lines.extend(_format_ticket_articles_section(ticket.articles))
 
     return "\n".join(lines)
 
@@ -611,6 +619,31 @@ def _format_user_address_section(user: User) -> list[str]:
     if user.address:
         fields.append(f"- **Address**: {user.address}")
     return ["## Address", "", *fields, ""] if fields else []
+
+
+def _format_user_ooo_section(user: User) -> list[str]:
+    """Build out-of-office section for user markdown."""
+    if not user.out_of_office:
+        return []
+
+    lines = ["## Out of Office", "", "- **Status**: Active"]
+    if user.out_of_office_start_at:
+        lines.append(f"- **Start**: {user.out_of_office_start_at.isoformat()}")
+    if user.out_of_office_end_at:
+        lines.append(f"- **End**: {user.out_of_office_end_at.isoformat()}")
+    if user.out_of_office_replacement_id:
+        lines.append(f"- **Replacement ID**: {user.out_of_office_replacement_id}")
+    lines.append("")
+    return lines
+
+
+def _format_user_metadata_section(user: User) -> list[str]:
+    """Build metadata section for user markdown."""
+    lines = ["## Metadata", "", f"- **Created**: {user.created_at.isoformat()}"]
+    lines.append(f"- **Updated**: {user.updated_at.isoformat()}")
+    if user.last_login:
+        lines.append(f"- **Last Login**: {user.last_login.isoformat()}")
+    return lines
 
 
 def _format_user_detail_markdown(user: User) -> str:
@@ -642,28 +675,58 @@ def _format_user_detail_markdown(user: User) -> str:
     # Optional sections
     lines.extend(_format_user_contact_section(user))
     lines.extend(_format_user_address_section(user))
+    lines.extend(_format_user_ooo_section(user))
 
-    # Out of Office
-    if user.out_of_office:
-        lines.extend(["## Out of Office", "", "- **Status**: Active"])
-        if user.out_of_office_start_at:
-            lines.append(f"- **Start**: {user.out_of_office_start_at.isoformat()}")
-        if user.out_of_office_end_at:
-            lines.append(f"- **End**: {user.out_of_office_end_at.isoformat()}")
-        if user.out_of_office_replacement_id:
-            lines.append(f"- **Replacement ID**: {user.out_of_office_replacement_id}")
-        lines.append("")
-
-    # Note and Metadata
+    # Note
     if user.note:
         lines.extend(["## Notes", "", user.note, ""])
 
-    lines.extend(["## Metadata", "", f"- **Created**: {user.created_at.isoformat()}"])
-    lines.append(f"- **Updated**: {user.updated_at.isoformat()}")
-    if user.last_login:
-        lines.append(f"- **Last Login**: {user.last_login.isoformat()}")
-
+    lines.extend(_format_user_metadata_section(user))
     return "\n".join(lines)
+
+
+def _format_org_domain_section(org: Organization) -> list[str]:
+    """Build domain information section for organization markdown."""
+    if not (org.domain or org.domain_assignment):
+        return []
+
+    lines = ["## Domain", ""]
+    if org.domain:
+        lines.append(f"- **Domain**: {org.domain}")
+    lines.append(f"- **Domain Assignment**: {org.domain_assignment}")
+    lines.append("")
+    return lines
+
+
+def _format_org_members_section(members: list) -> list[str]:
+    """Build members section for organization markdown."""
+    if not members:
+        return []
+
+    lines = ["## Members", ""]
+    for member in members:
+        if isinstance(member, dict):
+            email = member.get("email", "Unknown")
+            name = f"{member.get('firstname', '')} {member.get('lastname', '')}".strip() or email
+        else:
+            # UserBrief object
+            email = getattr(member, "email", None) or "Unknown"
+            firstname = getattr(member, "firstname", None) or ""
+            lastname = getattr(member, "lastname", None) or ""
+            name = f"{firstname} {lastname}".strip() or email
+        lines.append(f"- {name} ({email})")
+    lines.append("")
+    return lines
+
+
+def _format_org_metadata_section(org: Organization) -> list[str]:
+    """Build metadata section for organization markdown."""
+    return [
+        "## Metadata",
+        "",
+        f"- **Created**: {org.created_at.isoformat()}",
+        f"- **Updated**: {org.updated_at.isoformat()}",
+    ]
 
 
 def _format_organization_detail_markdown(org: Organization) -> str:
@@ -681,45 +744,16 @@ def _format_organization_detail_markdown(org: Organization) -> str:
     lines.append(f"**Shared**: {org.shared}")
     lines.append("")
 
-    # Domain Information
-    if org.domain or org.domain_assignment:
-        lines.append("## Domain")
-        lines.append("")
-        if org.domain:
-            lines.append(f"- **Domain**: {org.domain}")
-        lines.append(f"- **Domain Assignment**: {org.domain_assignment}")
-        lines.append("")
-
-    # Members
+    # Optional sections
+    lines.extend(_format_org_domain_section(org))
     if hasattr(org, "members") and org.members:
-        lines.append("## Members")
-        lines.append("")
-        for member in org.members:
-            if isinstance(member, dict):
-                email = member.get("email", "Unknown")
-                name = f"{member.get('firstname', '')} {member.get('lastname', '')}".strip() or email
-            else:
-                # UserBrief object
-                email = getattr(member, "email", None) or "Unknown"
-                firstname = getattr(member, "firstname", None) or ""
-                lastname = getattr(member, "lastname", None) or ""
-                name = f"{firstname} {lastname}".strip() or email
-            lines.append(f"- {name} ({email})")
-        lines.append("")
+        lines.extend(_format_org_members_section(org.members))
 
     # Note
     if org.note:
-        lines.append("## Notes")
-        lines.append("")
-        lines.append(org.note)
-        lines.append("")
+        lines.extend(["## Notes", "", org.note, ""])
 
-    # Metadata
-    lines.append("## Metadata")
-    lines.append("")
-    lines.append(f"- **Created**: {org.created_at.isoformat()}")
-    lines.append(f"- **Updated**: {org.updated_at.isoformat()}")
-
+    lines.extend(_format_org_metadata_section(org))
     return "\n".join(lines)
 
 
@@ -931,65 +965,25 @@ class ZammadMCPServer:
             """Get detailed information about a specific ticket by ID.
 
             Args:
-                params (GetTicketParams): Validated parameters containing:
-                    - ticket_id (int): Internal database ID (NOT display number)
-                    - include_articles (bool): Include articles (default: False)
-                    - article_limit (int): Max articles to return (default: 20)
-                    - article_offset (int): Skip first N articles (default: 0)
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                params (GetTicketParams): ticket_id (int - internal DB ID, NOT number),
+                    include_articles (bool), article_limit (int), article_offset (int),
+                    response_format (ResponseFormat: MARKDOWN or JSON)
 
             Returns:
-                str: Formatted response with the following schema:
-
-                Markdown format (default):
-                ```
-                # Ticket #65003 - Server not responding
-
-                **ID**: 123
-                **State**: open
-                **Priority**: high
-                **Group**: Support
-                **Owner**: agent@example.com
-                **Customer**: user@example.com
-                **Created**: 2024-01-15T10:30:00Z
-                **Updated**: 2024-01-15T14:20:00Z
-
-                ## Articles
-                ...
-                ```
-
-                JSON format:
-                ```json
-                {
-                    "id": 123,
-                    "number": "65003",
-                    "title": "Server not responding",
-                    "state": {"id": 1, "name": "open"},
-                    "priority": {"id": 2, "name": "high"},
-                    "customer": {"id": 5, "email": "user@example.com"},
-                    "group": {"id": 3, "name": "Support"},
-                    "created_at": "2024-01-15T10:30:00Z",
-                    "updated_at": "2024-01-15T14:20:00Z",
-                    "articles": [...]
-                }
-                ```
+                str: Ticket details in markdown (default) or JSON format with fields:
+                    id, number, title, state, priority, group, owner, customer,
+                    created_at, updated_at, articles (if requested)
 
             Examples:
                 - Use when: "Get details for ticket 123" -> ticket_id=123
                 - Use when: "Show ticket with articles" -> ticket_id=123, include_articles=True
-                - Don't use when: Searching for tickets by criteria (use zammad_search_tickets)
-                - Don't use when: You only have ticket number (search first to get ID)
-
-            Error Handling:
-                - Returns TicketIdGuidanceError if ticket not found (suggests using search)
-                - Returns "Error: Permission denied" if no access to ticket
-                - Returns "Error: Invalid authentication" on 401 status
+                - Don't use when: Searching by criteria (use zammad_search_tickets)
+                - Don't use when: Only have ticket number (search first to get ID)
 
             Note:
-                ticket_id must be the internal database ID, NOT the display number.
-                Use the 'id' field from search results, not the 'number' field.
-                Example: Ticket #65003 may have id=123. Use id=123 for API calls.
-                Large tickets may exceed token limits; use article_limit to control size.
+                ticket_id is the internal database ID (from 'id' field in search),
+                NOT the display number (from 'number' field). Example: Ticket #65003
+                may have id=123; use id=123 for this tool.
             """
             client = self.get_client()
             try:
@@ -1370,44 +1364,21 @@ class ZammadMCPServer:
             """Get detailed information about a specific user by ID.
 
             Args:
-                params (GetUserParams): Validated parameters containing:
-                    - user_id (int): User's internal database ID (required)
-                    - response_format (ResponseFormat): Output format - markdown (default) or json
+                params (GetUserParams): user_id (int - required),
+                    response_format (ResponseFormat: MARKDOWN or JSON)
 
             Returns:
-                str: Formatted user information.
-                     - Markdown format: Human-readable with sections for contact info, address, etc.
-                     - JSON format: Complete user object with all fields
-
-                Example JSON response:
-                ```json
-                {
-                    "id": 5,
-                    "login": "user@example.com",
-                    "firstname": "Jane",
-                    "lastname": "Doe",
-                    "email": "user@example.com",
-                    "organization": {"id": 2, "name": "ACME Corp"},
-                    "active": true,
-                    "vip": false,
-                    "created_at": "2023-01-10T08:00:00Z"
-                }
-                ```
+                str: User details in markdown (default) or JSON format with fields:
+                    id, login, firstname, lastname, email, organization, active, vip,
+                    contact info, address, out-of-office status, created_at, updated_at
 
             Examples:
                 - Use when: "Get details for user 5" -> user_id=5
-                - Use when: "Show user information" -> user_id=5
                 - Don't use when: Searching by email/name (use zammad_search_users)
-                - Don't use when: Getting current authenticated user (use zammad_get_current_user)
-
-            Error Handling:
-                - Returns "Error: Resource not found" if user_id doesn't exist
-                - Returns "Error: Permission denied" if no access to user data
-                - Returns "Error: Invalid authentication" on 401 status
+                - Don't use when: Getting current user (use zammad_get_current_user)
 
             Note:
                 Returns full user profile including organization, roles, and preferences.
-                Use zammad_search_users if you need to find users by email or name.
             """
             client = self.get_client()
             user_data = client.get_user(params.user_id)

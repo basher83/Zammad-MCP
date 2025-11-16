@@ -1,6 +1,49 @@
 """Helper functions for generating MCP tool docstrings per best practices."""
 
 
+def _build_args_section(args_doc: dict[str, str]) -> list[str]:
+    """Build the Args section of a docstring."""
+    lines = ["Args:"]
+    for param, desc in args_doc.items():
+        lines.append(f"    {param}: {desc}")
+    lines.append("")
+    return lines
+
+
+def _build_returns_section(return_schema: dict[str, str]) -> list[str]:
+    """Build the Returns section with schema."""
+    lines = ["Returns:", "    Formatted string with the following schema:", "", "    {"]
+    for field, type_desc in return_schema.items():
+        lines.append(f'        "{field}": {type_desc},')
+    lines.extend(["    }", ""])
+    return lines
+
+
+def _build_examples_section(
+    examples: list[str], use_when: list[str] | None, dont_use_when: list[str] | None
+) -> list[str]:
+    """Build the Examples section."""
+    if not (use_when or dont_use_when or examples):
+        return []
+    lines = ["Examples:"]
+    if use_when:
+        lines.extend(f"    - Use when: {ex}" for ex in use_when)
+    if dont_use_when:
+        lines.extend(f"    - Don't use when: {ex}" for ex in dont_use_when)
+    lines.extend(f"    - {ex}" for ex in examples)
+    lines.append("")
+    return lines
+
+
+def _build_errors_section(errors: list[str]) -> list[str]:
+    """Build the Error Handling section."""
+    if not errors:
+        return []
+    lines = ["Error Handling:"]
+    lines.extend(f"    - {error}" for error in errors)
+    return lines
+
+
 def format_tool_docstring(
     summary: str,
     args_doc: dict[str, str],
@@ -25,40 +68,8 @@ def format_tool_docstring(
         Formatted docstring following MCP Python best practices
     """
     lines = [summary, ""]
-
-    # Args section
-    lines.append("Args:")
-    for param, desc in args_doc.items():
-        lines.append(f"    {param}: {desc}")
-    lines.append("")
-
-    # Returns section with schema
-    lines.append("Returns:")
-    lines.append("    Formatted string with the following schema:")
-    lines.append("")
-    lines.append("    {")
-    for field, type_desc in return_schema.items():
-        lines.append(f'        "{field}": {type_desc},')
-    lines.append("    }")
-    lines.append("")
-
-    # Examples section
-    if use_when or dont_use_when or examples:
-        lines.append("Examples:")
-        if use_when:
-            for example in use_when:
-                lines.append(f"    - Use when: {example}")
-        if dont_use_when:
-            for example in dont_use_when:
-                lines.append(f"    - Don't use when: {example}")
-        for example in examples:
-            lines.append(f"    - {example}")
-        lines.append("")
-
-    # Error handling section
-    if errors:
-        lines.append("Error Handling:")
-        for error in errors:
-            lines.append(f"    - {error}")
-
+    lines.extend(_build_args_section(args_doc))
+    lines.extend(_build_returns_section(return_schema))
+    lines.extend(_build_examples_section(examples, use_when, dont_use_when))
+    lines.extend(_build_errors_section(errors))
     return "\n".join(lines)
