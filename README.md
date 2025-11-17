@@ -164,9 +164,22 @@ The server requires Zammad API credentials. The recommended approach is to use a
    # Optional: Logging level (default: INFO)
    # Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
    # LOG_LEVEL=INFO
+
+   # Optional: Transport Configuration
+   # MCP_TRANSPORT=stdio  # Transport type: stdio (default) or http
+   # MCP_HOST=127.0.0.1   # Host address for HTTP transport
+   # MCP_PORT=8000        # Port number for HTTP transport
    ```
 
 1. The server will automatically load the `.env` file on startup.
+
+### Transport Configuration (Optional)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_TRANSPORT` | `stdio` | Transport type: `stdio` or `http` |
+| `MCP_HOST` | `127.0.0.1` | Host address for HTTP transport |
+| `MCP_PORT` | - | Port number for HTTP transport (required if `MCP_TRANSPORT=http`) |
 
 **Important**: Never commit your `.env` file to version control. It's already included in `.gitignore`.
 
@@ -224,7 +237,7 @@ Or using Docker:
 }
 ```
 
-**Note**: MCP servers communicate via stdio (stdin/stdout), not HTTP. The `-i` flag is required for interactive mode. Port mapping (`-p 8080:8080`) is not needed for MCP operation.
+**Note**: This server supports both stdio (default) and HTTP transports. For stdio mode, the `-i` flag is required for Docker interactive mode. For HTTP mode, see the HTTP Transport section below.
 
 **Important**: The container must run in interactive mode (`-i`) or the MCP server will not receive stdin. Ensure this flag is preserved in any wrapper scripts or shell aliases.
 
@@ -254,6 +267,109 @@ python -m mcp_zammad
 # Or with environment variables
 ZAMMAD_URL=https://instance.zammad.com/api/v1 ZAMMAD_HTTP_TOKEN=token python -m mcp_zammad
 ```
+
+### HTTP Transport (Remote/Cloud Deployment)
+
+The server supports Streamable HTTP transport for remote deployments alongside your Zammad instance.
+
+#### Environment Configuration
+
+Set these environment variables to enable HTTP transport:
+
+```bash
+export MCP_TRANSPORT=http    # Enable HTTP transport
+export MCP_HOST=127.0.0.1    # Host to bind (default: 127.0.0.1)
+export MCP_PORT=8000         # Port to listen on
+```
+
+#### Running with HTTP Transport
+
+**Direct Python:**
+
+```bash
+MCP_TRANSPORT=http \
+MCP_HOST=127.0.0.1 \
+MCP_PORT=8000 \
+ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
+ZAMMAD_HTTP_TOKEN=your-api-token \
+uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
+```
+
+**Docker:**
+
+```bash
+docker run -d \
+  --name zammad-mcp-http \
+  -p 8000:8000 \
+  -e MCP_TRANSPORT=http \
+  -e MCP_HOST=0.0.0.0 \
+  -e MCP_PORT=8000 \
+  -e ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
+  -e ZAMMAD_HTTP_TOKEN=your-api-token \
+  ghcr.io/basher83/zammad-mcp:latest
+```
+
+The MCP endpoint will be available at `http://localhost:8000/mcp/`.
+
+#### Production Deployment with Reverse Proxy
+
+⚠️ **SECURITY WARNING**: Only bind to `0.0.0.0` when deploying behind a reverse proxy with TLS.
+
+For production deployments, use a reverse proxy (nginx/Caddy) to provide HTTPS and additional security:
+
+**Example with Caddy:**
+
+```bash
+# Start the MCP server (binds to all interfaces for reverse proxy)
+MCP_TRANSPORT=http \
+MCP_HOST=0.0.0.0 \
+MCP_PORT=8000 \
+ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
+ZAMMAD_HTTP_TOKEN=your-api-token \
+uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
+```
+
+**Caddyfile configuration:**
+
+```caddy
+mcp.yourdomain.com {
+    reverse_proxy localhost:8000
+    # Caddy automatically handles HTTPS/TLS
+}
+```
+
+**Important production notes:**
+
+1. **Only use `MCP_HOST=0.0.0.0` behind a reverse proxy** - never expose directly to the internet
+2. **Always use HTTPS/TLS** in production via reverse proxy
+3. **Implement authentication** at the reverse proxy or application level
+4. **Use firewall rules** to restrict access to the MCP server port
+
+#### Client Configuration for HTTP
+
+Configure your MCP client to use HTTP transport:
+
+```json
+{
+  "mcpServers": {
+    "zammad": {
+      "url": "http://localhost:8000/mcp/"
+    }
+  }
+}
+```
+
+#### Security Considerations
+
+⚠️ **Important Security Notes:**
+
+1. **Local Development**: Use `MCP_HOST=127.0.0.1` (localhost only)
+2. **Production**: Implement authentication (see Security section)
+3. **HTTPS**: Use reverse proxy (nginx/caddy) for TLS/HTTPS
+4. **Firewall**: Restrict access to trusted networks only
+5. **Origin Validation**: Built-in protection against DNS rebinding attacks
+
+For production deployments, see [Security](#security) section.
 
 ## Examples
 

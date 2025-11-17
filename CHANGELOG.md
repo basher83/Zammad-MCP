@@ -1,4 +1,4 @@
-## [unreleased] - 2025-11-17
+## [unreleased]
 
 ### 🚀 Features
 
@@ -11,6 +11,8 @@
 - *(server)* Add markdown formatter for ticket details
 - *(server)* Add response format support to zammad_get_ticket
 - *(server)* Unify response formats for user and org tools
+- *(config)* Add transport configuration model with env support
+- *(main)* Add HTTP transport support via environment config
 
 ### 🐛 Bug Fixes
 
@@ -30,6 +32,8 @@
 - *(docs)* Use modern type syntax in docstrings per CLAUDE.md
 - *(server)* Handle Article objects in ticket markdown formatter
 - *(tests)* Move imports to top level per CLAUDE.md
+- *(config)* Add port validation and improve error messages
+- *(server)* Use proper Request type for health_check endpoint
 
 ### 💼 Other
 
@@ -47,6 +51,8 @@
 - Use JSON-safe serialization with aliases for add_article
 - Use keyword arguments in search_users and search_organizations
 - *(server)* Simplify CHARACTER_LIMIT to constant
+- *(integration)* Improve test helper functions and process management
+- *(test)* Replace bare exception handlers with specific types
 
 ### 📚 Documentation
 
@@ -54,15 +60,28 @@
 - *(server)* Enhance tool docstrings with MCP compliance
 - Add response format section and update MCP version
 - *(changelog)* Update for MCP audit fixes
+- *(plan)* Add HTTP transport implementation plan and exclude plans from linting
+- *(readme)* Add HTTP transport documentation and update stdio note
+- *(deployment)* Add comprehensive HTTP transport deployment guide
+- *(env)* Add HTTP transport configuration examples
+- *(changelog)* Update for HTTP transport feature
+- *(server)* Standardize tool docstrings with Parameters section
 
 ### ⚡ Performance
 
 - Optimize code quality and performance
 
+### 🎨 Styling
+
+- *(server)* Move JSONResponse import to top level and add type annotations
+
 ### 🧪 Testing
 
 - Add comprehensive tests for add_article tool with params model
 - Use specific ValidationError in negative tests
+- *(integration)* Add HTTP transport integration tests
+- *(integration)* Fix HTTP transport tests per CodeRabbit feedback
+- *(integration)* Improve HTTP transport test reliability and coverage
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -73,3 +92,5 @@
 - *(configs)* Update configs
 - Remove unused setup script and Codacy-related tasks from configuration
 - Update coverage threshold to 86% to match current reality
+
+

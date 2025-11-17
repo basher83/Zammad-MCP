@@ -4,8 +4,14 @@
 [global]
 # Disable specific rules (from original markdownlint config)
 disable = [
+    "MD002",  # First heading level - changelogs use ## for versions
+    "MD012",  # Multiple consecutive blank lines - allow for formatting
     "MD013",  # Line length - disabled for flexibility
+    "MD029",  # Ordered list item prefix - allow "1." for all items
     "MD034",  # Bare URL - disabled
+    "MD041",  # First line heading - changelogs start with ##
+    "MD047",  # File end newline - handled by other formatters
+    "MD052",  # Reference links - changelogs use [unreleased] convention
 ]
 
 # Exclude patterns

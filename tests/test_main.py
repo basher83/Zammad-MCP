@@ -2,6 +2,8 @@
 
 from unittest.mock import Mock, patch
 
+import pytest
+
 import mcp_zammad.__main__ as main_module
 from mcp_zammad.__main__ import main
 
@@ -46,3 +48,41 @@ class TestMain:
 
             # Verify no calls were made
             mock_run.assert_not_called()
+
+
+def test_main_with_http_transport(monkeypatch) -> None:
+    """Test main entry point with HTTP transport."""
+    monkeypatch.setenv("MCP_TRANSPORT", "http")
+    monkeypatch.setenv("MCP_HOST", "127.0.0.1")
+    monkeypatch.setenv("MCP_PORT", "8000")
+
+    with patch("mcp_zammad.__main__.mcp") as mock_mcp:
+        main()
+
+        # Host and port are configured during server initialization, not passed to run()
+        mock_mcp.run.assert_called_once_with(transport="streamable-http")
+
+
+def test_main_with_stdio_transport_default(monkeypatch) -> None:
+    """Test main entry point defaults to stdio transport."""
+    # Ensure no transport env vars are set
+    monkeypatch.delenv("MCP_TRANSPORT", raising=False)
+    monkeypatch.delenv("MCP_HOST", raising=False)
+    monkeypatch.delenv("MCP_PORT", raising=False)
+
+    with patch("mcp_zammad.__main__.mcp") as mock_mcp:
+        main()
+
+        # Should call run() without transport args (stdio default)
+        mock_mcp.run.assert_called_once_with()
+
+
+def test_main_validates_http_config(monkeypatch) -> None:
+    """Test main validates HTTP configuration."""
+    monkeypatch.setenv("MCP_TRANSPORT", "http")
+    # Don't set port - should fail validation
+    monkeypatch.delenv("MCP_PORT", raising=False)
+
+    with pytest.raises(ValueError) as excinfo:
+        main()
+    assert "HTTP transport requires MCP_PORT" in str(excinfo.value)
