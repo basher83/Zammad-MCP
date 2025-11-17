@@ -25,6 +25,7 @@ from .models import (
     ArticleCreate,
     Attachment,
     AttachmentDownloadError,
+    DeleteAttachmentParams,
     DownloadAttachmentParams,
     GetArticleAttachmentsParams,
     GetOrganizationParams,
@@ -1324,6 +1325,58 @@ class ZammadMCPServer:
 
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")
+
+        @self.mcp.tool(annotations=_write_annotations("Delete Attachment"))
+        def zammad_delete_attachment(params: DeleteAttachmentParams) -> str:
+            """Delete an attachment from a ticket article.
+
+            Args:
+                params (DeleteAttachmentParams): Validated parameters containing:
+                    - ticket_id (int): Ticket ID
+                    - article_id (int): Article ID
+                    - attachment_id (int): Attachment ID to delete
+
+            Returns:
+                str: Success confirmation message
+
+            Examples:
+                - Use when: "Delete attachment 789 from article 456" -> ticket_id=123, article_id=456, attachment_id=789
+                - Use when: "Remove incorrect file upload" -> ticket_id=123, article_id=456, attachment_id=789
+                - Don't use when: Need to download first (use zammad_download_attachment)
+                - Don't use when: Attachment IDs unknown (list attachments first)
+
+            Error Handling:
+                - Raises AttachmentDeletionError if deletion fails
+                - Returns "Error: Resource not found" if attachment not found
+                - Returns "Error: Permission denied" if no delete permissions
+                - Validates all IDs are positive integers
+
+            Note:
+                Requires appropriate Zammad permissions to delete attachments.
+                Deletion is permanent and cannot be undone.
+            """
+            client = self.get_client()
+
+            try:
+                success = client.delete_attachment(
+                    ticket_id=params.ticket_id,
+                    article_id=params.article_id,
+                    attachment_id=params.attachment_id,
+                )
+            except Exception as e:
+                raise AttachmentDeletionError(
+                    ticket_id=params.ticket_id,
+                    article_id=params.article_id,
+                    attachment_id=params.attachment_id,
+                    reason=str(e),
+                ) from e
+
+            if success:
+                return (
+                    f"Successfully deleted attachment {params.attachment_id} "
+                    f"from article {params.article_id} in ticket {params.ticket_id}"
+                )
+            return f"Failed to delete attachment {params.attachment_id}"
 
         @self.mcp.tool(annotations=_idempotent_write_annotations("Add Ticket Tag"))
         def zammad_add_ticket_tag(params: TagOperationParams) -> TagOperationResult:
