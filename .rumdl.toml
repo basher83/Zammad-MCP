@@ -1,0 +1,74 @@
+# rumdl configuration for Zammad MCP
+# Docs: https://github.com/rvben/rumdl
+
+[global]
+# Disable specific rules (from original markdownlint config)
+disable = [
+    "MD002",  # First heading level - changelogs use ## for versions
+    "MD012",  # Multiple consecutive blank lines - allow for formatting
+    "MD013",  # Line length - disabled for flexibility
+    "MD029",  # Ordered list item prefix - allow "1." for all items
+    "MD034",  # Bare URL - disabled
+    "MD041",  # First line heading - changelogs start with ##
+    "MD047",  # File end newline - handled by other formatters
+    "MD052",  # Reference links - changelogs use [unreleased] convention
+]
+
+# Exclude patterns
+exclude = [
+    "node_modules",
+    ".venv",
+    "dist",
+    "build",
+    ".claude",
+    "docs/ai-docs",
+    "docs/dev",
+    "docs/plans",
+    ".git",
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/*.tmp",
+    "**/*.bak",
+]
+
+# Respect .gitignore files
+respect-gitignore = true
+
+# MD003 - Heading style (consistent)
+[MD003]
+style = "consistent"
+
+# MD004 - Unordered list style (dash)
+[MD004]
+style = "dash"
+
+# MD007 - Unordered list indentation
+[MD007]
+indent = 2
+
+# MD024 - Multiple headings with same content (allow siblings)
+[MD024]
+siblings_only = true
+
+# MD033 - Inline HTML (allow specific elements)
+[MD033]
+allowed_elements = [
+    "img",
+    "br",
+    "details",
+    "summary",
+    "sup",
+    "sub",
+]
+
+# MD046 - Code block style (fenced)
+[MD046]
+style = "fenced"
+
+# MD049 - Emphasis style (consistent)
+[MD049]
+style = "consistent"
+
+# MD050 - Strong style (consistent)
+[MD050]
+style = "consistent"
