@@ -55,7 +55,7 @@ mise run changelog-bump <version> # Prepare release
 
 **Core Files:**
 
-- `mcp_zammad/server.py` - FastMCP server with 18 tools, 4 resources, 3 prompts
+- `mcp_zammad/server.py` - FastMCP server with 19 tools, 4 resources, 3 prompts
 - `mcp_zammad/client.py` - Zammad API wrapper with authentication & validation
 - `mcp_zammad/models.py` - Pydantic models for type safety
 
@@ -159,6 +159,8 @@ Optional[str]
 - URL validation (SSRF protection)
 - HTML sanitization (XSS protection)
 - Input validation via Pydantic
+- Base64 validation for attachments
+- Filename sanitization (path traversal prevention)
 
 **Not Implemented:**
 
