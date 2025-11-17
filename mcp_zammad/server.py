@@ -54,6 +54,27 @@ from .models import (
 )
 
 
+class AttachmentDeletionError(Exception):
+    """Raised when attachment deletion fails."""
+
+    def __init__(self, ticket_id: int, article_id: int, attachment_id: int, reason: str):
+        """Initialize attachment deletion error.
+
+        Args:
+            ticket_id: Ticket ID
+            article_id: Article ID
+            attachment_id: Attachment ID that failed to delete
+            reason: Reason for failure
+        """
+        self.ticket_id = ticket_id
+        self.article_id = article_id
+        self.attachment_id = attachment_id
+        self.reason = reason
+        super().__init__(
+            f"Failed to delete attachment {attachment_id} from " f"article {article_id} in ticket {ticket_id}: {reason}"
+        )
+
+
 # Protocol for items that can be dumped to dict (for type safety)
 class _Dumpable(Protocol):
     """Protocol for Pydantic models with id, name, and model_dump."""
