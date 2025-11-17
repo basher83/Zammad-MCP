@@ -149,14 +149,14 @@ The server requires Zammad API credentials. The recommended approach is to use a
    ```env
    # Required: Zammad instance URL (include /api/v1)
    ZAMMAD_URL=https://your-instance.zammad.com/api/v1
-   
+
    # Authentication (choose one method):
    # Option 1: API Token (recommended)
    ZAMMAD_HTTP_TOKEN=your-api-token
-   
+
    # Option 2: OAuth2 Token
    # ZAMMAD_OAUTH2_TOKEN=your-oauth2-token
-   
+
    # Option 3: Username/Password
    # ZAMMAD_USERNAME=your-username
    # ZAMMAD_PASSWORD=your-password
