@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, NoReturn, Protocol, TypeVar
 
-import requests
+import requests  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
