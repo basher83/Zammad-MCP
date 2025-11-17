@@ -188,3 +188,41 @@ class TestDeleteAttachmentParams:
         """Test that ticket_id must be positive."""
         with pytest.raises(ValidationError, match="greater than 0"):
             DeleteAttachmentParams(ticket_id=0, article_id=456, attachment_id=789)
+
+
+class TestDeleteAttachmentResult:
+    """Tests for DeleteAttachmentResult model."""
+
+    def test_successful_deletion(self):
+        """Test creating successful deletion result."""
+        from mcp_zammad.models import DeleteAttachmentResult
+
+        result = DeleteAttachmentResult(
+            success=True,
+            ticket_id=123,
+            article_id=456,
+            attachment_id=789,
+            message="Successfully deleted attachment 789 from article 456 in ticket 123",
+        )
+        assert result.success is True
+        assert result.ticket_id == 123
+        assert result.article_id == 456
+        assert result.attachment_id == 789
+        assert "Successfully deleted" in result.message
+
+    def test_failed_deletion(self):
+        """Test creating failed deletion result."""
+        from mcp_zammad.models import DeleteAttachmentResult
+
+        result = DeleteAttachmentResult(
+            success=False,
+            ticket_id=123,
+            article_id=456,
+            attachment_id=789,
+            message="Failed to delete attachment 789",
+        )
+        assert result.success is False
+        assert result.ticket_id == 123
+        assert result.article_id == 456
+        assert result.attachment_id == 789
+        assert "Failed" in result.message

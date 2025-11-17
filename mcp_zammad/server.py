@@ -26,6 +26,7 @@ from .models import (
     Attachment,
     AttachmentDownloadError,
     DeleteAttachmentParams,
+    DeleteAttachmentResult,
     DownloadAttachmentParams,
     GetArticleAttachmentsParams,
     GetOrganizationParams,
@@ -1338,7 +1339,7 @@ class ZammadMCPServer:
             return base64.b64encode(attachment_data).decode("utf-8")
 
         @self.mcp.tool(annotations=_destructive_write_annotations("Delete Attachment"))
-        def zammad_delete_attachment(params: DeleteAttachmentParams) -> str:
+        def zammad_delete_attachment(params: DeleteAttachmentParams) -> DeleteAttachmentResult:
             """Delete an attachment from a ticket article.
 
             Args:
@@ -1348,7 +1349,7 @@ class ZammadMCPServer:
                     - attachment_id (int): Attachment ID to delete
 
             Returns:
-                str: Success confirmation message
+                DeleteAttachmentResult: Result with success status and details
 
             Examples:
                 - Use when: "Delete attachment 789 from article 456" -> ticket_id=123, article_id=456, attachment_id=789
@@ -1382,12 +1383,17 @@ class ZammadMCPServer:
                     reason=str(e),
                 ) from e
 
-            if success:
-                return (
-                    f"Successfully deleted attachment {params.attachment_id} "
-                    f"from article {params.article_id} in ticket {params.ticket_id}"
-                )
-            return f"Failed to delete attachment {params.attachment_id}"
+            return DeleteAttachmentResult(
+                success=success,
+                ticket_id=params.ticket_id,
+                article_id=params.article_id,
+                attachment_id=params.attachment_id,
+                message=(
+                    f"Successfully deleted attachment {params.attachment_id} from article {params.article_id} in ticket {params.ticket_id}"
+                    if success
+                    else f"Failed to delete attachment {params.attachment_id}"
+                ),
+            )
 
         @self.mcp.tool(annotations=_idempotent_write_annotations("Add Ticket Tag"))
         def zammad_add_ticket_tag(params: TagOperationParams) -> TagOperationResult:

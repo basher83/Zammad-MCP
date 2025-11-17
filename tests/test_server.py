@@ -2245,10 +2245,14 @@ class TestAttachmentSupport:
         # Call tool
         result = test_tools["zammad_delete_attachment"](params)
 
-        # Verify success message
-        assert "Successfully deleted attachment 789" in result
-        assert "article 456" in result
-        assert "ticket 123" in result
+        # Verify result structure
+        assert result.success is True
+        assert result.ticket_id == 123
+        assert result.article_id == 456
+        assert result.attachment_id == 789
+        assert "Successfully deleted attachment 789" in result.message
+        assert "article 456" in result.message
+        assert "ticket 123" in result.message
 
         # Verify client called correctly
         server_inst.client.delete_attachment.assert_called_once_with(  # type: ignore[union-attr]
