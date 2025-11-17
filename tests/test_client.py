@@ -140,3 +140,46 @@ def test_get_article_attachments(mock_api: MagicMock) -> None:
     assert result[0]["filename"] == "test.pdf"
     assert result[1]["filename"] == "image.png"
     mock_instance.ticket_article.find.assert_called_once_with(456)
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_add_article_with_attachments(mock_api: MagicMock) -> None:
+    """Test adding article with attachments."""
+    mock_instance = mock_api.return_value
+    mock_instance.ticket_article.create.return_value = {
+        "id": 789,
+        "ticket_id": 123,
+        "body": "See attached",
+        "attachments": [{"id": 1, "filename": "test.pdf", "size": 1024}],
+    }
+
+    attachments = [{"filename": "test.pdf", "data": "dGVzdA==", "mime-type": "application/pdf"}]
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        result = client.add_article(ticket_id=123, body="See attached", attachments=attachments)
+
+    assert result["id"] == 789
+    mock_instance.ticket_article.create.assert_called_once()
+    call_args = mock_instance.ticket_article.create.call_args[0][0]
+    assert "attachments" in call_args
+    assert call_args["attachments"] == attachments
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_add_article_without_attachments_backward_compat(mock_api: MagicMock) -> None:
+    """Test adding article without attachments (backward compatibility)."""
+    mock_instance = mock_api.return_value
+    mock_instance.ticket_article.create.return_value = {"id": 789, "ticket_id": 123, "body": "Simple comment"}
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        result = client.add_article(ticket_id=123, body="Simple comment")
+
+    assert result["id"] == 789
+    call_args = mock_instance.ticket_article.create.call_args[0][0]
+    assert "attachments" not in call_args  # Should not include empty attachments
