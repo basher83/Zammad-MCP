@@ -25,7 +25,14 @@ def start_mcp_server(
 
     Returns:
         subprocess.Popen: Started server process
+
+    Raises:
+        ValueError: If both env and env_overrides are provided
     """
+    if env is not None and env_overrides is not None:
+        msg = "env and env_overrides are mutually exclusive - provide only one"
+        raise ValueError(msg)
+
     if env is None:
         env = os.environ.copy()
         if env_overrides:
@@ -59,19 +66,25 @@ def terminate_process_safely(process: subprocess.Popen, timeout: float = 5.0) ->
 @pytest.fixture
 def http_server() -> Iterator[str]:
     """Start HTTP server for integration testing."""
-    # Start server process
+    # Get an available ephemeral port
+    temp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    temp_sock.bind(("127.0.0.1", 0))
+    port = temp_sock.getsockname()[1]
+    temp_sock.close()
+
+    # Start server process with dynamically allocated port
     process = start_mcp_server(
         {
             "MCP_TRANSPORT": "http",
             "MCP_HOST": "127.0.0.1",
-            "MCP_PORT": "8765",
+            "MCP_PORT": str(port),
             "ZAMMAD_URL": "http://mock.zammad.com/api/v1",
             "ZAMMAD_HTTP_TOKEN": "test-token",
         }
     )
 
     # Wait for server to become ready with polling
-    server_url = "http://127.0.0.1:8765"
+    server_url = f"http://127.0.0.1:{port}"
     max_wait = 5.0
     check_interval = 0.1
     elapsed = 0.0
@@ -82,7 +95,7 @@ def http_server() -> Iterator[str]:
             # Try TCP connection to check if server is listening
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(0.1)
-            result = sock.connect_ex(("127.0.0.1", 8765))
+            result = sock.connect_ex(("127.0.0.1", port))
             sock.close()
             if result == 0:
                 # TCP connection successful, verify HTTP endpoint
@@ -119,7 +132,7 @@ def test_http_server_starts(http_server) -> None:
 
 @pytest.mark.integration
 def test_mcp_endpoint_exists(http_server) -> None:
-    """Test that MCP endpoint is accessible."""
+    """Test that MCP endpoint is accessible and redirects correctly."""
     # MCP endpoint should accept POST requests
     # FastMCP HTTP transport returns 307 redirect to SSE endpoint
     response = httpx.post(
@@ -132,9 +145,15 @@ def test_mcp_endpoint_exists(http_server) -> None:
     # MCP HTTP transport redirects to SSE endpoint, 307 indicates endpoint exists
     assert response.status_code == 307
 
+    # Verify redirect target
+    location = response.headers.get("Location")
+    assert location is not None, "Location header must be present in 307 redirect"
+    # FastMCP redirects from /mcp/ (with slash) to /mcp (without slash)
+    assert location.endswith("/mcp"), f"Expected redirect to /mcp endpoint, got: {location}"
+
 
 @pytest.mark.integration
-def test_http_server_rejects_missing_port():
+def test_http_server_rejects_missing_port() -> None:
     """Test that server fails without port in HTTP mode."""
     env = os.environ.copy()
     env.update(
