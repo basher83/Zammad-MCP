@@ -288,7 +288,7 @@ export MCP_PORT=8000         # Port to listen on
 
 ```bash
 MCP_TRANSPORT=http \
-MCP_HOST=0.0.0.0 \
+MCP_HOST=127.0.0.1 \
 MCP_PORT=8000 \
 ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
 ZAMMAD_HTTP_TOKEN=your-api-token \
@@ -310,6 +310,40 @@ docker run -d \
 ```
 
 The MCP endpoint will be available at `http://localhost:8000/mcp/`.
+
+#### Production Deployment with Reverse Proxy
+
+⚠️ **SECURITY WARNING**: Only bind to `0.0.0.0` when deploying behind a reverse proxy with TLS.
+
+For production deployments, use a reverse proxy (nginx/Caddy) to provide HTTPS and additional security:
+
+**Example with Caddy:**
+
+```bash
+# Start the MCP server (binds to all interfaces for reverse proxy)
+MCP_TRANSPORT=http \
+MCP_HOST=0.0.0.0 \
+MCP_PORT=8000 \
+ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
+ZAMMAD_HTTP_TOKEN=your-api-token \
+uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
+```
+
+**Caddyfile configuration:**
+
+```caddy
+mcp.yourdomain.com {
+    reverse_proxy localhost:8000
+    # Caddy automatically handles HTTPS/TLS
+}
+```
+
+**Important production notes:**
+
+1. **Only use `MCP_HOST=0.0.0.0` behind a reverse proxy** - never expose directly to the internet
+2. **Always use HTTPS/TLS** in production via reverse proxy
+3. **Implement authentication** at the reverse proxy or application level
+4. **Use firewall rules** to restrict access to the MCP server port
 
 #### Client Configuration for HTTP
 
