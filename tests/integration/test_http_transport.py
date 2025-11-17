@@ -4,6 +4,7 @@ import logging
 import os
 import socket
 import subprocess
+import sys
 import time
 from collections.abc import Iterator
 
@@ -13,11 +14,53 @@ import pytest
 logger = logging.getLogger(__name__)
 
 
+def start_mcp_server(
+    env_overrides: dict[str, str] | None = None, *, env: dict[str, str] | None = None
+) -> subprocess.Popen:
+    """Start MCP server subprocess with environment overrides.
+
+    Args:
+        env_overrides: Environment variable overrides to apply to os.environ
+        env: Pre-built environment dict (mutually exclusive with env_overrides)
+
+    Returns:
+        subprocess.Popen: Started server process
+    """
+    if env is None:
+        env = os.environ.copy()
+        if env_overrides:
+            env.update(env_overrides)
+
+    return subprocess.Popen(
+        [sys.executable, "-m", "mcp_zammad"],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def terminate_process_safely(process: subprocess.Popen, timeout: float = 5.0) -> None:
+    """Safely terminate a subprocess with proper timeout handling.
+
+    Args:
+        process: The process to terminate
+        timeout: Timeout in seconds for waiting for process termination
+    """
+    process.terminate()
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        logger.warning("Process did not terminate within %s seconds, killing...", timeout)
+        process.kill()
+        # Wait without timeout to collect exit code
+        process.wait()
+
+
 @pytest.fixture
 def http_server() -> Iterator[str]:
     """Start HTTP server for integration testing."""
-    env = os.environ.copy()
-    env.update(
+    # Start server process
+    process = start_mcp_server(
         {
             "MCP_TRANSPORT": "http",
             "MCP_HOST": "127.0.0.1",
@@ -25,14 +68,6 @@ def http_server() -> Iterator[str]:
             "ZAMMAD_URL": "http://mock.zammad.com/api/v1",
             "ZAMMAD_HTTP_TOKEN": "test-token",
         }
-    )
-
-    # Start server process
-    process = subprocess.Popen(
-        ["python", "-m", "mcp_zammad"],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
     )
 
     # Wait for server to become ready with polling
@@ -65,16 +100,14 @@ def http_server() -> Iterator[str]:
         elapsed += check_interval
 
     if not ready:
-        process.terminate()
-        process.wait(timeout=5)
+        terminate_process_safely(process)
         raise TimeoutError(f"Server did not become ready within {max_wait}s")
 
     try:
         yield server_url
     finally:
         # Cleanup
-        process.terminate()
-        process.wait(timeout=5)
+        terminate_process_safely(process)
 
 
 @pytest.mark.integration
@@ -112,15 +145,23 @@ def test_http_server_rejects_missing_port():
     )
     env.pop("MCP_PORT", None)  # Remove port
 
-    process = subprocess.Popen(
-        ["python", "-m", "mcp_zammad"],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    process = start_mcp_server(env=env)
 
     # Should exit with error
-    process.wait(timeout=5)
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired as exc:
+        # Process hung - terminate and kill if needed
+        process.terminate()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+        # Assert failure - process should have exited quickly with error
+        msg = "Process did not exit within timeout"
+        raise AssertionError(msg) from exc
+
     assert process.returncode != 0
 
     assert process.stderr is not None
