@@ -490,9 +490,9 @@ def test_add_article_tool(mock_zammad_client, sample_article_data, decorator_cap
     assert result.body == "Test article"
     assert result.type == "note"
 
-    # Verify the client was called with correct params
+    # Verify the client was called with correct params (including attachments=None for backward compat)
     mock_instance.add_article.assert_called_once_with(
-        ticket_id=1, article_type="note", body="New comment", internal=False, sender="Agent"
+        ticket_id=1, article_type="note", attachments=None, body="New comment", internal=False, sender="Agent"
     )
 
 

@@ -1140,7 +1140,7 @@ class ZammadMCPServer:
 
         @self.mcp.tool(annotations=_write_annotations("Add Ticket Article"))
         def zammad_add_article(params: ArticleCreate) -> Article:
-            """Add an article (comment/note/email) to an existing ticket.
+            """Add an article (comment/note/email) to an existing ticket with optional attachments.
 
             Args:
                 params (ArticleCreate): Validated article creation parameters containing:
@@ -1152,6 +1152,7 @@ class ZammadMCPServer:
                     - content_type (str | None): text/plain or text/html (default: text/plain)
                     - to (str | None): Email recipient (for email type)
                     - cc (str | None): Email CC recipients
+                    - attachments (list[AttachmentUpload] | None): Optional attachments (max 10)
 
             Returns:
                 Article: The created article object with schema:
@@ -1172,6 +1173,7 @@ class ZammadMCPServer:
                 - Use when: "Add note to ticket 123" -> ticket_id=123, body="text", article_type=NOTE
                 - Use when: "Reply to customer" -> ticket_id=123, body="reply", article_type=EMAIL
                 - Use when: "Internal comment" -> ticket_id=123, body="note", article_type=NOTE, internal=True
+                - Use when: "Upload files with article" -> ticket_id=123, body="See attached", attachments=[...]
                 - Don't use when: Creating new ticket (use zammad_create_ticket with article)
                 - Don't use when: Updating ticket fields (use zammad_update_ticket)
 
@@ -1180,6 +1182,9 @@ class ZammadMCPServer:
                 - Returns "Error: Resource not found" if ticket_id invalid
                 - Returns "Error: Permission denied" if no article create permissions
                 - Sanitizes HTML content if content_type is text/html
+                - Validates base64 encoding before upload
+                - Sanitizes filenames to prevent path traversal
+                - Limits to 10 attachments per article
 
             Note:
                 ticket_id must be the internal database ID, NOT the display number.
@@ -1188,11 +1193,29 @@ class ZammadMCPServer:
                 Internal articles are only visible to agents, not customers.
             """
             client = self.get_client()
+
+            # Convert Pydantic attachments to dict format for client
+            attachments_data = None
+            if params.attachments:
+                attachments_data = [
+                    {
+                        "filename": att.filename,
+                        "data": att.data,
+                        "mime-type": att.mime_type,
+                    }
+                    for att in params.attachments
+                ]
+
             # Extract ticket_id and article_type separately to avoid duplicate kwargs
             # Use mode="json" to convert enums to strings, by_alias=True for API compatibility
-            article_params = params.model_dump(mode="json", by_alias=True, exclude={"ticket_id", "article_type"})
+            article_params = params.model_dump(
+                mode="json", by_alias=True, exclude={"ticket_id", "article_type", "attachments"}
+            )
             article_data = client.add_article(
-                ticket_id=params.ticket_id, article_type=params.article_type.value, **article_params
+                ticket_id=params.ticket_id,
+                article_type=params.article_type.value,
+                attachments=attachments_data,
+                **article_params,
             )
 
             return Article(**article_data)
