@@ -183,3 +183,34 @@ def test_add_article_without_attachments_backward_compat(mock_api: MagicMock) ->
     assert result["id"] == 789
     call_args = mock_instance.ticket_article.create.call_args[0][0]
     assert "attachments" not in call_args  # Should not include empty attachments
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_delete_attachment_success(mock_api: MagicMock) -> None:
+    """Test successful attachment deletion."""
+    mock_instance = mock_api.return_value
+    mock_instance.ticket_article_attachment.destroy.return_value = True
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        result = client.delete_attachment(ticket_id=123, article_id=456, attachment_id=789)
+
+    assert result is True
+    mock_instance.ticket_article_attachment.destroy.assert_called_once_with(789, 456, 123)
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_delete_attachment_failure(mock_api: MagicMock) -> None:
+    """Test attachment deletion failure."""
+    mock_instance = mock_api.return_value
+    mock_instance.ticket_article_attachment.destroy.return_value = False
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        result = client.delete_attachment(ticket_id=123, article_id=456, attachment_id=789)
+
+    assert result is False

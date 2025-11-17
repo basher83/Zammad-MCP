@@ -271,6 +271,24 @@ class ZammadClient:
 
         return dict(self.api.ticket_article.create(article_data))
 
+    def delete_attachment(self, ticket_id: int, article_id: int, attachment_id: int) -> bool:
+        """Delete an attachment from a ticket article.
+
+        Args:
+            ticket_id: Ticket ID
+            article_id: Article ID
+            attachment_id: Attachment ID to delete
+
+        Returns:
+            True if deletion succeeded
+
+        Raises:
+            Exception if deletion fails
+        """
+        result = self.api.ticket_article_attachment.destroy(attachment_id, article_id, ticket_id)
+        # destroy() returns True on success, may return dict on error
+        return bool(result)
+
     def get_user(self, user_id: int) -> dict[str, Any]:
         """Get user information by ID."""
         return dict(self.api.user.find(user_id))
