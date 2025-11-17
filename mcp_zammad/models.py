@@ -80,7 +80,7 @@ class AttachmentUpload(StrictBaseModel):
         try:
             base64.b64decode(v, validate=True)
         except Exception as e:
-            raise ValueError(f"Invalid base64 encoding: {e}") from e
+            raise ValueError("Invalid base64 encoding") from e
         else:
             return v
 

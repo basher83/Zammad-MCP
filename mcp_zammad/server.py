@@ -58,7 +58,7 @@ from .models import (
 class AttachmentDeletionError(Exception):
     """Raised when attachment deletion fails."""
 
-    def __init__(self, ticket_id: int, article_id: int, attachment_id: int, reason: str):
+    def __init__(self, ticket_id: int, article_id: int, attachment_id: int, reason: str) -> None:
         """Initialize attachment deletion error.
 
         Args:
@@ -123,6 +123,17 @@ def _write_annotations(title: str) -> ToolAnnotations:
     return ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+        title=title,
+    )
+
+
+def _destructive_write_annotations(title: str) -> ToolAnnotations:
+    """Create destructive write tool annotations with title."""
+    return ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=True,
         idempotentHint=False,
         openWorldHint=True,
         title=title,
@@ -1326,7 +1337,7 @@ class ZammadMCPServer:
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")
 
-        @self.mcp.tool(annotations=_write_annotations("Delete Attachment"))
+        @self.mcp.tool(annotations=_destructive_write_annotations("Delete Attachment"))
         def zammad_delete_attachment(params: DeleteAttachmentParams) -> str:
             """Delete an attachment from a ticket article.
 
