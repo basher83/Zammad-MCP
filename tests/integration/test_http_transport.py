@@ -104,9 +104,9 @@ def http_server() -> Iterator[str]:
                     if response.status_code == 200:
                         ready = True
                         break
-                except Exception as e:
+                except httpx.RequestError as e:
                     logger.debug("Startup poll: HTTP health check failed: %s", e)
-        except Exception as e:
+        except OSError as e:
             logger.debug("Startup poll: TCP connect failed: %s", e)
 
         time.sleep(check_interval)
