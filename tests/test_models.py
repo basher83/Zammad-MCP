@@ -166,13 +166,25 @@ class TestArticleCreateWithAttachments:
                 ],
             )
 
+    def test_max_attachments_boundary(self):
+        """Test that exactly 10 attachments are accepted."""
+        article = ArticleCreate(
+            ticket_id=123,
+            body="Boundary test",
+            attachments=[
+                AttachmentUpload(filename=f"file{i}.txt", data="dGVzdA==", mime_type="text/plain")
+                for i in range(10)
+            ],
+        )
+        assert article.attachments is not None
+        assert len(article.attachments) == 10
+
     def test_article_without_attachments(self):
         """Test creating article without attachments (backward compatibility)."""
         article = ArticleCreate(ticket_id=123, body="Simple comment")
         assert article.ticket_id == 123
         assert article.body == "Simple comment"
         assert article.attachments is None
-
 
 class TestDeleteAttachmentParams:
     """Tests for DeleteAttachmentParams model."""
