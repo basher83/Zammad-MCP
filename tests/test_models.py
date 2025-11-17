@@ -135,3 +135,39 @@ class TestAttachmentUpload:
         att = AttachmentUpload(filename="test\x00.pdf", data="dGVzdA==", mime_type="application/pdf")
         assert "\x00" not in att.filename
         assert att.filename == "test.pdf"
+
+
+class TestArticleCreateWithAttachments:
+    """Tests for ArticleCreate with attachments."""
+
+    def test_article_with_valid_attachments(self):
+        """Test creating article with valid attachments."""
+        article = ArticleCreate(
+            ticket_id=123,
+            body="See attached",
+            attachments=[AttachmentUpload(filename="doc.pdf", data="dGVzdA==", mime_type="application/pdf")],
+        )
+        assert article.ticket_id == 123
+        assert article.body == "See attached"
+        assert article.attachments is not None
+        assert len(article.attachments) == 1
+        assert article.attachments[0].filename == "doc.pdf"
+
+    def test_too_many_attachments(self):
+        """Test that >10 attachments raises validation error."""
+        with pytest.raises(ValidationError):
+            ArticleCreate(
+                ticket_id=123,
+                body="Too many files",
+                attachments=[
+                    AttachmentUpload(filename=f"file{i}.txt", data="dGVzdA==", mime_type="text/plain")
+                    for i in range(11)  # 11 attachments - exceeds limit
+                ],
+            )
+
+    def test_article_without_attachments(self):
+        """Test creating article without attachments (backward compatibility)."""
+        article = ArticleCreate(ticket_id=123, body="Simple comment")
+        assert article.ticket_id == 123
+        assert article.body == "Simple comment"
+        assert article.attachments is None

@@ -312,7 +312,7 @@ class Attachment(BaseModel):
 
 
 class ArticleCreate(StrictBaseModel):
-    """Create article request."""
+    """Create article request with optional attachments."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
@@ -321,6 +321,9 @@ class ArticleCreate(StrictBaseModel):
     article_type: ArticleType = Field(default=ArticleType.NOTE, alias="type", description="Article type")
     internal: bool = Field(default=False, description="Whether the article is internal")
     sender: ArticleSender = Field(default=ArticleSender.AGENT, description="Sender type")
+    attachments: list[AttachmentUpload] | None = Field(
+        default=None, description="Optional attachments to include", max_length=10
+    )
 
     @field_validator("body")
     @classmethod
