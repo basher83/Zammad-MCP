@@ -171,3 +171,23 @@ class TestArticleCreateWithAttachments:
         assert article.ticket_id == 123
         assert article.body == "Simple comment"
         assert article.attachments is None
+
+
+class TestDeleteAttachmentParams:
+    """Tests for DeleteAttachmentParams model."""
+
+    def test_valid_params(self):
+        """Test creating valid delete attachment parameters."""
+        from mcp_zammad.models import DeleteAttachmentParams
+
+        params = DeleteAttachmentParams(ticket_id=123, article_id=456, attachment_id=789)
+        assert params.ticket_id == 123
+        assert params.article_id == 456
+        assert params.attachment_id == 789
+
+    def test_invalid_ticket_id(self):
+        """Test that ticket_id must be positive."""
+        from mcp_zammad.models import DeleteAttachmentParams
+
+        with pytest.raises(ValidationError, match="greater than 0"):
+            DeleteAttachmentParams(ticket_id=0, article_id=456, attachment_id=789)

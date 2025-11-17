@@ -379,6 +379,14 @@ class DownloadAttachmentParams(StrictBaseModel):
     )
 
 
+class DeleteAttachmentParams(StrictBaseModel):
+    """Delete attachment request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    article_id: int = Field(gt=0, description="Article ID")
+    attachment_id: int = Field(gt=0, description="Attachment ID")
+
+
 class TagOperationParams(StrictBaseModel):
     """Tag operation (add/remove) request parameters."""
 
