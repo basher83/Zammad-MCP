@@ -19,6 +19,8 @@ from mcp_zammad.models import (
     ArticleSender,
     ArticleType,
     Attachment,
+    AttachmentUpload,
+    DeleteAttachmentParams,
     GetOrganizationParams,
     GetTicketParams,
     GetTicketStatsParams,
@@ -39,6 +41,7 @@ from mcp_zammad.models import (
 )
 from mcp_zammad.server import (
     CHARACTER_LIMIT,
+    AttachmentDeletionError,
     ZammadMCPServer,
     _format_ticket_detail_markdown,
     main,
@@ -519,6 +522,106 @@ def test_add_article_backward_compat_alias():
     # Test that field is accessible as article_type
     params2 = ArticleCreate(ticket_id=1, body="test", type=ArticleType.PHONE)
     assert params2.article_type == ArticleType.PHONE
+
+
+def test_add_article_with_attachments_tool(mock_zammad_client, decorator_capturer):
+    """Test zammad_add_article tool with attachments."""
+    mock_instance, _ = mock_zammad_client
+
+    # Mock client response with attachment
+    mock_instance.add_article.return_value = {
+        "id": 789,
+        "ticket_id": 123,
+        "body": "See attachment",
+        "type": "note",
+        "internal": False,
+        "sender": "Agent",
+        "created_at": "2024-01-15T16:30:00Z",
+        "updated_at": "2024-01-15T16:30:00Z",
+        "created_by_id": 1,
+        "updated_by_id": 1,
+        "attachments": [{"id": 1, "filename": "doc.pdf", "size": 1024, "content_type": "application/pdf"}],
+    }
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Create params with attachment
+    params = ArticleCreate(
+        ticket_id=123,
+        body="See attachment",
+        article_type=ArticleType.NOTE,
+        internal=False,
+        sender=ArticleSender.AGENT,
+        attachments=[AttachmentUpload(filename="doc.pdf", data="dGVzdA==", mime_type="application/pdf")],
+    )
+
+    # Call tool
+    result = test_tools["zammad_add_article"](params)
+
+    # Verify result
+    assert result.id == 789
+    assert result.ticket_id == 123
+    assert result.body == "See attachment"
+
+    # Verify client.add_article was called with converted attachments
+    mock_instance.add_article.assert_called_once()
+    call_kwargs = mock_instance.add_article.call_args[1]
+    assert "attachments" in call_kwargs
+    assert call_kwargs["attachments"] is not None
+    assert len(call_kwargs["attachments"]) == 1
+    assert call_kwargs["attachments"][0]["filename"] == "doc.pdf"
+    assert call_kwargs["attachments"][0]["data"] == "dGVzdA=="
+    assert call_kwargs["attachments"][0]["mime-type"] == "application/pdf"
+
+
+def test_add_article_without_attachments_backward_compat_tool(mock_zammad_client, decorator_capturer):
+    """Test zammad_add_article tool without attachments (backward compatibility)."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.add_article.return_value = {
+        "id": 789,
+        "ticket_id": 123,
+        "body": "Simple comment",
+        "type": "note",
+        "internal": False,
+        "sender": "Agent",
+        "created_at": "2024-01-15T16:30:00Z",
+        "updated_at": "2024-01-15T16:30:00Z",
+        "created_by_id": 1,
+        "updated_by_id": 1,
+    }
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = ArticleCreate(
+        ticket_id=123, body="Simple comment", article_type=ArticleType.NOTE, internal=False, sender=ArticleSender.AGENT
+    )
+
+    # Call tool
+    result = test_tools["zammad_add_article"](params)
+
+    # Verify result
+    assert result.id == 789
+    assert result.body == "Simple comment"
+
+    # Verify attachments=None passed to client for backward compatibility
+    mock_instance.add_article.assert_called_once()
+    call_kwargs = mock_instance.add_article.call_args[1]
+    assert call_kwargs.get("attachments") is None
 
 
 def test_get_user_tool(mock_zammad_client, sample_user_data):
@@ -2121,6 +2224,61 @@ class TestAttachmentSupport:
         # Test that the error is raised
         with pytest.raises(Exception, match="API Error"):
             server_inst.client.download_attachment(123, 456, 789)  # type: ignore[union-attr]
+
+    def test_delete_attachment_tool_success(self, decorator_capturer) -> None:
+        """Test zammad_delete_attachment tool success."""
+        server_inst = ZammadMCPServer()
+        server_inst.client = Mock()
+
+        # Mock successful deletion
+        server_inst.client.delete_attachment.return_value = True  # type: ignore[union-attr]
+
+        # Setup tools using decorator_capturer fixture
+        test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+        server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+        server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+        server_inst._setup_tools()
+
+        # Create params
+        params = DeleteAttachmentParams(ticket_id=123, article_id=456, attachment_id=789)
+
+        # Call tool
+        result = test_tools["zammad_delete_attachment"](params)
+
+        # Verify success message
+        assert "Successfully deleted attachment 789" in result
+        assert "article 456" in result
+        assert "ticket 123" in result
+
+        # Verify client called correctly
+        server_inst.client.delete_attachment.assert_called_once_with(  # type: ignore[union-attr]
+            ticket_id=123, article_id=456, attachment_id=789
+        )
+
+    def test_delete_attachment_tool_not_found(self, decorator_capturer) -> None:
+        """Test zammad_delete_attachment with non-existent attachment."""
+        server_inst = ZammadMCPServer()
+        server_inst.client = Mock()
+
+        # Mock API error
+        server_inst.client.delete_attachment.side_effect = Exception("Attachment not found")  # type: ignore[union-attr]
+
+        # Setup tools using decorator_capturer fixture
+        test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+        server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+        server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+        server_inst._setup_tools()
+
+        # Create params
+        params = DeleteAttachmentParams(ticket_id=123, article_id=456, attachment_id=999)
+
+        # Verify AttachmentDeletionError is raised
+        with pytest.raises(AttachmentDeletionError) as exc_info:
+            test_tools["zammad_delete_attachment"](params)
+
+        # Verify error details
+        assert exc_info.value.attachment_id == 999
+        assert "Attachment not found" in str(exc_info.value)
 
 
 class TestJSONOutputAndTruncation:

@@ -72,7 +72,7 @@ class AttachmentDeletionError(Exception):
         self.attachment_id = attachment_id
         self.reason = reason
         super().__init__(
-            f"Failed to delete attachment {attachment_id} from " f"article {article_id} in ticket {ticket_id}: {reason}"
+            f"Failed to delete attachment {attachment_id} from article {article_id} in ticket {ticket_id}: {reason}"
         )
 
 
