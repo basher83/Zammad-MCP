@@ -3,7 +3,14 @@
 import pytest
 from pydantic import ValidationError
 
-from mcp_zammad.models import ArticleCreate, GetTicketParams, ResponseFormat, TicketCreate, TicketUpdate
+from mcp_zammad.models import (
+    ArticleCreate,
+    AttachmentUpload,
+    GetTicketParams,
+    ResponseFormat,
+    TicketCreate,
+    TicketUpdate,
+)
 
 
 class TestTicketCreate:
@@ -96,3 +103,35 @@ def test_get_ticket_params_has_response_format():
     # Test default is MARKDOWN
     params_default = GetTicketParams(ticket_id=123)
     assert params_default.response_format == ResponseFormat.MARKDOWN
+
+
+class TestAttachmentUpload:
+    """Tests for AttachmentUpload model."""
+
+    def test_valid_attachment(self):
+        """Test creating valid attachment with base64 data."""
+        att = AttachmentUpload(
+            filename="test.pdf",
+            data="dGVzdA==",  # "test" in base64
+            mime_type="application/pdf",
+        )
+        assert att.filename == "test.pdf"
+        assert att.data == "dGVzdA=="
+        assert att.mime_type == "application/pdf"
+
+    def test_invalid_base64(self):
+        """Test that invalid base64 data raises validation error."""
+        with pytest.raises(ValidationError, match="Invalid base64"):
+            AttachmentUpload(filename="test.pdf", data="not-valid-base64!!!", mime_type="application/pdf")
+
+    def test_path_traversal_sanitization(self):
+        """Test filename sanitization prevents path traversal."""
+        att = AttachmentUpload(filename="../../../etc/passwd", data="dGVzdA==", mime_type="text/plain")
+        assert att.filename == "passwd"  # Path components stripped
+        assert "/" not in att.filename
+
+    def test_null_byte_removal(self):
+        """Test null bytes are removed from filename."""
+        att = AttachmentUpload(filename="test\x00.pdf", data="dGVzdA==", mime_type="application/pdf")
+        assert "\x00" not in att.filename
+        assert att.filename == "test.pdf"

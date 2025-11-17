@@ -1,6 +1,8 @@
 """Pydantic models for Zammad entities."""
 
+import base64
 import html
+import os
 from datetime import date, datetime
 from enum import Enum
 
@@ -55,6 +57,32 @@ class ArticleSender(str, Enum):
     AGENT = "Agent"
     CUSTOMER = "Customer"
     SYSTEM = "System"
+
+
+class AttachmentUpload(StrictBaseModel):
+    """Attachment data for upload."""
+
+    filename: str = Field(description="Attachment filename", max_length=255)
+    data: str = Field(description="Base64-encoded file content")
+    mime_type: str = Field(description="MIME type (e.g., application/pdf)", max_length=100)
+
+    @field_validator("filename")
+    @classmethod
+    def sanitize_filename(cls, v: str) -> str:
+        """Sanitize filename to prevent path traversal."""
+        # Remove path components, keep only basename, and remove null bytes
+        return os.path.basename(v).replace("\x00", "")
+
+    @field_validator("data")
+    @classmethod
+    def validate_base64(cls, v: str) -> str:
+        """Validate base64 encoding."""
+        try:
+            base64.b64decode(v, validate=True)
+        except Exception as e:
+            raise ValueError(f"Invalid base64 encoding: {e}") from e
+        else:
+            return v
 
 
 class AttachmentDownloadError(Exception):
