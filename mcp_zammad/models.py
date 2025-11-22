@@ -1,6 +1,8 @@
 """Pydantic models for Zammad entities."""
 
+import base64
 import html
+import os
 from datetime import date, datetime
 from enum import Enum
 
@@ -55,6 +57,32 @@ class ArticleSender(str, Enum):
     AGENT = "Agent"
     CUSTOMER = "Customer"
     SYSTEM = "System"
+
+
+class AttachmentUpload(StrictBaseModel):
+    """Attachment data for upload."""
+
+    filename: str = Field(description="Attachment filename", max_length=255)
+    data: str = Field(description="Base64-encoded file content")
+    mime_type: str = Field(description="MIME type (e.g., application/pdf)", max_length=100)
+
+    @field_validator("filename")
+    @classmethod
+    def sanitize_filename(cls, v: str) -> str:
+        """Sanitize filename to prevent path traversal."""
+        # Remove path components, keep only basename, and remove null bytes
+        return os.path.basename(v).replace("\x00", "")
+
+    @field_validator("data")
+    @classmethod
+    def validate_base64(cls, v: str) -> str:
+        """Validate base64 encoding."""
+        try:
+            base64.b64decode(v, validate=True)
+        except Exception as e:
+            raise ValueError("Invalid base64 encoding") from e
+        else:
+            return v
 
 
 class AttachmentDownloadError(Exception):
@@ -284,7 +312,7 @@ class Attachment(BaseModel):
 
 
 class ArticleCreate(StrictBaseModel):
-    """Create article request."""
+    """Create article request with optional attachments."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
@@ -293,6 +321,9 @@ class ArticleCreate(StrictBaseModel):
     article_type: ArticleType = Field(default=ArticleType.NOTE, alias="type", description="Article type")
     internal: bool = Field(default=False, description="Whether the article is internal")
     sender: ArticleSender = Field(default=ArticleSender.AGENT, description="Sender type")
+    attachments: list[AttachmentUpload] | None = Field(
+        default=None, description="Optional attachments to include", max_length=10
+    )
 
     @field_validator("body")
     @classmethod
@@ -346,6 +377,24 @@ class DownloadAttachmentParams(StrictBaseModel):
     max_bytes: int | None = Field(
         default=10_000_000, ge=1, description="Maximum attachment size in bytes (None for unlimited)"
     )
+
+
+class DeleteAttachmentParams(StrictBaseModel):
+    """Delete attachment request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    article_id: int = Field(gt=0, description="Article ID")
+    attachment_id: int = Field(gt=0, description="Attachment ID")
+
+
+class DeleteAttachmentResult(StrictBaseModel):
+    """Result of attachment deletion operation."""
+
+    success: bool = Field(description="Whether the deletion succeeded")
+    ticket_id: int = Field(description="Ticket ID")
+    article_id: int = Field(description="Article ID")
+    attachment_id: int = Field(description="Attachment ID that was deleted")
+    message: str = Field(description="Human-readable result message")
 
 
 class TagOperationParams(StrictBaseModel):

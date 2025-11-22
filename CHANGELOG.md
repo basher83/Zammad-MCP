@@ -11,8 +11,15 @@
 - *(server)* Add markdown formatter for ticket details
 - *(server)* Add response format support to zammad_get_ticket
 - *(server)* Unify response formats for user and org tools
-- *(config)* Add transport configuration model with env support
-- *(main)* Add HTTP transport support via environment config
+- Add Streamable HTTP transport support (#119)
+- *(models)* Add AttachmentUpload model with security validation
+- *(models)* Add attachments support to ArticleCreate
+- *(models)* Add DeleteAttachmentParams model
+- *(client)* Add attachment support to add_article method
+- *(client)* Add delete_attachment method
+- *(server)* Add AttachmentDeletionError exception
+- *(server)* Add attachment support to zammad_add_article tool
+- *(server)* Add zammad_delete_attachment tool
 
 ### 🐛 Bug Fixes
 
@@ -32,8 +39,7 @@
 - *(docs)* Use modern type syntax in docstrings per CLAUDE.md
 - *(server)* Handle Article objects in ticket markdown formatter
 - *(tests)* Move imports to top level per CLAUDE.md
-- *(config)* Add port validation and improve error messages
-- *(server)* Use proper Request type for health_check endpoint
+- Add type ignore for requests import to satisfy mypy
 
 ### 💼 Other
 
@@ -51,8 +57,6 @@
 - Use JSON-safe serialization with aliases for add_article
 - Use keyword arguments in search_users and search_organizations
 - *(server)* Simplify CHARACTER_LIMIT to constant
-- *(integration)* Improve test helper functions and process management
-- *(test)* Replace bare exception handlers with specific types
 
 ### 📚 Documentation
 
@@ -60,28 +64,18 @@
 - *(server)* Enhance tool docstrings with MCP compliance
 - Add response format section and update MCP version
 - *(changelog)* Update for MCP audit fixes
-- *(plan)* Add HTTP transport implementation plan and exclude plans from linting
-- *(readme)* Add HTTP transport documentation and update stdio note
-- *(deployment)* Add comprehensive HTTP transport deployment guide
-- *(env)* Add HTTP transport configuration examples
-- *(changelog)* Update for HTTP transport feature
-- *(server)* Standardize tool docstrings with Parameters section
+- Add attachment upload/delete feature design
+- Add detailed implementation plan for attachment upload/delete
 
 ### ⚡ Performance
 
 - Optimize code quality and performance
 
-### 🎨 Styling
-
-- *(server)* Move JSONResponse import to top level and add type annotations
-
 ### 🧪 Testing
 
 - Add comprehensive tests for add_article tool with params model
 - Use specific ValidationError in negative tests
-- *(integration)* Add HTTP transport integration tests
-- *(integration)* Fix HTTP transport tests per CodeRabbit feedback
-- *(integration)* Improve HTTP transport test reliability and coverage
+- Add missing server-layer tests and fix code quality issues
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -92,5 +86,6 @@
 - *(configs)* Update configs
 - Remove unused setup script and Codacy-related tasks from configuration
 - Update coverage threshold to 86% to match current reality
-
+- *(config)* Improve cliff.toml format with emojis and better organization
+- *(config)* Migrate from markdownlint-cli2 to rumdl
 

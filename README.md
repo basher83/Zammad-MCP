@@ -23,6 +23,7 @@ A Model Context Protocol (MCP) server for Zammad integration, enabling AI assist
 - **Attachment Support** 🆕
   - `zammad_get_article_attachments` - List all attachments for a ticket article
   - `zammad_download_attachment` - Download attachment content as base64-encoded data
+  - `zammad_delete_attachment` - Delete attachments from ticket articles
 
 - **User & Organization Management**
   - `zammad_get_user` / `zammad_search_users` - User information and search
@@ -401,6 +402,30 @@ Use create_ticket with:
 
 ```plaintext
 Use the escalation_summary prompt to get a report of all tickets approaching escalation
+```
+
+### Upload Attachments to a Ticket
+
+```plaintext
+Use add_article with attachments parameter:
+- ticket_id: 123
+- body: "See attached documentation"
+- attachments: [
+    {
+      "filename": "guide.pdf",
+      "data": "JVBERi0xLjQKJ...",  # base64-encoded content
+      "mime_type": "application/pdf"
+    }
+  ]
+```
+
+### Delete an Attachment
+
+```plaintext
+Use delete_attachment with:
+- ticket_id: 123
+- article_id: 456
+- attachment_id: 789
 ```
 
 ## Development

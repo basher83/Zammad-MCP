@@ -7,8 +7,14 @@ disable = [
     "MD002",  # First heading level - changelogs use ## for versions
     "MD012",  # Multiple consecutive blank lines - allow for formatting
     "MD013",  # Line length - disabled for flexibility
+    "MD022",  # Blank lines around headings - implementation plans need flexible formatting
+    "MD025",  # Multiple top-level headings - implementation plans use this pattern
     "MD029",  # Ordered list item prefix - allow "1." for all items
+    "MD031",  # Blank lines around fenced code blocks - allow for readability
+    "MD032",  # Lists should be surrounded by blank lines - implementation plans need flexibility
     "MD034",  # Bare URL - disabled
+    "MD036",  # Emphasis instead of heading - implementation plans use **Step N:** format
+    "MD040",  # Code block language - allow unlabeled blocks for generic content
     "MD041",  # First line heading - changelogs start with ##
     "MD047",  # File end newline - handled by other formatters
     "MD052",  # Reference links - changelogs use [unreleased] convention
@@ -23,7 +29,7 @@ exclude = [
     ".claude",
     "docs/ai-docs",
     "docs/dev",
-    "docs/plans",
+    "docs/plans/**",
     ".git",
     "**/__pycache__",
     "**/.pytest_cache",

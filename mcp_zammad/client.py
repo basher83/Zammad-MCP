@@ -240,8 +240,24 @@ class ZammadClient:
         article_type: str = "note",
         internal: bool = False,
         sender: str = "Agent",
+        attachments: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
-        """Add an article (comment/note) to a ticket."""
+        """Add an article (comment/note) to a ticket with optional attachments.
+
+        Args:
+            ticket_id: Ticket ID to add article to
+            body: Article body content
+            article_type: Article type (note, email, phone)
+            internal: Whether the article is internal
+            sender: Sender type (Agent, Customer, System)
+            attachments: Optional list of attachments with keys:
+                - filename: str
+                - data: str (base64-encoded content)
+                - mime-type: str
+
+        Returns:
+            Created article data with attachment metadata
+        """
         article_data = {
             "ticket_id": ticket_id,
             "body": body,
@@ -250,7 +266,28 @@ class ZammadClient:
             "sender": sender,
         }
 
+        if attachments:
+            article_data["attachments"] = attachments
+
         return dict(self.api.ticket_article.create(article_data))
+
+    def delete_attachment(self, ticket_id: int, article_id: int, attachment_id: int) -> bool:
+        """Delete an attachment from a ticket article.
+
+        Args:
+            ticket_id: Ticket ID
+            article_id: Article ID
+            attachment_id: Attachment ID to delete
+
+        Returns:
+            True if deletion succeeded
+
+        Raises:
+            Exception if deletion fails
+        """
+        result = self.api.ticket_article_attachment.destroy(attachment_id, article_id, ticket_id)
+        # destroy() returns True on success, may return dict on error
+        return bool(result)
 
     def get_user(self, user_id: int) -> dict[str, Any]:
         """Get user information by ID."""
