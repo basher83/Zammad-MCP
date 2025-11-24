@@ -63,21 +63,16 @@ echo "✅ CHANGELOG.md updated!"
 
 [tasks.changelog-bump]
 description = "Bump version and update changelog for a release"
+usage = 'arg "<version>" help="Version number (e.g., 0.1.4)"'
 run = """
-if [ -z "$1" ]; then
-  echo "Usage: mise run changelog-bump <version>"
-  echo "Example: mise run changelog-bump 0.1.4"
-  exit 1
-fi
-VERSION="$1"
-echo "📝 Creating release $VERSION..."
-git-cliff --tag "v$VERSION" -o CHANGELOG.md
-echo "✅ CHANGELOG.md updated for v$VERSION!"
+echo "📝 Creating release ${usage_version}..."
+git-cliff --tag "v${usage_version}" -o CHANGELOG.md
+echo "✅ CHANGELOG.md updated for v${usage_version}!"
 echo "Next steps:"
 echo "  1. Review CHANGELOG.md"
 echo "  2. Update version in pyproject.toml"
-echo "  3. Commit changes: git add CHANGELOG.md pyproject.toml && git commit -m 'chore: release v$VERSION'"
-echo "  4. Tag release: git tag -a v$VERSION -m 'Release v$VERSION'"
+echo "  3. Commit changes: git add CHANGELOG.md pyproject.toml && git commit -m 'chore: release v${usage_version}'"
+echo "  4. Tag release: git tag -a v${usage_version} -m 'Release v${usage_version}'"
 echo "  5. Push: git push && git push --tags"
 """
 
