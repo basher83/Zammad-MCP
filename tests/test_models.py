@@ -7,6 +7,7 @@ from mcp_zammad.models import (
     ArticleCreate,
     AttachmentUpload,
     DeleteAttachmentParams,
+    DeleteAttachmentResult,
     GetTicketParams,
     ResponseFormat,
     TicketCreate,
@@ -172,8 +173,7 @@ class TestArticleCreateWithAttachments:
             ticket_id=123,
             body="Boundary test",
             attachments=[
-                AttachmentUpload(filename=f"file{i}.txt", data="dGVzdA==", mime_type="text/plain")
-                for i in range(10)
+                AttachmentUpload(filename=f"file{i}.txt", data="dGVzdA==", mime_type="text/plain") for i in range(10)
             ],
         )
         assert article.attachments is not None
@@ -185,6 +185,7 @@ class TestArticleCreateWithAttachments:
         assert article.ticket_id == 123
         assert article.body == "Simple comment"
         assert article.attachments is None
+
 
 class TestDeleteAttachmentParams:
     """Tests for DeleteAttachmentParams model."""
@@ -207,8 +208,6 @@ class TestDeleteAttachmentResult:
 
     def test_successful_deletion(self):
         """Test creating successful deletion result."""
-        from mcp_zammad.models import DeleteAttachmentResult
-
         result = DeleteAttachmentResult(
             success=True,
             ticket_id=123,
@@ -224,8 +223,6 @@ class TestDeleteAttachmentResult:
 
     def test_failed_deletion(self):
         """Test creating failed deletion result."""
-        from mcp_zammad.models import DeleteAttachmentResult
-
         result = DeleteAttachmentResult(
             success=False,
             ticket_id=123,
