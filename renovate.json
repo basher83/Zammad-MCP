@@ -1,10 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    ":semanticCommits",
-    ":preserveSemverRanges",
-    "helpers:pinGitHubActionDigests"
+    "local>basher83/renovate-config",
+    "local>basher83/renovate-config//presets:python-mcp",
+    "local>basher83/renovate-config//presets:github-actions-security"
   ],
   "labels": [
     "dependencies",
@@ -14,54 +13,11 @@
     "basher83"
   ],
   "pip_requirements": {
-    "fileMatch": [
-      "(^|/)requirements(-.*)?\\.(txt|in)$"
+    "managerFilePatterns": [
+      "/(^|/)requirements(-.*)?\\.(txt|in)$/"
     ]
   },
   "packageRules": [
-    {
-      "description": "Automerge non-major updates for dev dependencies",
-      "matchDepTypes": [
-        "devDependencies"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "automerge": true
-    },
-    {
-      "description": "Group Python test dependencies",
-      "groupName": "Python test dependencies",
-      "matchDepTypes": [
-        "devDependencies"
-      ],
-      "matchPackageNames": [
-        "/^pytest/"
-      ]
-    },
-    {
-      "description": "Group Python linting tools",
-      "groupName": "Python linters",
-      "matchPackageNames": [
-        "black",
-        "ruff",
-        "mypy"
-      ],
-      "matchDepTypes": [
-        "devDependencies"
-      ]
-    },
-    {
-      "description": "Require approval for major MCP updates",
-      "matchPackageNames": [
-        "mcp"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "dependencyDashboardApproval": true
-    },
     {
       "description": "Require approval for major Zammad API updates",
       "matchPackageNames": [
@@ -73,44 +29,11 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Pin Python version for Actions",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "matchPackageNames": [
-        "actions/setup-python"
-      ],
-      "rangeStrategy": "pin"
-    },
-    {
-      "description": "Auto-update GitHub Actions digests",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "digest": {
-        "automerge": true
-      },
-      "commitMessageTopic": "{{depName}} digest to {{newDigestShort}}",
-      "commitMessageExtra": "({{currentValue}})"
-    },
-    {
       "description": "Use different commit prefix for dev dependencies",
       "matchDepTypes": [
         "devDependencies"
       ],
       "commitMessagePrefix": "chore(dev-deps):"
-    },
-    /* ---- Python version pinning (3.14 not yet compatible) ---- */
-    {
-      "description": "Cap Python to 3.13.x (3.14 compatibility tracked in issue)",
-      "matchPackageNames": [
-        "python"
-      ],
-      "matchDatasources": [
-        "docker",
-        "github-tags"
-      ],
-      "allowedVersions": "<=3.13"
     },
     {
       "description": "Pin actions/setup-python to 3.13.x maximum",
@@ -124,21 +47,7 @@
         ".github/workflows/**"
       ],
       "allowedVersions": "3.13.x"
-    },
-    {
-      "description": "Block Python 3.14+ updates until compatibility confirmed",
-      "matchPackageNames": [
-        "python",
-        "actions/setup-python"
-      ],
-      "matchCurrentVersion": ">=3.14.0",
-      "enabled": false
     }
   ],
-  "prConcurrentLimit": 3,
-  "prCreation": "not-pending",
-  "prHourlyLimit": 2,
-  "rebaseWhen": "behind-base-branch",
-  "semanticCommits": "enabled",
   "commitMessagePrefix": "chore(deps):"
 }
