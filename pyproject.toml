@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-zammad"
-version = "0.2.0"
+version = "1.0.0"
 description = "Model Context Protocol server for Zammad ticket system integration (unofficial)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,7 +12,7 @@ license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "basher83", email = "crashoverride6545@gmail.com" }]
 keywords = ["mcp", "zammad", "tickets", "support", "api"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",

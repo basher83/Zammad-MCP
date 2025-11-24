@@ -1,5 +1,5 @@
 
-## [unreleased]
+## [1.0.0] - 2025-11-24
 
 
 ### 🚀 Features
@@ -38,6 +38,7 @@
 - *(renovate)* Remove invalid regex slashes from managerFilePatterns
 - *(renovate)* Add regex delimiters to managerFilePatterns
 - *(renovate)* Use file path syntax instead of sub-preset syntax
+- *(changelog)* Add blank line before version headers
 
 ### 💼 Other
 
@@ -275,47 +276,3 @@
 - Remove unused 'serena' server configuration from .mcp.json
 - Update permissions in settings.local.json and improve Dockerfile comments
 - Release v0.1.1
-
-## [0.1.0] - 2025-07-11
-
-
-### 🚀 Features
-
-- Implement Zammad MCP server with 16 tools and 3 resources
-- Add setup scripts for easy installation
-- Add .env.example for easy configuration
-- Add article pagination to get_ticket
-- Add Docker support for containerized deployment
-
-### 🐛 Bug Fixes
-
-- Resolve asyncio conflict in MCP server startup
-- Handle Zammad API expand behavior in models
-- Remove invalid Renovate configuration options
-- *(ci)* Add attestations permission for attest-build-provenance v2
-
-### 🚜 Refactor
-
-- Simplify environment configuration
-
-### 📚 Documentation
-
-- Add comprehensive documentation
-- Add CLAUDE.md for AI assistant context
-- Update README with uvx support and improved documentation
-- Update documentation for recent fixes
-- Add Codacy code quality badge to README
-
-### 🎨 Styling
-
-- Apply ruff formatting to Python files
-
-### ⚙️ Miscellaneous Tasks
-
-- Update .gitignore for comprehensive coverage
-- Add development environment configuration
-- Configure Renovate for dependency management
-- Remove test.md file
-- Update dependency lock file
-- Clean up .gitignore and add .gitmessage template
-- Add .safety-project.ini configuration file for zammad-mcp project

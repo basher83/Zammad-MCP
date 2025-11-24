@@ -4,7 +4,7 @@
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9cc0ebac926a4d56b0bdf2271d46bbf7)](https://app.codacy.com/gh/basher83/Zammad-MCP/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 ![Coverage](https://img.shields.io/badge/coverage-90.08%25-brightgreen)
 
-A Model Context Protocol (MCP) server for Zammad integration, enabling AI assistants to interact with tickets, users, organizations, and more through a standardized interface.
+An MCP server that connects AI assistants to Zammad, providing tools for managing tickets, users, organizations, and attachments.
 
 > **Disclaimer**: This project is not affiliated with or endorsed by Zammad GmbH or the Zammad Foundation. This is an independent integration that uses the Zammad API.
 
@@ -20,9 +20,9 @@ A Model Context Protocol (MCP) server for Zammad integration, enabling AI assist
   - `zammad_add_article` - Add comments/notes to tickets
   - `zammad_add_ticket_tag` / `zammad_remove_ticket_tag` - Manage ticket tags
 
-- **Attachment Support** 🆕
-  - `zammad_get_article_attachments` - List all attachments for a ticket article
-  - `zammad_download_attachment` - Download attachment content as base64-encoded data
+- **Attachment Support**
+  - `zammad_get_article_attachments` - List attachments for a ticket article
+  - `zammad_download_attachment` - Download attachment content (base64-encoded)
   - `zammad_delete_attachment` - Delete attachments from ticket articles
 
 - **User & Organization Management**
@@ -38,16 +38,16 @@ A Model Context Protocol (MCP) server for Zammad integration, enabling AI assist
 
 ### Resources
 
-Direct access to Zammad data:
+Access Zammad data directly:
 
 - `zammad://ticket/{id}` - Individual ticket details
 - `zammad://user/{id}` - User profile information
 - `zammad://organization/{id}` - Organization details
-- `zammad://queue/{group}` - Ticket queue for a specific group 🆕
+- `zammad://queue/{group}` - Ticket queue for a group
 
 ### Prompts
 
-Pre-configured prompts for common tasks:
+Pre-configured prompts:
 
 - `analyze_ticket` - Comprehensive ticket analysis
 - `draft_response` - Generate ticket responses
@@ -57,7 +57,7 @@ Pre-configured prompts for common tasks:
 
 ### Option 1: Run Directly with uvx (Recommended)
 
-The quickest way to use the MCP server without installation:
+Run without installation:
 
 ```bash
 # Install uv if you haven't already
@@ -77,7 +77,7 @@ uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
 
 ### Option 2: Docker Run
 
-For production deployments or when you need more control:
+For production or containerized deployments:
 
 ```bash
 # Basic usage with environment variables
@@ -101,7 +101,7 @@ docker run --rm -i \
 
 #### Docker Image Versioning
 
-Docker images are published with semantic versioning:
+The project publishes Docker images with semantic versioning:
 
 - `latest` - Most recent stable release
 - `1.2.3` - Specific version (recommended for production)
@@ -118,7 +118,7 @@ View all versions on [GitHub Container Registry](https://github.com/basher83/Zam
 
 ### Option 3: For Developers
 
-If you're contributing to the project or need to modify the code:
+To contribute or modify the code:
 
 ```bash
 # Clone the repository
@@ -137,7 +137,7 @@ For manual setup, see the [Development](#development) section below.
 
 ## Configuration
 
-The server requires Zammad API credentials. The recommended approach is to use a `.env` file:
+The server requires Zammad API credentials. Use a `.env` file:
 
 1. Copy the example configuration:
 
@@ -182,7 +182,7 @@ The server requires Zammad API credentials. The recommended approach is to use a
 | `MCP_HOST` | `127.0.0.1` | Host address for HTTP transport |
 | `MCP_PORT` | - | Port number for HTTP transport (required if `MCP_TRANSPORT=http`) |
 
-**Important**: Never commit your `.env` file to version control. It's already included in `.gitignore`.
+**Important**: Keep your `.env` file out of version control (already in `.gitignore`).
 
 ## Response Formats
 
@@ -238,9 +238,9 @@ Or using Docker:
 }
 ```
 
-**Note**: This server supports both stdio (default) and HTTP transports. For stdio mode, the `-i` flag is required for Docker interactive mode. For HTTP mode, see the HTTP Transport section below.
+**Note**: The server supports stdio (default) and HTTP transports. Stdio mode requires the `-i` flag for Docker. See the HTTP Transport section below for remote deployments.
 
-**Important**: The container must run in interactive mode (`-i`) or the MCP server will not receive stdin. Ensure this flag is preserved in any wrapper scripts or shell aliases.
+**Important**: The `-i` flag is required—without it, the MCP server cannot receive stdin. Preserve this flag in wrapper scripts or shell aliases.
 
 Or if you have it installed locally:
 
@@ -271,7 +271,7 @@ ZAMMAD_URL=https://instance.zammad.com/api/v1 ZAMMAD_HTTP_TOKEN=token python -m 
 
 ### HTTP Transport (Remote/Cloud Deployment)
 
-The server supports Streamable HTTP transport for remote deployments alongside your Zammad instance.
+The server supports Streamable HTTP transport for remote deployments.
 
 #### Environment Configuration
 
@@ -310,13 +310,13 @@ docker run -d \
   ghcr.io/basher83/zammad-mcp:latest
 ```
 
-The MCP endpoint will be available at `http://localhost:8000/mcp/`.
+Access the MCP endpoint at `http://localhost:8000/mcp/`.
 
 #### Production Deployment with Reverse Proxy
 
-⚠️ **SECURITY WARNING**: Only bind to `0.0.0.0` when deploying behind a reverse proxy with TLS.
+⚠️ **SECURITY WARNING**: Bind to `0.0.0.0` only behind a reverse proxy with TLS.
 
-For production deployments, use a reverse proxy (nginx/Caddy) to provide HTTPS and additional security:
+Use a reverse proxy (nginx/Caddy) for HTTPS and security:
 
 **Example with Caddy:**
 
@@ -339,12 +339,12 @@ mcp.yourdomain.com {
 }
 ```
 
-**Important production notes:**
+**Production checklist:**
 
-1. **Only use `MCP_HOST=0.0.0.0` behind a reverse proxy** - never expose directly to the internet
-2. **Always use HTTPS/TLS** in production via reverse proxy
-3. **Implement authentication** at the reverse proxy or application level
-4. **Use firewall rules** to restrict access to the MCP server port
+1. Use `MCP_HOST=0.0.0.0` only behind a reverse proxy
+2. Enable HTTPS/TLS via reverse proxy
+3. Implement authentication at the proxy or application layer
+4. Restrict access with firewall rules
 
 #### Client Configuration for HTTP
 
@@ -362,15 +362,11 @@ Configure your MCP client to use HTTP transport:
 
 #### Security Considerations
 
-⚠️ **Important Security Notes:**
-
 1. **Local Development**: Use `MCP_HOST=127.0.0.1` (localhost only)
-2. **Production**: Implement authentication (see Security section)
-3. **HTTPS**: Use reverse proxy (nginx/caddy) for TLS/HTTPS
-4. **Firewall**: Restrict access to trusted networks only
-5. **Origin Validation**: Built-in protection against DNS rebinding attacks
-
-For production deployments, see [Security](#security) section.
+2. **Production**: Implement authentication (see [Security](#security))
+3. **HTTPS**: Use reverse proxy for TLS
+4. **Firewall**: Restrict access to trusted networks
+5. **DNS Rebinding**: Built-in origin validation protects against these attacks
 
 ## Examples
 
@@ -431,8 +427,6 @@ Use delete_attachment with:
 ## Development
 
 ### Setup
-
-For development, you have two options:
 
 #### Using Setup Scripts (Recommended)
 
@@ -539,99 +533,60 @@ To generate an API token in Zammad:
 
 ### Authentication Errors
 
-- API tokens are preferred over username/password
-- Tokens must have appropriate permissions for the operations
+- Use API tokens over username/password
+- Ensure tokens have permissions for the operations
 - Check token expiration in Zammad settings
 
 ### Rate Limiting
 
-The server respects Zammad's rate limits. If you encounter rate limit errors:
+The server respects Zammad's rate limits. If you hit rate limits:
 
-- Reduce the frequency of requests
-- Use pagination for large result sets
-- Consider caching frequently accessed data
+- Reduce request frequency
+- Paginate large result sets
+- Cache frequently accessed data
 
 ## Security
 
-Security is a top priority for the Zammad MCP Server. We employ multiple layers of protection and follow industry best practices.
+The server implements multiple layers of protection following industry best practices.
 
 ### Reporting Security Issues
 
-**⚠️ IMPORTANT**: Please do NOT create public GitHub issues for security vulnerabilities.
+**⚠️ IMPORTANT**: Do not create public GitHub issues for security vulnerabilities.
 
-Report security issues via:
-
-- [GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/security/advisories/new) (Preferred)
-- See our [Security Policy](SECURITY.md) for detailed reporting guidelines
+Report via [GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/security/advisories/new) (preferred) or see [SECURITY.md](SECURITY.md).
 
 ### Security Features
 
-- ✅ **Input Validation**: All user inputs validated and sanitized ([models.py](mcp_zammad/models.py))
+- ✅ **Input Validation**: Validates and sanitizes all user inputs ([models.py](mcp_zammad/models.py))
 - ✅ **SSRF Protection**: URL validation prevents server-side request forgery ([client.py](mcp_zammad/client.py#L46-L58))
-- ✅ **XSS Prevention**: HTML sanitization in all text fields ([models.py](mcp_zammad/models.py#L27-L31))
-- ✅ **Secure Authentication**: API tokens preferred over passwords ([client.py](mcp_zammad/client.py#L60-L92))
-- ✅ **Dependency Scanning**: Automated vulnerability detection with Dependabot
-- ✅ **Security Testing**: Multiple scanners (Bandit, Safety, pip-audit) in CI ([security-scan.yml](.github/workflows/security-scan.yml))
+- ✅ **XSS Prevention**: Sanitizes HTML in all text fields ([models.py](mcp_zammad/models.py#L27-L31))
+- ✅ **Secure Authentication**: Prefers API tokens over passwords ([client.py](mcp_zammad/client.py#L60-L92))
+- ✅ **Dependency Scanning**: Dependabot detects vulnerabilities automatically
+- ✅ **Security Testing**: CI runs Bandit, Safety, and pip-audit ([security-scan.yml](.github/workflows/security-scan.yml))
 
-For complete security documentation, see [SECURITY.md](SECURITY.md).
+See [SECURITY.md](SECURITY.md) for complete documentation.
 
 ## Contributing
 
-See [CONTRIBUTING](CONTRIBUTING.md) for detailed guidelines on:
-
-- Development setup
-- Code style and quality standards
-- Testing requirements
-- Pull request process
-- GitHub workflows and CI/CD pipeline
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code standards, testing, and pull request guidelines.
 
 ## License
 
-GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later) - see LICENSE file for details
-
-This project uses the same license as the [Zammad project](https://github.com/zammad/zammad) to ensure compatibility and alignment with the upstream project.
+[AGPL-3.0-or-later](LICENSE) — matches the [Zammad project](https://github.com/zammad/zammad) license.
 
 ## Documentation
 
-- [Architecture](ARCHITECTURE.md) - Technical architecture and design decisions
-- [Security](SECURITY.md) - Security policy and vulnerability reporting
-- [Contributing](CONTRIBUTING.md) - Development guidelines and contribution process
-- [Changelog](CHANGELOG.md) - Version history and changes
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Technical design
+- [SECURITY.md](SECURITY.md) — Security policy
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Development guidelines
+- [CHANGELOG.md](CHANGELOG.md) — Version history
 
 ## Support
 
-- [GitHub Issues:](https://github.com/basher83/Zammad-MCP/issues)
-- [Zammad Documentation:](https://docs.zammad.org/)
-- [MCP Documentation:](https://modelcontextprotocol.io/)
-
-## Recent Updates
-
-### Latest Features (v0.1.3)
-
-🎉 **New Attachment Support**: Full implementation for managing ticket article attachments
-
-- List attachments with complete metadata (filename, size, content type)
-- Download attachments as base64-encoded content for safe transmission
-- Comprehensive error handling and security validation
-
-> **Security Note**: Attachment downloads are base64-encoded for safe transmission via MCP protocol. All attachment metadata is sanitized to prevent XSS attacks. Downloaded content should be validated before processing in client applications.
-
-🚀 **Performance Improvements**:
-
-- Intelligent caching for frequently accessed data (groups, states, priorities)
-- Optimized ticket statistics with pagination instead of loading all data into memory
-- Reduced memory footprint for large datasets
-
-🔒 **Enhanced Security**:
-
-- URL validation with SSRF attack protection
-- HTML sanitization prevents XSS attacks
-- Enhanced authentication with Docker secrets support
-
-🧪 **Quality Assurance**: 90.08% test coverage with comprehensive test suite including attachment functionality
-
-See [CLAUDE.md](CLAUDE.md) for complete technical details and implementation notes.
+- [GitHub Issues](https://github.com/basher83/Zammad-MCP/issues)
+- [Zammad Documentation](https://docs.zammad.org/)
+- [MCP Documentation](https://modelcontextprotocol.io/)
 
 ## Trademark Notice
 
-"Zammad" is a trademark of Zammad GmbH. This project is an independent integration and is not affiliated with, endorsed by, or sponsored by Zammad GmbH or the Zammad Foundation. The use of the name "Zammad" is solely to indicate compatibility with the Zammad ticket system.
+"Zammad" is a trademark of Zammad GmbH. This independent integration is not affiliated with or endorsed by Zammad GmbH or the Zammad Foundation. The name "Zammad" indicates compatibility with the Zammad ticket system.
