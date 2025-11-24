@@ -1343,29 +1343,17 @@ class ZammadMCPServer:
             """Delete an attachment from a ticket article.
 
             Args:
-                params (DeleteAttachmentParams): Validated parameters containing:
-                    - ticket_id (int): Ticket ID
-                    - article_id (int): Article ID
-                    - attachment_id (int): Attachment ID to delete
+                params: DeleteAttachmentParams with ticket_id, article_id, attachment_id
 
             Returns:
-                DeleteAttachmentResult: Result with success status and details
+                DeleteAttachmentResult with success status and message
 
             Examples:
-                - Use when: "Delete attachment 789 from article 456" -> ticket_id=123, article_id=456, attachment_id=789
-                - Use when: "Remove incorrect file upload" -> ticket_id=123, article_id=456, attachment_id=789
-                - Don't use when: Need to download first (use zammad_download_attachment)
+                - Use when: Removing incorrect file uploads or outdated attachments
                 - Don't use when: Attachment IDs unknown (list attachments first)
 
-            Error Handling:
-                - Raises AttachmentDeletionError if deletion fails
-                - Returns "Error: Resource not found" if attachment not found
-                - Returns "Error: Permission denied" if no delete permissions
-                - Validates all IDs are positive integers
-
             Note:
-                Requires appropriate Zammad permissions to delete attachments.
-                Deletion is permanent and cannot be undone.
+                Requires Zammad delete permissions. Deletion is permanent.
             """
             client = self.get_client()
 
