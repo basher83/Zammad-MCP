@@ -14,9 +14,10 @@ class StrictBaseModel(BaseModel):
 
     This ensures that typos or incorrect field names in request parameters
     are caught early with clear validation errors rather than being silently ignored.
+    String fields are automatically stripped of leading/trailing whitespace.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
 class ResponseFormat(str, Enum):
