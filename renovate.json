@@ -14,7 +14,7 @@
   ],
   "pip_requirements": {
     "managerFilePatterns": [
-      "(^|/)requirements(-.*)?\\.(txt|in)$"
+      "/(^|/)requirements(-.*)?\\.(txt|in)$/"
     ]
   },
   "packageRules": [
