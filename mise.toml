@@ -113,3 +113,7 @@ run = "markdownlint-cli2 '**/*.md'"
 [tasks.markdown-fix]
 description = "Fix Markdown files"
 run = "markdownlint-cli2 '**/*.md' --fix"
+
+[tasks.validate-renovate]
+description = "Validate Renovate configuration"
+run = "npx --yes --package renovate -- renovate-config-validator --strict"
