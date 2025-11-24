@@ -80,7 +80,9 @@ class MCPConnectionStdio(MCPConnection):
         self.env = env
 
     def _create_context(self):
-        return stdio_client(StdioServerParameters(command=self.command, args=self.args, env=self.env))
+        return stdio_client(
+            StdioServerParameters(command=self.command, args=self.args, env=self.env)
+        )
 
 
 class MCPConnectionSSE(MCPConnection):
