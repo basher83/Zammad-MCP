@@ -1,4 +1,6 @@
+
 ## [unreleased]
+
 
 ### 🚀 Features
 
@@ -64,6 +66,7 @@
 - *(changelog)* Update for MCP audit fixes
 - Add attachment upload/delete feature design
 - Add detailed implementation plan for attachment upload/delete
+- *(changelog)* Regenerate with all historical versions
 
 ### ⚡ Performance
 
@@ -86,7 +89,9 @@
 - *(config)* Improve cliff.toml format with emojis and better organization
 - *(config)* Migrate from markdownlint-cli2 to rumdl
 - Update renovate config and add hookify rules
+
 ## [0.2.0] - 2025-10-22
+
 
 ### 🚀 Features
 
@@ -157,7 +162,9 @@
 - *(docs)* Add WARP.md
 - *(refactor)* Clean up and apply coderabbit suggestions
 - Release v0.2.0
+
 ## [0.1.3] - 2025-08-06
+
 
 ### 🚀 Features
 
@@ -200,7 +207,9 @@
 - Configure pre-commit hooks to be less strict for test files
 - Update configuration files for MCP servers
 - Bump version to 0.1.3
+
 ## [0.1.2] - 2025-07-24
+
 
 ### 🐛 Bug Fixes
 
@@ -209,7 +218,9 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Release v0.1.2 - security update
+
 ## [0.1.1] - 2025-07-24
+
 
 ### 🚀 Features
 
@@ -266,6 +277,7 @@
 - Release v0.1.1
 
 ## [0.1.0] - 2025-07-11
+
 
 ### 🚀 Features
 
