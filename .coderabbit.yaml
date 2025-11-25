@@ -192,7 +192,7 @@ reviews:
     # GitHub integration - ENHANCED
     github-checks:
       enabled: true
-      timeout_ms: 180000 # Increased for complex pipelines
+      timeout_ms: 900000 # Increased for complex pipelines
 
     # Language/documentation tools
     languagetool:
