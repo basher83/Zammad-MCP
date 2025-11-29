@@ -1,5 +1,5 @@
 {
-	"image": "mcr.microsoft.com/devcontainers/universal:4",
+	"image": "mcr.microsoft.com/devcontainers/universal:5@sha256:987eada1cc06457aae24b94513c7f8576caa2fa807c5f494674d20d71add10f8",
 	"runArgs": [
 		"--device=/dev/net/tun"
 	],
