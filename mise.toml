@@ -15,12 +15,12 @@ truncate = true
 python = "3.13"
 eza = "0.23.0"
 fd = "10.2.0"
-pre-commit = "4.5.0"
 rg = "14.1.1"
 git-cliff = "2.10.1"
 shellcheck = "0.11.0"
 markdownlint-cli2 = "0.19.1"
 uv = "0.9.16"
+prek = "0.2.20"
 
 [env]
 _.python.venv = { path = ".venv", create = true } # create the venv if it doesn't exist
@@ -95,11 +95,11 @@ run = "uv sync"
 # === Hooks tasks ===
 [tasks.hooks-install]
 description = "Install pre-commit and infisical hooks"
-run = "pre-commit install && infisical scan install --pre-commit-hook"
+run = "prek install && infisical scan install --pre-commit-hook"
 
 [tasks.pre-commit-run]
 description = "Run pre-commit hooks"
-run = "pre-commit run --all-files"
+run = "prek run --all-files"
 
 # === Infisical tasks ===
 [tasks.infisical-scan]
