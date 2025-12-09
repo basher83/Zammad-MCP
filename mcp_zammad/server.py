@@ -53,6 +53,7 @@ from .models import (
     TicketUpdateParams,
     User,
     UserBrief,
+    UserCreate,
 )
 
 
@@ -1089,9 +1090,21 @@ class ZammadMCPServer:
                 Use zammad_create_user to create new customers first.
             """
             client = self.get_client()
-            ticket_data = client.create_ticket(**params.model_dump(exclude_none=True, mode="json"))
-
-            return Ticket(**ticket_data)
+            try:
+                ticket_data = client.create_ticket(**params.model_dump(exclude_none=True, mode="json"))
+                return Ticket(**ticket_data)
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "customer" in error_msg and (
+                    "not found" in error_msg or "couldn't find" in error_msg or "lookup" in error_msg
+                ):
+                    raise ValueError(
+                        f"Customer '{params.customer}' not found in Zammad. "
+                        f"Note: Customers must exist before creating tickets. "
+                        f"Use zammad_search_users to check, or zammad_create_user to create. "
+                        f"Example: zammad_create_user(email='{params.customer}', firstname='...', lastname='...')"
+                    ) from e
+                raise
 
         @self.mcp.tool(annotations=_write_annotations("Update Ticket"))
         def zammad_update_ticket(params: TicketUpdateParams) -> Ticket:
@@ -1593,6 +1606,37 @@ class ZammadMCPServer:
                 result = _format_users_markdown(users, f"query='{params.query}'")
 
             return truncate_response(result)
+
+        @self.mcp.tool(annotations=_write_annotations("Create User"))
+        def zammad_create_user(params: UserCreate) -> User:
+            """Create a new user (customer) in Zammad.
+
+            Args:
+                params (UserCreate): User creation parameters:
+                    - email (str): Email address (required)
+                    - firstname (str): First name (required)
+                    - lastname (str): Last name (required)
+                    - login, phone, mobile, organization, note (optional)
+
+            Returns:
+                User: Created user object
+
+            Examples:
+                - "Create customer" -> email, firstname, lastname
+                - "Add contact with phone" -> + phone field
+                - Don't use when: User exists (use zammad_search_users first)
+
+            Note:
+                After creating, use their email in zammad_create_ticket's customer field.
+
+            Error Handling:
+                - Returns "Error: Validation failed" if required fields missing or email invalid
+                - Returns "Error: Permission denied" if no create permissions
+                - Returns "Error: Email already exists" if user with email already exists
+            """
+            client = self.get_client()
+            user_data = client.create_user(**params.model_dump(exclude_none=True))
+            return User(**user_data)
 
         @self.mcp.tool(annotations=_read_only_annotations("Get Organization Details"))
         def zammad_get_organization(params: GetOrganizationParams) -> str:

@@ -384,6 +384,45 @@ class TestZammadClientMethods:
         assert result["email"] == "user@example.com"
         mock_instance.user.find.assert_called_once_with(1)
 
+    def test_create_user(self, mock_zammad_api: Mock) -> None:
+        """Test create_user method."""
+        mock_instance = Mock()
+        mock_instance.user.create.return_value = {
+            "id": 42,
+            "email": "newuser@example.com",
+            "firstname": "New",
+            "lastname": "User",
+        }
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.create_user(email="newuser@example.com", firstname="New", lastname="User")
+
+        assert result["id"] == 42
+        mock_instance.user.create.assert_called_once()
+
+    def test_create_user_with_optional_fields(self, mock_zammad_api: Mock) -> None:
+        """Test create_user passes optional fields to API."""
+        mock_instance = Mock()
+        mock_instance.user.create.return_value = {"id": 42, "email": "test@example.com"}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+        client.create_user(
+            email="test@example.com",
+            firstname="Test",
+            lastname="User",
+            login="testlogin",
+            phone="+1234567890",
+            organization="ACME Corp",
+        )
+
+        call_args = mock_instance.user.create.call_args[0][0]
+        assert call_args["login"] == "testlogin"
+        assert call_args["phone"] == "+1234567890"
+        assert call_args["organization"] == "ACME Corp"
+
     def test_get_ticket_tags(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket_tags method."""
         mock_instance = Mock()

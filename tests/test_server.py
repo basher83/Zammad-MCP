@@ -33,11 +33,13 @@ from mcp_zammad.models import (
     SearchUsersParams,
     StateBrief,
     Ticket,
+    TicketCreate,
     TicketPriority,
     TicketSearchParams,
     TicketState,
     User,
     UserBrief,
+    UserCreate,
 )
 from mcp_zammad.server import (
     CHARACTER_LIMIT,
@@ -469,6 +471,26 @@ def test_create_ticket_tool(mock_zammad_client, ticket_factory, decorator_captur
     mock_instance.create_ticket.assert_called_once_with(
         title="New Test Ticket", group="Support", customer="customer@example.com", article_body="Test article body"
     )
+
+
+def test_create_ticket_customer_not_found_error(mock_zammad_client, decorator_capturer):
+    """Test that create_ticket gives helpful error when customer not found."""
+    mock_instance, _ = mock_zammad_client
+    mock_instance.create_ticket.side_effect = Exception("No lookup value found for 'customer'")
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = TicketCreate(title="Test", group="Support", customer="new@example.com", article_body="Body")
+
+    with pytest.raises(ValueError) as exc_info:
+        test_tools["zammad_create_ticket"](params)
+
+    assert "zammad_create_user" in str(exc_info.value)
 
 
 def test_add_article_tool(mock_zammad_client, sample_article_data, decorator_capturer):
@@ -930,6 +952,32 @@ def test_search_users_tool(mock_zammad_client, sample_user_data):
     client.search_users(query="test", page=3, per_page=10)
 
     mock_instance.search_users.assert_called_once_with(query="test", page=3, per_page=10)
+
+
+def test_create_user_tool(mock_zammad_client, decorator_capturer):
+    """Test zammad_create_user tool."""
+    mock_instance, _ = mock_zammad_client
+    mock_instance.create_user.return_value = {
+        "id": 42,
+        "email": "new@example.com",
+        "firstname": "New",
+        "lastname": "User",
+        "active": True,
+        "created_at": "2024-01-15T10:00:00Z",
+        "updated_at": "2024-01-15T10:00:00Z",
+    }
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = UserCreate(email="new@example.com", firstname="New", lastname="User")
+    result = test_tools["zammad_create_user"](params)
+
+    assert result.id == 42
 
 
 def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
@@ -2496,6 +2544,51 @@ class TestJSONOutputAndTruncation:
         assert items[0]["id"] == 1  # Should be sorted
         assert items[1]["id"] == 2
         assert items[2]["id"] == 3
+
+
+def test_user_create_model_validation():
+    """Test UserCreate model validates required fields."""
+    # Valid user
+    user = UserCreate(email="new@example.com", firstname="New", lastname="User")
+    assert user.email == "new@example.com"
+
+    # Missing required field
+    with pytest.raises(ValidationError):
+        UserCreate(firstname="Missing", lastname="Email")
+
+
+@pytest.mark.parametrize(
+    "invalid_email",
+    [
+        "@example.com",  # Missing local part
+        "user@",  # Missing domain
+        "user",  # No @ symbol
+        "user@domain",  # No dot in domain
+        "",  # Empty string
+    ],
+)
+def test_user_create_email_validation_rejects_invalid(invalid_email: str):
+    """Test UserCreate rejects invalid email formats."""
+    with pytest.raises(ValidationError) as exc_info:
+        UserCreate(email=invalid_email, firstname="Test", lastname="User")
+    assert "Invalid email" in str(exc_info.value) or "String should have at least" in str(exc_info.value)
+
+
+def test_user_create_email_normalization():
+    """Test UserCreate normalizes email to lowercase and strips whitespace."""
+    user = UserCreate(email="  TEST@EXAMPLE.COM  ", firstname="Test", lastname="User")
+    assert user.email == "test@example.com"
+
+
+def test_user_create_html_sanitization():
+    """Test UserCreate sanitizes HTML in names."""
+    user = UserCreate(
+        email="test@example.com",
+        firstname="<script>alert('xss')</script>",
+        lastname="O'Connor",
+    )
+    assert "&lt;script&gt;" in user.firstname
+    assert "&#x27;" in user.lastname or "O&#39;Connor" in user.lastname
 
 
 def test_server_name_follows_mcp_convention():

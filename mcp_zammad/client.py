@@ -304,6 +304,31 @@ class ZammadClient:
         result = self.api.user.search(query, filters=filters)
         return list(result)
 
+    def create_user(
+        self,
+        email: str,
+        firstname: str,
+        lastname: str,
+        login: str | None = None,
+        phone: str | None = None,
+        mobile: str | None = None,
+        organization: str | None = None,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new user in Zammad."""
+        user_data: dict[str, Any] = {"email": email, "firstname": firstname, "lastname": lastname}
+        if login:
+            user_data["login"] = login
+        if phone:
+            user_data["phone"] = phone
+        if mobile:
+            user_data["mobile"] = mobile
+        if organization:
+            user_data["organization"] = organization
+        if note:
+            user_data["note"] = note
+        return dict(self.api.user.create(user_data))
+
     def get_organization(self, org_id: int) -> dict[str, Any]:
         """Get organization information by ID."""
         return dict(self.api.organization.find(org_id))

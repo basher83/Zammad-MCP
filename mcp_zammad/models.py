@@ -518,6 +518,36 @@ class User(BaseModel):
     updated_by: UserBrief | str | None = None
 
 
+class UserCreate(StrictBaseModel):
+    """Create user request."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", str_strip_whitespace=True)
+
+    email: str = Field(description="User email (required)", max_length=255)
+    firstname: str = Field(description="First name", max_length=100)
+    lastname: str = Field(description="Last name", max_length=100)
+    login: str | None = Field(None, description="Login username", max_length=255)
+    phone: str | None = Field(None, description="Phone number", max_length=100)
+    mobile: str | None = Field(None, description="Mobile number", max_length=100)
+    organization: str | None = Field(None, description="Organization name", max_length=255)
+    note: str | None = Field(None, description="Internal notes", max_length=5000)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if "@" not in v:
+            raise ValueError(f"Invalid email: '{v}'. Example: user@example.com")
+        local_part, domain = v.rsplit("@", 1)
+        if not local_part or not domain or "." not in domain:
+            raise ValueError(f"Invalid email: '{v}'. Example: user@example.com")
+        return v.lower()
+
+    @field_validator("firstname", "lastname")
+    @classmethod
+    def sanitize_names(cls, v: str) -> str:
+        return html.escape(v)
+
+
 class Organization(BaseModel):
     """Organization information."""
 
