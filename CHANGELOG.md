@@ -1,4 +1,21 @@
 
+## [1.1.0] - 2025-12-09
+
+
+### 🚀 Features
+
+- *(tasks)* Add validation task for Renovate configuration
+- Add zammad_create_user tool (#149)
+
+### 🐛 Bug Fixes
+
+- *(docs)* Correct zammad_create_ticket docstring (#148)
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove old instructions
+- Remove deprecated agent files
+
 ## [1.0.0] - 2025-11-24
 
 
@@ -90,6 +107,7 @@
 - *(config)* Improve cliff.toml format with emojis and better organization
 - *(config)* Migrate from markdownlint-cli2 to rumdl
 - Update renovate config and add hookify rules
+- Release v1.0.0
 
 ## [0.2.0] - 2025-10-22
 
