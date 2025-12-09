@@ -1050,12 +1050,12 @@ class ZammadMCPServer:
                 params (TicketCreate): Validated ticket creation parameters containing:
                     - title (str): Ticket title/subject (required)
                     - group (str): Group name to assign ticket (required)
-                    - customer (str): Customer email or login (required)
-                    - article (dict): Initial article with body and type (required)
-                    - state (str | None): State name (default: "new")
-                    - priority (str | None): Priority name (default: "2 normal")
-                    - owner (str | None): Owner email or login
-                    - tags (list[str] | None): Initial tags
+                    - customer (str): Customer email or login (required, must exist in Zammad)
+                    - article_body (str): Initial article/comment body (required)
+                    - state (str): State name (default: "new")
+                    - priority (str): Priority name (default: "2 normal")
+                    - article_type (str): Article type - "note", "email", "phone" (default: "note")
+                    - article_internal (bool): Whether article is internal-only (default: False)
 
             Returns:
                 Ticket: The created ticket object with schema:
@@ -1074,21 +1074,19 @@ class ZammadMCPServer:
                 ```
 
             Examples:
-                - Use when: "Create ticket for server outage" -> title, group, customer, article
-                - Use when: "New high priority ticket" -> title, group, customer, article, priority="high"
+                - Use when: "Create ticket for server outage" -> title, group, customer, article_body
+                - Use when: "New high priority ticket" -> add priority="3 high"
                 - Don't use when: Ticket already exists (use zammad_update_ticket)
-                - Don't use when: Only adding comment to existing ticket (use zammad_add_article)
+                - Don't use when: Only adding comment (use zammad_add_article)
 
             Error Handling:
                 - Returns "Error: Validation failed" if required fields missing
                 - Returns "Error: Permission denied" if no create permissions
                 - Returns "Error: Resource not found" if group/customer/state invalid
-                - Validates group, customer, state, priority names before creation
 
             Note:
-                The article parameter must include 'body' and 'type' (e.g., 'note', 'email').
-                All name-based references (group, customer, state, priority) are validated.
-                Created ticket returns with expanded field objects, not just IDs.
+                The customer must exist in Zammad before creating a ticket.
+                Use zammad_create_user to create new customers first.
             """
             client = self.get_client()
             ticket_data = client.create_ticket(**params.model_dump(exclude_none=True, mode="json"))

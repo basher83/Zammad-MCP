@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.21.1",
+    "mcp>=1.23.0",
     "zammad-py>=3.2.0",
     "pydantic>=2.11.7",
     "python-dotenv>=1.0.0",
@@ -148,10 +148,12 @@ show_missing = true
 directory = "htmlcov"
 
 [tool.uv]
-# Force authlib to secure version to fix vulnerabilities in safety dependency
-# GHSA-9ggr-2464-2j32, GHSA-pq5p-34cr-23v9, GHSA-g7f3-828f-7h7m
+# Force secure versions to fix vulnerabilities
+# authlib: GHSA-9ggr-2464-2j32, GHSA-pq5p-34cr-23v9, GHSA-g7f3-828f-7h7m
+# urllib3: GHSA-gm62-xv2j-4w53 (CVE-2025-66418), GHSA-2xpw-w6gg-jr37 (CVE-2025-66471)
 override-dependencies = [
     "authlib>=1.6.5",
+    "urllib3>=2.6.0",
 ]
 
 [tool.pytest.ini_options]
