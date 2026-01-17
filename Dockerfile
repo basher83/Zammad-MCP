@@ -2,12 +2,12 @@
 # Build stage
 # Pin to specific digest for reproducibility and security
 # python:3.13-slim as of 2025-01-09
-FROM python:3.13-slim@sha256:6ef0353fbbf46d0755063135b1a093d319929bca496c387afac53f512bd9350d AS builder
+FROM python:3.13-slim@sha256:51e1a0a317fdb6e170dc791bbeae63fac5272c82f43958ef74a34e170c6f8b18 AS builder
 
 WORKDIR /app
 
 # Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest@sha256:13e233d08517abdafac4ead26c16d881cd77504a2c40c38c905cf3a0d70131a6 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:latest@sha256:9a23023be68b2ed09750ae636228e903a54a05ea56ed03a934d00fe9fbeded4b /uv /uvx /usr/local/bin/
 
 # Copy only dependency files first for better layer caching
 # This ensures dependency installation is only re-run when these files change
@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
   uv pip install --python /app/.venv/bin/python -e .
 
 # Production stage
-FROM python:3.13-slim@sha256:6ef0353fbbf46d0755063135b1a093d319929bca496c387afac53f512bd9350d AS production
+FROM python:3.13-slim@sha256:51e1a0a317fdb6e170dc791bbeae63fac5272c82f43958ef74a34e170c6f8b18 AS production
 
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
@@ -71,7 +71,7 @@ FROM production AS development
 USER root
 
 # Install uv for development
-COPY --from=ghcr.io/astral-sh/uv:latest@sha256:13e233d08517abdafac4ead26c16d881cd77504a2c40c38c905cf3a0d70131a6 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:latest@sha256:9a23023be68b2ed09750ae636228e903a54a05ea56ed03a934d00fe9fbeded4b /uv /uvx /usr/local/bin/
 
 # Copy dependency files needed for dev sync
 COPY pyproject.toml uv.lock ./
