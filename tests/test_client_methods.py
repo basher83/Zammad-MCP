@@ -6,6 +6,7 @@ from collections.abc import Generator
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 
 from mcp_zammad.client import ZammadClient
 
@@ -478,3 +479,57 @@ class TestZammadClientMethods:
         # This should handle the exception internally and retry
         with pytest.raises(Exception, match="Group error"):
             client.update_ticket(1, group="Support")
+
+    def test_list_tags(self, mock_zammad_api: Mock) -> None:
+        """Test list_tags method returns all system tags."""
+        mock_instance = Mock()
+        # Mock the session.get for direct HTTP call
+        mock_response = Mock()
+        mock_response.json.return_value = [
+            {"id": 1, "name": "urgent", "count": 15},
+            {"id": 2, "name": "billing", "count": 8},
+            {"id": 3, "name": "feature-request", "count": 23},
+        ]
+        mock_response.raise_for_status = Mock()
+        mock_instance.session.get.return_value = mock_response
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.list_tags()
+
+        assert len(result) == 3
+        assert result[0]["name"] == "urgent"
+        assert result[0]["count"] == 15
+        assert result[1]["name"] == "billing"
+        assert result[2]["name"] == "feature-request"
+        mock_instance.session.get.assert_called_once_with("https://test.zammad.com/api/v1/tag_list")
+
+    def test_list_tags_empty(self, mock_zammad_api: Mock) -> None:
+        """Test list_tags returns empty list when no tags defined."""
+        mock_instance = Mock()
+        mock_response = Mock()
+        mock_response.json.return_value = []
+        mock_response.raise_for_status = Mock()
+        mock_instance.session.get.return_value = mock_response
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.list_tags()
+
+        assert result == []
+        mock_instance.session.get.assert_called_once()
+
+    def test_list_tags_permission_denied(self, mock_zammad_api: Mock) -> None:
+        """Test list_tags raises error when lacking admin.tag permission."""
+        mock_instance = Mock()
+        mock_response = Mock()
+        mock_response.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
+        mock_instance.session.get.return_value = mock_response
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        with pytest.raises(requests.HTTPError, match="403"):
+            client.list_tags()
