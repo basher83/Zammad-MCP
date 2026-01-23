@@ -2424,7 +2424,7 @@ class ZammadMCPServer:
             client = self.get_client()
             try:
                 tags = client.get_ticket_tags(params.ticket_id)
-            except Exception as e:
+            except (requests.exceptions.RequestException, ValueError) as e:
                 _handle_ticket_not_found_error(params.ticket_id, e)
 
             # Format response
