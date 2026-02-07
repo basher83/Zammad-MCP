@@ -405,6 +405,15 @@ class TagOperationParams(StrictBaseModel):
     tag: str = Field(min_length=1, max_length=100, description="Tag name")
 
 
+class GetTicketTagsParams(StrictBaseModel):
+    """Get ticket tags request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN, description="Output format: markdown (default) or json"
+    )
+
+
 class GetUserParams(StrictBaseModel):
     """Get user request parameters."""
 
