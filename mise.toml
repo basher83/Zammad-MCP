@@ -32,7 +32,6 @@ run = """
 echo "📦 Installing Python dependencies..."
 uv sync
 echo "🪝 Installing pre-commit hooks..."
-pre-commit install
 infisical scan install --pre-commit-hook || echo "⚠️  Infisical not available, skipping..."
 if ! command -v coderabbit >/dev/null 2>&1; then
   echo "ℹ️  CodeRabbit CLI not installed. See mise.toml for installation instructions."
