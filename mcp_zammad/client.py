@@ -794,6 +794,39 @@ class ZammadClient:
         response = self.api.session.post(self._kb_url(kb_id, "answers"), json=payload)
         return self._kb_raise_or_return(response)
 
+    def _resolve_kb_answer_update_ids(
+        self,
+        kb_id: int,
+        answer_id: int,
+        title: str | None,
+        body: str | None,
+        translation_id: int | None,
+        category_id: int | None,
+    ) -> tuple[int | None, int | None]:
+        """Prefetch answer to resolve missing category_id and/or translation_id.
+
+        Zammad PATCH requires category_id and translation_id when updating
+        title/body. This helper fetches the current answer only when needed.
+
+        Returns:
+            Tuple of (resolved_category_id, resolved_translation_id)
+        """
+        needs_fetch = category_id is None or (
+            (title is not None or body is not None) and translation_id is None
+        )
+        if not needs_fetch:
+            return category_id, translation_id
+        answer_data = self.get_kb_answer(kb_id, answer_id)
+        answer = self._extract_kb_answer_from_payload(answer_data, answer_id)
+        if answer:
+            if translation_id is None and (title is not None or body is not None):
+                ids = answer.get("translation_ids") or []
+                if ids:
+                    translation_id = ids[0]
+            if category_id is None:
+                category_id = answer.get("category_id")
+        return category_id, translation_id
+
     def update_kb_answer(
         self,
         kb_id: int,
@@ -817,23 +850,9 @@ class ZammadClient:
         Returns:
             Updated answer dict (compound payload)
         """
-        # Zammad PATCH always requires category_id - fetch the answer upfront if we
-        # need to resolve it or the translation_id
-        resolved_category_id = category_id
-        resolved_translation_id = translation_id
-        needs_fetch = (title is not None or body is not None) and resolved_translation_id is None
-        needs_fetch = needs_fetch or resolved_category_id is None
-        if needs_fetch:
-            answer_data = self.get_kb_answer(kb_id, answer_id)
-            answer = self._extract_kb_answer_from_payload(answer_data, answer_id)
-            if answer:
-                if resolved_translation_id is None and (title is not None or body is not None):
-                    ids = answer.get("translation_ids") or []
-                    if ids:
-                        resolved_translation_id = ids[0]
-                if resolved_category_id is None:
-                    resolved_category_id = answer.get("category_id")
-
+        resolved_category_id, resolved_translation_id = self._resolve_kb_answer_update_ids(
+            kb_id, answer_id, title, body, translation_id, category_id
+        )
         payload: dict[str, Any] = {}
         if resolved_category_id is not None:
             payload["category_id"] = resolved_category_id

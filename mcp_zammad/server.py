@@ -903,6 +903,93 @@ def _format_kb_answers_list_markdown(answers: list[dict[str, Any]], kb_id: int, 
     return "\n".join(lines)
 
 
+def _format_kb_search_results_markdown(results: list[dict[str, Any]], query: str, kb_id: int) -> str:
+    """Format KB answer search results as markdown.
+
+    Args:
+        results: List of matching answer dicts (each with _title, _category_id)
+        query: The search query string
+        kb_id: Knowledge base ID
+
+    Returns:
+        Markdown-formatted string
+    """
+    if not results:
+        return f"No KB answers found matching '{query}' in KB {kb_id}."
+    lines = [f"# KB Answer Search: '{query}' (KB: {kb_id})", ""]
+    lines.append(f"Found {len(results)} match(es)")
+    lines.append("")
+    for answer in results:
+        title = answer.get("_title") or "(no title)"
+        status = _kb_answer_status(answer)
+        lines.append(f"## {title} (ID: {answer.get('id', 'N/A')})")
+        lines.append(f"- **Category ID**: {answer.get('_category_id', answer.get('category_id', 'N/A'))}")
+        lines.append(f"- **Status**: {status}")
+        lines.append(f"- **Promoted**: {answer.get('promoted', False)}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _build_kb_attachment_result(
+    content: bytes,
+    content_type: str,
+    params: Any,
+    save_path: str | None,
+) -> str:
+    """Build the JSON result string for a KB attachment download.
+
+    Args:
+        content: Raw attachment bytes
+        content_type: MIME type of the attachment
+        params: KBAnswerAttachmentDownloadParams instance
+        save_path: Resolved absolute save path, or None for base64 mode
+
+    Returns:
+        JSON-encoded result string
+    """
+    base: dict[str, Any] = {
+        "attachment_id": params.attachment_id,
+        "answer_id": params.answer_id,
+        "kb_id": params.kb_id,
+        "content_type": content_type,
+        "size": len(content),
+    }
+    if save_path:
+        base["saved_to"] = save_path
+    else:
+        base["data"] = base64.b64encode(content).decode("ascii")
+    return json.dumps(base, indent=2)
+
+
+def _resolve_attachment_upload_params(params: Any) -> tuple[str, str, str]:
+    """Resolve filename, base64 data, and mime_type for a KB attachment upload.
+
+    Reads from disk when file_path is provided; otherwise uses pre-supplied data.
+
+    Args:
+        params: KBAnswerAttachmentAddParams instance
+
+    Returns:
+        Tuple of (filename, data_b64, mime_type)
+    """
+    if params.file_path:
+        file_path = os.path.abspath(params.file_path)
+        with open(file_path, "rb") as f:
+            raw = f.read()
+        data = base64.b64encode(raw).decode("ascii")
+        filename = params.filename or os.path.basename(file_path)
+        if params.mime_type == "application/octet-stream":
+            guessed, _ = mimetypes.guess_type(file_path)
+            mime_type = guessed or "application/octet-stream"
+        else:
+            mime_type = params.mime_type
+    else:
+        data = params.data
+        filename = params.filename
+        mime_type = params.mime_type
+    return filename, data, mime_type
+
+
 def _handle_api_error(e: Exception, context: str = "operation") -> str:
     """Format errors with actionable guidance for LLM agents.
 
@@ -2703,21 +2790,7 @@ class ZammadMCPServer:
                         default=str,
                     )
                 else:
-                    if not results:
-                        result = f"No KB answers found matching '{params.query}' in KB {params.kb_id}."
-                    else:
-                        lines = [f"# KB Answer Search: '{params.query}' (KB: {params.kb_id})", ""]
-                        lines.append(f"Found {len(results)} match(es)")
-                        lines.append("")
-                        for answer in results:
-                            title = answer.get("_title") or "(no title)"
-                            status = _kb_answer_status(answer)
-                            lines.append(f"## {title} (ID: {answer.get('id', 'N/A')})")
-                            lines.append(f"- **Category ID**: {answer.get('_category_id', answer.get('category_id', 'N/A'))}")
-                            lines.append(f"- **Status**: {status}")
-                            lines.append(f"- **Promoted**: {answer.get('promoted', False)}")
-                            lines.append("")
-                        result = "\n".join(lines)
+                    result = _format_kb_search_results_markdown(results, params.query, params.kb_id)
                 return truncate_response(result)
             except Exception as e:
                 return _handle_api_error(
@@ -2981,21 +3054,7 @@ class ZammadMCPServer:
             """
             client = self.get_client()
             try:
-                if params.file_path:
-                    file_path = os.path.abspath(params.file_path)
-                    with open(file_path, "rb") as f:
-                        raw = f.read()
-                    data = base64.b64encode(raw).decode("ascii")
-                    filename = params.filename or os.path.basename(file_path)
-                    if params.mime_type == "application/octet-stream":
-                        guessed, _ = mimetypes.guess_type(file_path)
-                        mime_type = guessed or "application/octet-stream"
-                    else:
-                        mime_type = params.mime_type
-                else:
-                    data = params.data
-                    filename = params.filename
-                    mime_type = params.mime_type
+                filename, data, mime_type = _resolve_attachment_upload_params(params)
                 payload = client.add_kb_answer_attachment(
                     kb_id=params.kb_id,
                     answer_id=params.answer_id,
@@ -3081,35 +3140,13 @@ class ZammadMCPServer:
             client = self.get_client()
             try:
                 content, content_type = client.download_kb_attachment(params.attachment_id)
+                save_path: str | None = None
                 if params.save_path:
                     save_path = os.path.abspath(params.save_path)
                     os.makedirs(os.path.dirname(save_path), exist_ok=True)
                     with open(save_path, "wb") as f:
                         f.write(content)
-                    result = json.dumps(
-                        {
-                            "saved_to": save_path,
-                            "attachment_id": params.attachment_id,
-                            "answer_id": params.answer_id,
-                            "kb_id": params.kb_id,
-                            "content_type": content_type,
-                            "size": len(content),
-                        },
-                        indent=2,
-                    )
-                else:
-                    encoded = base64.b64encode(content).decode("ascii")
-                    result = json.dumps(
-                        {
-                            "attachment_id": params.attachment_id,
-                            "answer_id": params.answer_id,
-                            "kb_id": params.kb_id,
-                            "content_type": content_type,
-                            "size": len(content),
-                            "data": encoded,
-                        },
-                        indent=2,
-                    )
+                result = _build_kb_attachment_result(content, content_type, params, save_path)
                 return truncate_response(result)
             except Exception as e:
                 return _handle_api_error(
