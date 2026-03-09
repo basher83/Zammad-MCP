@@ -448,12 +448,14 @@ class ZammadClient:
         return dict(data)
 
     def _probe_kb_ids(self) -> list[dict[str, Any]]:
-        """Probe KB IDs 1-10 individually as a fallback for unreliable list endpoints."""
+        """Probe KB IDs 1-10 individually as a fallback for unreliable list endpoints.
+
+        Skips 404 responses (ID not found) but continues probing the full range
+        so non-contiguous IDs are still discovered.
+        """
         results = []
         for kb_id in range(1, 11):
             r = self.api.session.get(self._kb_url(kb_id))
-            if r.status_code == 404:
-                break
             if r.status_code == 200 and r.content:
                 results.append(dict(r.json()))
         return results
@@ -462,7 +464,8 @@ class ZammadClient:
         """List all knowledge bases.
 
         Zammad's GET /knowledge_bases endpoint is unreliable on some versions
-        (returns 404 even when KBs exist). Falls back to probing IDs 1-10.
+        (returns 404 even when KBs exist). Falls back to probing IDs 1-10 only
+        on 404; other error statuses are propagated as exceptions.
 
         Returns:
             List of knowledge base dicts
@@ -474,6 +477,8 @@ class ZammadClient:
                 return list(data)
             if isinstance(data, dict) and data:
                 return [data]
+        if response.status_code != 404:
+            response.raise_for_status()
         return self._probe_kb_ids()
 
     def get_knowledge_base(self, kb_id: int) -> dict[str, Any]:

@@ -72,8 +72,8 @@ class AttachmentUpload(StrictBaseModel):
     @classmethod
     def sanitize_filename(cls, v: str) -> str:
         """Sanitize filename to prevent path traversal."""
-        # Remove path components, keep only basename, and remove null bytes
-        return os.path.basename(v).replace("\x00", "")
+        # Normalize Windows backslashes before extracting basename, then remove null bytes
+        return os.path.basename(v.replace("\\", "/")).replace("\x00", "")
 
     @field_validator("data")
     @classmethod
@@ -936,7 +936,8 @@ class KBAnswerAttachmentAddParams(StrictBaseModel):
         """Sanitize filename to prevent path traversal."""
         if v is None:
             return v
-        return os.path.basename(v).replace("\x00", "")
+        # Normalize Windows backslashes before extracting basename, then remove null bytes
+        return os.path.basename(v.replace("\\", "/")).replace("\x00", "")
 
     @field_validator("data")
     @classmethod

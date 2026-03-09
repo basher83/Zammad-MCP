@@ -3,10 +3,12 @@
 import base64
 import json
 from collections.abc import Generator
+from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 import requests
+from pydantic import ValidationError
 
 from mcp_zammad.client import ZammadClient
 from mcp_zammad.models import (
@@ -152,8 +154,8 @@ class TestKBClientMethods:
         not_found.status_code = 404
         not_found.content = b"not found"
         kb1_response = _make_mock_response({"id": 1, "active": True})
-        # First call: list endpoint → 404; second call: id=1 → 200; third call: id=2 → 404 (stop)
-        mock_instance.session.get.side_effect = [not_found, kb1_response, not_found]
+        # First call: list endpoint → 404; id=1 → 200; ids 2-10 → 404 (skipped, not stopped)
+        mock_instance.session.get.side_effect = [not_found, kb1_response] + [not_found] * 9
         client = _make_client(mock_zammad_api)
         result = client.list_knowledge_bases()
         assert len(result) == 1
@@ -432,6 +434,32 @@ class TestKBClientMethods:
         assert payload["category_id"] == 20
         assert "translations_attributes" not in payload
 
+    def test_update_kb_answer_auto_resolves_ids(self, mock_zammad_api: Mock) -> None:
+        """update_kb_answer fetches answer to resolve missing translation_id and category_id."""
+        mock_instance = mock_zammad_api.return_value
+        mock_instance.url = KB_BASE_URL
+        answer_payload = {
+            "id": 100,
+            "assets": {
+                "KnowledgeBaseAnswer": {
+                    "100": {"id": 100, "category_id": 10, "translation_ids": [55]}
+                }
+            },
+        }
+        mock_instance.session.get.side_effect = [
+            _make_mock_response(answer_payload),
+            _make_mock_response(answer_payload),
+        ]
+        mock_instance.session.patch.return_value = _make_mock_response({"id": 100})
+        client = _make_client(mock_zammad_api)
+        client.update_kb_answer(kb_id=1, answer_id=100, title="New Title", body="New body")
+        payload = mock_instance.session.patch.call_args.kwargs["json"]
+        assert payload["category_id"] == 10
+        trans = payload["translations_attributes"][0]
+        assert trans["id"] == 55
+        assert trans["title"] == "New Title"
+        assert trans["content_attributes"]["body"] == "New body"
+
     # --- delete_kb_answer ---
 
     def test_delete_kb_answer(self, mock_zammad_api: Mock) -> None:
@@ -491,6 +519,42 @@ class TestKBClientMethods:
         assert att["data"] == b64
         assert att["mime-type"] == "text/plain"
 
+    def test_add_kb_answer_attachment_from_file_path(self, mock_zammad_api: Mock, tmp_path: Any) -> None:
+        """_resolve_attachment_upload_params reads file from disk and infers mime type."""
+        import tempfile
+        from mcp_zammad.server import _resolve_attachment_upload_params
+
+        file = tmp_path / "document.pdf"
+        file.write_bytes(b"%PDF-test")
+
+        class FakeParams:
+            file_path = str(file)
+            filename = None
+            mime_type = "application/octet-stream"
+
+        filename, data, mime_type = _resolve_attachment_upload_params(FakeParams())
+        assert filename == "document.pdf"
+        assert data == base64.b64encode(b"%PDF-test").decode()
+        assert mime_type == "application/pdf"
+
+    def test_download_kb_attachment_saves_to_disk(self, mock_zammad_api: Mock, tmp_path: Any) -> None:
+        """download_kb_attachment writes content to disk when save_path is provided."""
+        mock_instance = mock_zammad_api.return_value
+        mock_instance.url = KB_BASE_URL
+        raw_content = b"binary content"
+        dl_response = Mock()
+        dl_response.status_code = 200
+        dl_response.content = raw_content
+        dl_response.headers = {"content-type": "application/octet-stream"}
+        dl_response.raise_for_status = Mock()
+        mock_instance.session.get.return_value = dl_response
+        client = _make_client(mock_zammad_api)
+        content, content_type = client.download_kb_attachment(999)
+        save_file = tmp_path / "output.bin"
+        save_file.write_bytes(content)
+        assert save_file.read_bytes() == raw_content
+        assert content_type == "application/octet-stream"
+
     # --- delete_kb_answer_attachment ---
 
     def test_delete_kb_answer_attachment(self, mock_zammad_api: Mock) -> None:
@@ -519,7 +583,7 @@ class TestKBModels:
 
     def test_kb_answer_attachment_add_invalid_base64(self) -> None:
         """KBAnswerAttachmentAddParams rejects invalid base64."""
-        with pytest.raises(Exception, match="Invalid base64"):
+        with pytest.raises(ValidationError, match="Invalid base64"):
             KBAnswerAttachmentAddParams(
                 kb_id=1, answer_id=1, filename="f.txt", data="not!base64!!!", mime_type="text/plain"
             )
@@ -541,6 +605,15 @@ class TestKBModels:
         assert "/" not in params.filename
         assert params.filename == "passwd"
 
+    def test_kb_answer_attachment_add_sanitizes_windows_traversal(self) -> None:
+        """KBAnswerAttachmentAddParams strips Windows-style backslash traversal."""
+        b64 = base64.b64encode(b"x").decode()
+        params = KBAnswerAttachmentAddParams(
+            kb_id=1, answer_id=1, filename="..\\..\\etc\\passwd", data=b64, mime_type="text/plain"
+        )
+        assert "\\" not in params.filename
+        assert params.filename == "passwd"
+
     def test_create_kb_category_escapes_html(self) -> None:
         """CreateKBCategoryParams escapes HTML in title."""
         params = CreateKBCategoryParams(
@@ -558,12 +631,12 @@ class TestKBModels:
 
     def test_kb_category_params_rejects_extra_fields(self) -> None:
         """GetKBCategoryParams rejects extra fields (StrictBaseModel)."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             GetKBCategoryParams(kb_id=1, category_id=5, unknown_field="x")  # type: ignore[call-arg]
 
     def test_kb_answer_params_rejects_zero_id(self) -> None:
         """GetKBAnswerParams rejects answer_id=0."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             GetKBAnswerParams(kb_id=1, answer_id=0)
 
     def test_knowledge_base_model_defaults(self) -> None:
@@ -736,7 +809,7 @@ class TestKBServerTools:
         mock_client.get_knowledge_base.side_effect = requests.HTTPError("404 Not Found")
         fn = self._get_tool(server, "zammad_get_knowledge_base")
         result = fn(params=GetKnowledgeBaseParams(kb_id=999))
-        assert "not found" in result.lower() or "Error" in result
+        assert "404 Not Found" in result
 
     def test_get_kb_category_markdown(
         self, server_and_client: tuple[ZammadMCPServer, Mock]

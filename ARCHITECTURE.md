@@ -49,7 +49,7 @@ The main server implementation using FastMCP framework.
 
 **Key Features:**
 
-- 33 tools for comprehensive Zammad operations (including full Knowledge Base CRUD)
+- 39 tools for comprehensive Zammad operations (including full Knowledge Base CRUD)
 - 7 resources with URI-based access pattern
 - 3 pre-configured prompts for common scenarios
 - Lifespan management for proper initialization
@@ -104,8 +104,10 @@ publish_kb_answer(kb_id, answer_id)
 internalize_kb_answer(kb_id, answer_id)
 archive_kb_answer(kb_id, answer_id)
 unarchive_kb_answer(kb_id, answer_id)
+search_kb_answers(kb_id, query, category_id)
 add_kb_answer_attachment(kb_id, answer_id, filename, data, mime_type)
 delete_kb_answer_attachment(kb_id, answer_id, attachment_id)
+download_kb_attachment(attachment_id)
 ```
 
 > **Note:** The `zammad_py` library has no Knowledge Base support. All KB methods use

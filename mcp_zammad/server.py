@@ -965,10 +965,41 @@ def _build_kb_attachment_result(
     return json.dumps(base, indent=2)
 
 
+_KB_UPLOAD_ROOT: str | None = os.environ.get("KB_UPLOAD_ROOT")
+_KB_DOWNLOAD_ROOT: str | None = os.environ.get("KB_DOWNLOAD_ROOT")
+_KB_MAX_INLINE_BYTES: int = int(os.environ.get("KB_MAX_INLINE_BYTES", str(512 * 1024)))
+
+
+def _validate_path_within_root(path: str, root: str | None, label: str) -> str:
+    """Resolve path and verify it lies within root (if configured).
+
+    Args:
+        path: User-supplied path string
+        root: Configured root directory (None = unrestricted)
+        label: Human-readable label for error messages
+
+    Returns:
+        Resolved absolute path
+
+    Raises:
+        ValueError: If root is configured and path escapes it, or path is not a file/accessible
+    """
+    resolved = os.path.realpath(os.path.abspath(path))
+    if root is not None:
+        root_resolved = os.path.realpath(root)
+        if not resolved.startswith(root_resolved + os.sep) and resolved != root_resolved:
+            raise ValueError(
+                f"{label} path '{resolved}' is outside the configured root '{root_resolved}'. "
+                f"Set {label.upper().replace(' ', '_')}_ROOT env var to allow a different directory."
+            )
+    return resolved
+
+
 def _resolve_attachment_upload_params(params: Any) -> tuple[str, str, str]:
     """Resolve filename, base64 data, and mime_type for a KB attachment upload.
 
     Reads from disk when file_path is provided; otherwise uses pre-supplied data.
+    When KB_UPLOAD_ROOT env var is set, file_path must reside within that directory.
 
     Args:
         params: KBAnswerAttachmentAddParams instance
@@ -977,7 +1008,11 @@ def _resolve_attachment_upload_params(params: Any) -> tuple[str, str, str]:
         Tuple of (filename, data_b64, mime_type)
     """
     if params.file_path:
-        file_path = os.path.abspath(params.file_path)
+        file_path = _validate_path_within_root(params.file_path, _KB_UPLOAD_ROOT, "upload")
+        if not os.path.isfile(file_path):
+            raise ValueError(f"Upload path is not a regular file: '{file_path}'")
+        if not os.access(file_path, os.R_OK):
+            raise ValueError(f"Upload path is not readable: '{file_path}'")
         with open(file_path, "rb") as f:
             raw = f.read()
         data = base64.b64encode(raw).decode("ascii")
@@ -3148,10 +3183,20 @@ class ZammadMCPServer:
                 content, content_type = client.download_kb_attachment(params.attachment_id)
                 save_path: str | None = None
                 if params.save_path:
-                    save_path = os.path.abspath(params.save_path)
+                    save_path = _validate_path_within_root(
+                        params.save_path, _KB_DOWNLOAD_ROOT, "download"
+                    )
                     os.makedirs(os.path.dirname(save_path), exist_ok=True)
                     with open(save_path, "wb") as f:
                         f.write(content)
+                else:
+                    if len(content) > _KB_MAX_INLINE_BYTES:
+                        return json.dumps({
+                            "error": (
+                                f"Attachment is {len(content)} bytes which exceeds the inline limit "
+                                f"of {_KB_MAX_INLINE_BYTES} bytes. Provide save_path to write to disk."
+                            )
+                        })
                 result = _build_kb_attachment_result(content, content_type, params, save_path)
                 return truncate_response(result)
             except Exception as e:
