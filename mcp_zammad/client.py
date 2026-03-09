@@ -802,6 +802,28 @@ class ZammadClient:
         response = self.api.session.post(self._kb_url(kb_id, "answers", answer_id, "unarchive"))
         return self._kb_raise_or_return(response)
 
+    def download_kb_attachment(self, attachment_id: int) -> tuple[bytes, str]:
+        """Download a KB answer attachment by its ID.
+
+        Uses the generic /api/v1/attachments/{id} endpoint (not KB-specific).
+
+        Args:
+            attachment_id: Attachment ID (from answer's attachments list)
+
+        Returns:
+            Tuple of (raw bytes, content-type string)
+        """
+        url = f"{self.api.url}attachments/{attachment_id}"
+        response = self.api.session.get(url)
+        if not response.ok:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise Exception(f"HTTP {response.status_code} downloading attachment {attachment_id}: {body}")
+        content_type = response.headers.get("Content-Type", "application/octet-stream")
+        return response.content, content_type
+
     def add_kb_answer_attachment(
         self, kb_id: int, answer_id: int, filename: str, data: str, mime_type: str
     ) -> dict[str, Any]:

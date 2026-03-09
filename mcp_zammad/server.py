@@ -2948,6 +2948,40 @@ class ZammadMCPServer:
                     context=f"deleting attachment {params.attachment_id} from KB answer {params.answer_id} in KB {params.kb_id}",
                 )
 
+        @self.mcp.tool(annotations=_read_only_annotations("Download KB Answer Attachment"))
+        def zammad_download_kb_attachment(attachment_id: int) -> str:
+            """Download a knowledge base answer attachment by its ID.
+
+            Args:
+                attachment_id (int): Attachment ID from the answer's attachments list.
+
+            Returns:
+                str: JSON with base64-encoded content and metadata, or error message.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+                Attachment IDs are listed in zammad_get_kb_answer results.
+                This uses the generic /api/v1/attachments/{id} endpoint, NOT the
+                ticket attachment endpoint. Do NOT use zammad_download_attachment
+                for KB attachments - use this tool instead.
+            """
+            client = self.get_client()
+            try:
+                content, content_type = client.download_kb_attachment(attachment_id)
+                encoded = base64.b64encode(content).decode("ascii")
+                result = json.dumps(
+                    {
+                        "attachment_id": attachment_id,
+                        "content_type": content_type,
+                        "size": len(content),
+                        "data": encoded,
+                    },
+                    indent=2,
+                )
+                return truncate_response(result)
+            except Exception as e:
+                return _handle_api_error(e, context=f"downloading KB attachment {attachment_id}")
+
     def _setup_resources(self) -> None:
         """Register all resources with the MCP server."""
         self._setup_ticket_resource()
