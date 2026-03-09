@@ -447,6 +447,17 @@ class ZammadClient:
             return data
         return dict(data)
 
+    def _probe_kb_ids(self) -> list[dict[str, Any]]:
+        """Probe KB IDs 1-10 individually as a fallback for unreliable list endpoints."""
+        results = []
+        for kb_id in range(1, 11):
+            r = self.api.session.get(self._kb_url(kb_id))
+            if r.status_code == 404:
+                break
+            if r.status_code == 200 and r.content:
+                results.append(dict(r.json()))
+        return results
+
     def list_knowledge_bases(self) -> list[dict[str, Any]]:
         """List all knowledge bases.
 
@@ -463,16 +474,7 @@ class ZammadClient:
                 return list(data)
             if isinstance(data, dict) and data:
                 return [data]
-
-        # Fallback: probe individual IDs (Zammad typically starts at 1)
-        results = []
-        for kb_id in range(1, 11):
-            r = self.api.session.get(self._kb_url(kb_id))
-            if r.status_code == 404:
-                break
-            if r.status_code == 200 and r.content:
-                results.append(dict(r.json()))
-        return results
+        return self._probe_kb_ids()
 
     def get_knowledge_base(self, kb_id: int) -> dict[str, Any]:
         """Get a single knowledge base by ID.
@@ -638,6 +640,23 @@ class ZammadClient:
                 logger.warning("Failed to fetch KB answer %d in category %d", aid, category_id)
         return answers
 
+    def _answers_matching_query(
+        self, kb_id: int, category_ids: list[int], query_lower: str
+    ) -> list[dict[str, Any]]:
+        """Return answers from the given categories whose title or body matches query_lower."""
+        results = []
+        for cid in category_ids:
+            try:
+                for answer in self.list_kb_answers(kb_id, cid):
+                    title = answer.get("_title") or ""
+                    body = answer.get("_body") or ""
+                    if query_lower in title.lower() or query_lower in body.lower():
+                        answer["_category_id"] = cid
+                        results.append(answer)
+            except Exception:
+                logger.warning("Failed to search KB answers in category %d", cid)
+        return results
+
     def search_kb_answers(
         self, kb_id: int, query: str, category_id: int | None = None
     ) -> list[dict[str, Any]]:
@@ -655,24 +674,22 @@ class ZammadClient:
             List of matching answer dicts with '_title' injected.
         """
         kb = self.get_knowledge_base(kb_id)
-        if category_id is not None:
-            category_ids = [category_id]
-        else:
-            category_ids = kb.get("category_ids") or []
-        query_lower = query.lower()
-        results = []
-        for cid in category_ids:
-            try:
-                answers = self.list_kb_answers(kb_id, cid)
-                for answer in answers:
-                    title = answer.get("_title") or ""
-                    body = answer.get("_body") or ""
-                    if query_lower in title.lower() or query_lower in body.lower():
-                        answer["_category_id"] = cid
-                        results.append(answer)
-            except Exception:
-                logger.warning("Failed to search KB answers in category %d", cid)
-        return results
+        category_ids = [category_id] if category_id is not None else (kb.get("category_ids") or [])
+        return self._answers_matching_query(kb_id, category_ids, query.lower())
+
+    def _first_translation_field(
+        self,
+        translations: dict[str, Any],
+        translation_ids: list[int],
+        field: str,
+    ) -> str:
+        """Return the first non-empty string field from translations, by ID then fallback."""
+        for tid in translation_ids:
+            value = (translations.get(str(tid)) or {}).get(field)
+            if value:
+                return str(value)
+        first = next(iter(translations.values()), {})
+        return str(first[field]) if first.get(field) else ""
 
     def _extract_kb_answer_title(self, raw_payload: dict[str, Any], answer: dict[str, Any]) -> str:
         """Extract the first available title from the translation assets of a KB answer payload.
@@ -686,15 +703,35 @@ class ZammadClient:
         """
         assets = raw_payload.get("assets") or {}
         translations = assets.get("KnowledgeBaseAnswerTranslation") or {}
-        if translations:
-            translation_ids: list[int] = answer.get("translation_ids") or []
-            for tid in translation_ids:
-                t = translations.get(str(tid))
-                if t and t.get("title"):
-                    return str(t["title"])
-            first = next(iter(translations.values()), {})
-            if first.get("title"):
-                return str(first["title"])
+        if not translations:
+            return ""
+        translation_ids: list[int] = answer.get("translation_ids") or []
+        return self._first_translation_field(translations, translation_ids, "title")
+
+    def _strip_html(self, html: str) -> str:
+        """Strip HTML tags and unescape entities from a string."""
+        return _html.unescape(_re.sub(r"<[^>]+>", " ", html))
+
+    def _body_from_content_assets(
+        self, contents: dict[str, Any], translation_ids: list[int]
+    ) -> str:
+        """Extract plain-text body from KnowledgeBaseAnswerTranslationContent assets."""
+        for tid in translation_ids:
+            body = (contents.get(str(tid)) or {}).get("body") or ""
+            if body:
+                return self._strip_html(body)
+        first_body = next(iter(contents.values()), {}).get("body") or ""
+        return self._strip_html(first_body) if first_body else ""
+
+    def _body_from_translation_assets(
+        self, translations: dict[str, Any], translation_ids: list[int]
+    ) -> str:
+        """Extract plain-text body from KnowledgeBaseAnswerTranslation content_attributes (legacy)."""
+        for tid in translation_ids:
+            t = translations.get(str(tid)) or {}
+            body = (t.get("content_attributes") or {}).get("body") or ""
+            if body:
+                return self._strip_html(body)
         return ""
 
     def _extract_kb_answer_body(self, raw_payload: dict[str, Any], answer: dict[str, Any]) -> str:
@@ -708,30 +745,13 @@ class ZammadClient:
             Body string (HTML stripped), or empty string if not found.
         """
         assets = raw_payload.get("assets") or {}
-        # Primary: KnowledgeBaseAnswerTranslationContent (present when include_contents was used)
+        translation_ids: list[int] = answer.get("translation_ids") or []
         contents = assets.get("KnowledgeBaseAnswerTranslationContent") or {}
         if contents:
-            translation_ids: list[int] = answer.get("translation_ids") or []
-            for tid in translation_ids:
-                c = contents.get(str(tid))
-                if c and c.get("body"):
-                    plain = _re.sub(r"<[^>]+>", " ", c["body"])
-                    return _html.unescape(plain)
-            first = next(iter(contents.values()), {})
-            if first.get("body"):
-                plain = _re.sub(r"<[^>]+>", " ", first["body"])
-                return _html.unescape(plain)
-        # Fallback: content_attributes.body in translation (older payload style)
+            return self._body_from_content_assets(contents, translation_ids)
         translations = assets.get("KnowledgeBaseAnswerTranslation") or {}
         if translations:
-            translation_ids = answer.get("translation_ids") or []
-            for tid in translation_ids:
-                t = translations.get(str(tid))
-                if t:
-                    body = (t.get("content_attributes") or {}).get("body") or ""
-                    if body:
-                        plain = _re.sub(r"<[^>]+>", " ", body)
-                        return _html.unescape(plain)
+            return self._body_from_translation_assets(translations, translation_ids)
         return ""
 
     def _extract_kb_answer_from_payload(self, payload: dict[str, Any], answer_id: int) -> dict[str, Any] | None:
@@ -811,20 +831,20 @@ class ZammadClient:
         Returns:
             Tuple of (resolved_category_id, resolved_translation_id)
         """
-        needs_fetch = category_id is None or (
-            (title is not None or body is not None) and translation_id is None
-        )
+        updating_text = title is not None or body is not None
+        needs_fetch = category_id is None or (updating_text and translation_id is None)
         if not needs_fetch:
             return category_id, translation_id
-        answer_data = self.get_kb_answer(kb_id, answer_id)
-        answer = self._extract_kb_answer_from_payload(answer_data, answer_id)
-        if answer:
-            if translation_id is None and (title is not None or body is not None):
-                ids = answer.get("translation_ids") or []
-                if ids:
-                    translation_id = ids[0]
-            if category_id is None:
-                category_id = answer.get("category_id")
+        answer = self._extract_kb_answer_from_payload(
+            self.get_kb_answer(kb_id, answer_id), answer_id
+        )
+        if answer is None:
+            return category_id, translation_id
+        if translation_id is None and updating_text:
+            ids = answer.get("translation_ids") or []
+            translation_id = ids[0] if ids else None
+        if category_id is None:
+            category_id = answer.get("category_id")
         return category_id, translation_id
 
     def update_kb_answer(
