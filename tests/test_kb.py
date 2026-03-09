@@ -104,21 +104,22 @@ class TestKBClientMethods:
         mock_zammad_api.return_value.url = KB_BASE_URL
         client = _make_client(mock_zammad_api)
         response = Mock()
+        response.ok = True
         response.status_code = 204
         response.content = b""
-        response.raise_for_status = Mock()
         result = client._kb_raise_or_return(response)
         assert result == {}
 
     def test_kb_raise_or_return_raises_on_error(self, mock_zammad_api: Mock) -> None:
-        """raise_for_status is called and propagates errors."""
+        """Non-ok responses raise Exception with status code and Zammad body."""
         mock_zammad_api.return_value.url = KB_BASE_URL
         client = _make_client(mock_zammad_api)
         response = Mock()
+        response.ok = False
         response.status_code = 404
-        response.content = b"not found"
-        response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
-        with pytest.raises(requests.HTTPError):
+        response.url = "https://example.com/api/v1/knowledge_bases/1/answers/99"
+        response.json.return_value = {"error": "Not Found"}
+        with pytest.raises(Exception, match="HTTP 404"):
             client._kb_raise_or_return(response)
 
     # --- list_knowledge_bases ---

@@ -904,13 +904,13 @@ def _handle_api_error(e: Exception, context: str = "operation") -> str:
 
     # Check for specific error patterns
     if "not found" in error_msg or "404" in error_msg:
-        return f"Error: Resource not found during {context}. Please verify the ID is correct and you have access."
+        return f"Error: Resource not found during {context}. Details: {e}"
 
     if "forbidden" in error_msg or "403" in error_msg:
-        return f"Error: Permission denied for {context}. Your credentials lack access to this resource."
+        return f"Error: Permission denied for {context}. Details: {e}"
 
     if "unauthorized" in error_msg or "401" in error_msg:
-        return f"Error: Authentication failed for {context}. Check ZAMMAD_HTTP_TOKEN is valid."
+        return f"Error: Authentication failed for {context}. Check ZAMMAD_HTTP_TOKEN is valid. Details: {e}"
 
     if "timeout" in error_msg:
         return f"Error: Request timeout during {context}. The server may be slow - try again or reduce the scope."

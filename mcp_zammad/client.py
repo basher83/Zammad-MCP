@@ -428,9 +428,16 @@ class ZammadClient:
             Parsed JSON (dict or list)
 
         Raises:
-            Exception: if HTTP status is 4xx/5xx
+            Exception: if HTTP status is 4xx/5xx, with Zammad's error body included
         """
-        response.raise_for_status()
+        if not response.ok:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise Exception(
+                f"HTTP {response.status_code} from Zammad: {body} (URL: {response.url})"
+            )
         if response.status_code == 204 or not response.content:
             return {}
         data = response.json()
