@@ -4,6 +4,7 @@ import base64
 import html
 import json
 import logging
+import mimetypes
 import os
 import time
 from collections.abc import AsyncIterator
@@ -2890,8 +2891,11 @@ class ZammadMCPServer:
                 params (KBAnswerAttachmentAddParams): Parameters containing:
                     - kb_id (int): Knowledge base ID (required)
                     - answer_id (int): Answer ID (required)
-                    - filename (str): Attachment filename (required)
-                    - data (str): Base64-encoded file content (required)
+                    - file_path (str): Absolute path to file on disk (preferred).
+                      Reads the file directly - no base64 required in the call.
+                      filename and mime_type are inferred from the path if not set.
+                    - filename (str): Filename (required when using data, optional with file_path)
+                    - data (str): Base64-encoded file content (use file_path instead)
                     - mime_type (str): MIME type (default: application/octet-stream)
 
             Returns:
@@ -2899,17 +2903,32 @@ class ZammadMCPServer:
 
             Note:
                 Requires knowledge_base.editor permission.
-                Encode file content as base64 before passing in 'data'.
+                Prefer file_path over data to avoid bloating context with base64.
                 Attachment IDs are returned in the payload for later deletion.
             """
             client = self.get_client()
             try:
+                if params.file_path:
+                    file_path = os.path.abspath(params.file_path)
+                    with open(file_path, "rb") as f:
+                        raw = f.read()
+                    data = base64.b64encode(raw).decode("ascii")
+                    filename = params.filename or os.path.basename(file_path)
+                    if params.mime_type == "application/octet-stream":
+                        guessed, _ = mimetypes.guess_type(file_path)
+                        mime_type = guessed or "application/octet-stream"
+                    else:
+                        mime_type = params.mime_type
+                else:
+                    data = params.data
+                    filename = params.filename
+                    mime_type = params.mime_type
                 payload = client.add_kb_answer_attachment(
                     kb_id=params.kb_id,
                     answer_id=params.answer_id,
-                    filename=params.filename,
-                    data=params.data,
-                    mime_type=params.mime_type,
+                    filename=filename,
+                    data=data,
+                    mime_type=mime_type,
                 )
                 return truncate_response(json.dumps(payload, indent=2, default=str))
             except Exception as e:
@@ -2959,31 +2978,53 @@ class ZammadMCPServer:
                     - kb_id (int): Knowledge base ID (required)
                     - answer_id (int): Answer ID (required)
                     - attachment_id (int): Attachment ID to download (required)
+                    - save_path (str | None): Absolute path on disk to save the file.
+                      When provided, the file is written to disk and only metadata
+                      is returned (no base64 in context). Recommended for large files.
+                      When omitted, returns base64-encoded content in the response.
 
             Returns:
-                str: JSON with base64-encoded content, content_type, and size.
+                str: JSON with metadata. If save_path given: {saved_to, size,
+                     content_type}. Otherwise: {data (base64), size, content_type}.
 
             Note:
                 Requires knowledge_base.reader or knowledge_base.editor permission.
                 Attachment IDs are listed in zammad_get_kb_answer results.
                 Do NOT use zammad_download_attachment for KB attachments - that
                 tool is for ticket attachments only.
+                Use save_path to avoid bloating the context with binary data.
             """
             client = self.get_client()
             try:
                 content, content_type = client.download_kb_attachment(params.attachment_id)
-                encoded = base64.b64encode(content).decode("ascii")
-                result = json.dumps(
-                    {
-                        "attachment_id": params.attachment_id,
-                        "answer_id": params.answer_id,
-                        "kb_id": params.kb_id,
-                        "content_type": content_type,
-                        "size": len(content),
-                        "data": encoded,
-                    },
-                    indent=2,
-                )
+                if params.save_path:
+                    save_path = os.path.abspath(params.save_path)
+                    with open(save_path, "wb") as f:
+                        f.write(content)
+                    result = json.dumps(
+                        {
+                            "saved_to": save_path,
+                            "attachment_id": params.attachment_id,
+                            "answer_id": params.answer_id,
+                            "kb_id": params.kb_id,
+                            "content_type": content_type,
+                            "size": len(content),
+                        },
+                        indent=2,
+                    )
+                else:
+                    encoded = base64.b64encode(content).decode("ascii")
+                    result = json.dumps(
+                        {
+                            "attachment_id": params.attachment_id,
+                            "answer_id": params.answer_id,
+                            "kb_id": params.kb_id,
+                            "content_type": content_type,
+                            "size": len(content),
+                            "data": encoded,
+                        },
+                        indent=2,
+                    )
                 return truncate_response(result)
             except Exception as e:
                 return _handle_api_error(

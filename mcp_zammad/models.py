@@ -904,24 +904,37 @@ class KBAnswerPublishParams(StrictBaseModel):
 
 
 class KBAnswerAttachmentAddParams(StrictBaseModel):
-    """Parameters for adding an attachment to a KB answer."""
+    """Parameters for adding an attachment to a KB answer.
+
+    Provide either file_path (preferred, avoids base64 in context) or data+filename.
+    """
 
     kb_id: int = Field(gt=0, description="Knowledge base ID")
     answer_id: int = Field(gt=0, description="Answer ID")
-    filename: str = Field(min_length=1, max_length=255, description="Attachment filename")
-    data: str = Field(description="Base64-encoded file content")
+    file_path: str | None = Field(
+        default=None,
+        description="Absolute path to the file on disk (preferred over base64 data)",
+    )
+    filename: str | None = Field(
+        default=None, min_length=1, max_length=255, description="Attachment filename (required when using data)"
+    )
+    data: str | None = Field(default=None, description="Base64-encoded file content (use file_path instead when possible)")
     mime_type: str = Field(default="application/octet-stream", max_length=100, description="MIME type")
 
     @field_validator("filename")
     @classmethod
-    def sanitize_filename(cls, v: str) -> str:
+    def sanitize_filename(cls, v: str | None) -> str | None:
         """Sanitize filename to prevent path traversal."""
+        if v is None:
+            return v
         return os.path.basename(v).replace("\x00", "")
 
     @field_validator("data")
     @classmethod
-    def validate_base64(cls, v: str) -> str:
+    def validate_base64(cls, v: str | None) -> str | None:
         """Validate base64 encoding."""
+        if v is None:
+            return v
         try:
             base64.b64decode(v, validate=True)
         except Exception as e:
@@ -929,10 +942,23 @@ class KBAnswerAttachmentAddParams(StrictBaseModel):
         else:
             return v
 
+    def model_post_init(self, __context: Any) -> None:
+        """Validate that exactly one of file_path or data is provided."""
+        if self.file_path is None and self.data is None:
+            raise ValueError("Either file_path or data must be provided")
+        if self.file_path is not None and self.data is not None:
+            raise ValueError("Provide either file_path or data, not both")
+        if self.data is not None and self.filename is None:
+            raise ValueError("filename is required when providing data")
+
 
 class KBAnswerAttachmentDeleteParams(StrictBaseModel):
-    """Parameters for deleting an attachment from a KB answer."""
+    """Parameters for deleting or downloading an attachment from a KB answer."""
 
     kb_id: int = Field(gt=0, description="Knowledge base ID")
     answer_id: int = Field(gt=0, description="Answer ID")
-    attachment_id: int = Field(gt=0, description="Attachment ID to delete")
+    attachment_id: int = Field(gt=0, description="Attachment ID")
+    save_path: str | None = Field(
+        default=None,
+        description="Absolute path on disk to save the downloaded file (used by download tool; omit to get base64)",
+    )
