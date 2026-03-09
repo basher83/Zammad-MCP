@@ -3105,37 +3105,15 @@ class ZammadMCPServer:
         ) -> str:
             """Download an attachment from a knowledge base answer.
 
-            Two modes depending on whether save_path is provided:
+            Two modes:
+            - save_path provided: writes file to disk, returns metadata only (no base64 in context).
+              Recommended for large/binary files. Example: save_path=/Users/you/Downloads/file.pdf
+            - save_path omitted: returns base64-encoded content in JSON response.
+              Use for small files (<50KB) Claude needs to read directly.
 
-            Mode 1 - Save to disk (recommended for large/binary files):
-                Provide save_path as an absolute path on the host machine.
-                The file is written to disk; only metadata is returned.
-                No binary data enters the context window.
-                Example: save_path=/Users/you/Downloads/figure.png
-
-            Mode 2 - Return base64 in response (for small files or direct processing):
-                Omit save_path. Returns base64-encoded content in the JSON response.
-                Suitable when Claude needs to read/process the content directly
-                (e.g. text files, small images, generated content).
-                Warning: large files (>50KB) will bloat the context window.
-
-            Args:
-                params (KBAnswerAttachmentDownloadParams): Parameters containing:
-                    - kb_id (int): Knowledge base ID (required)
-                    - answer_id (int): Answer ID (required)
-                    - attachment_id (int): Attachment ID to download (required)
-                    - save_path (str | None): Absolute local path to save the file.
-                      See mode descriptions above.
-
-            Returns:
-                str: JSON. With save_path: {saved_to, attachment_id, answer_id,
-                     kb_id, content_type, size}. Without: adds {data} (base64).
-
-            Note:
-                Requires knowledge_base.reader or knowledge_base.editor permission.
-                Attachment IDs are listed in zammad_get_kb_answer results.
-                Do NOT use zammad_download_attachment here - that tool is for
-                ticket attachments only.
+            Note: use attachment IDs from zammad_get_kb_answer.
+            Do NOT use zammad_download_attachment (ticket attachments only).
+            Requires knowledge_base.reader or knowledge_base.editor permission.
             """
             client = self.get_client()
             try:
