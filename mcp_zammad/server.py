@@ -2999,6 +2999,7 @@ class ZammadMCPServer:
                 content, content_type = client.download_kb_attachment(params.attachment_id)
                 if params.save_path:
                     save_path = os.path.abspath(params.save_path)
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
                     with open(save_path, "wb") as f:
                         f.write(content)
                     result = json.dumps(
