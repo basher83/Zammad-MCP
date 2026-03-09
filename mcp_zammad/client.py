@@ -814,6 +814,21 @@ class ZammadClient:
         response = self.api.session.post(self._kb_url(kb_id, "answers"), json=payload)
         return self._kb_raise_or_return(response)
 
+    def _fill_ids_from_answer(
+        self,
+        answer: dict[str, Any],
+        category_id: int | None,
+        translation_id: int | None,
+        updating_text: bool,
+    ) -> tuple[int | None, int | None]:
+        """Fill missing category_id / translation_id from a fetched answer dict."""
+        if translation_id is None and updating_text:
+            ids = answer.get("translation_ids") or []
+            translation_id = ids[0] if ids else None
+        if category_id is None:
+            category_id = answer.get("category_id")
+        return category_id, translation_id
+
     def _resolve_kb_answer_update_ids(
         self,
         kb_id: int,
@@ -840,12 +855,7 @@ class ZammadClient:
         )
         if answer is None:
             return category_id, translation_id
-        if translation_id is None and updating_text:
-            ids = answer.get("translation_ids") or []
-            translation_id = ids[0] if ids else None
-        if category_id is None:
-            category_id = answer.get("category_id")
-        return category_id, translation_id
+        return self._fill_ids_from_answer(answer, category_id, translation_id, updating_text)
 
     def update_kb_answer(
         self,

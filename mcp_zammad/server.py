@@ -836,6 +836,24 @@ def _format_kb_category_markdown(category: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _format_kb_answer_optional_sections(answer: dict[str, Any], body: str) -> list[str]:
+    """Build optional markdown sections (content, attachments, tags) for a KB answer."""
+    lines: list[str] = []
+    if body:
+        lines += ["", "## Content", "", body.strip()]
+    attachments = answer.get("attachments") or []
+    if attachments:
+        lines += ["", "## Attachments", ""]
+        lines += [
+            f"- **{att.get('filename', 'N/A')}** (ID: {att.get('id', 'N/A')}, size: {att.get('size', '?')} bytes)"
+            for att in attachments
+        ]
+    tags = answer.get("tags") or []
+    if tags:
+        lines += ["", f"**Tags**: {', '.join(tags)}"]
+    return lines
+
+
 def _format_kb_answer_markdown(answer: dict[str, Any], title: str = "", body: str = "") -> str:
     """Format a KnowledgeBaseAnswer dict as markdown.
 
@@ -849,32 +867,18 @@ def _format_kb_answer_markdown(answer: dict[str, Any], title: str = "", body: st
     """
     status = _kb_answer_status(answer)
     heading = title or f"KB Answer (ID: {answer.get('id', 'N/A')})"
-    lines = [f"# {heading}", ""]
-    lines.append(f"**ID**: {answer.get('id', 'N/A')}")
-    lines.append(f"**Category ID**: {answer.get('category_id', 'N/A')}")
-    lines.append(f"**Status**: {status}")
-    lines.append(f"**Promoted**: {answer.get('promoted', False)}")
-    lines.append(f"**Position**: {answer.get('position', 0)}")
     translation_ids = answer.get("translation_ids") or []
-    lines.append(f"**Translation IDs**: {translation_ids}")
-    if body:
-        lines.append("")
-        lines.append("## Content")
-        lines.append("")
-        lines.append(body.strip())
-    attachments = answer.get("attachments") or []
-    if attachments:
-        lines.append("")
-        lines.append("## Attachments")
-        lines.append("")
-        for att in attachments:
-            lines.append(f"- **{att.get('filename', 'N/A')}** (ID: {att.get('id', 'N/A')}, size: {att.get('size', '?')} bytes)")
-    tags = answer.get("tags") or []
-    if tags:
-        lines.append("")
-        lines.append(f"**Tags**: {', '.join(tags)}")
-    lines.append("")
-    lines.append(f"**Updated**: {answer.get('updated_at', 'N/A')}")
+    lines = [
+        f"# {heading}", "",
+        f"**ID**: {answer.get('id', 'N/A')}",
+        f"**Category ID**: {answer.get('category_id', 'N/A')}",
+        f"**Status**: {status}",
+        f"**Promoted**: {answer.get('promoted', False)}",
+        f"**Position**: {answer.get('position', 0)}",
+        f"**Translation IDs**: {translation_ids}",
+    ]
+    lines += _format_kb_answer_optional_sections(answer, body)
+    lines += ["", f"**Updated**: {answer.get('updated_at', 'N/A')}"]
     return "\n".join(lines)
 
 
@@ -2528,8 +2532,14 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
-    def _setup_kb_tools(self) -> None:  # noqa: PLR0915
+    def _setup_kb_tools(self) -> None:
         """Register Knowledge Base tools."""
+        self._setup_kb_category_tools()
+        self._setup_kb_answer_tools()
+        self._setup_kb_attachment_tools()
+
+    def _setup_kb_category_tools(self) -> None:  # noqa: PLR0915
+        """Register KB knowledge-base and category tools."""
 
         @self.mcp.tool(annotations=_read_only_annotations("List Knowledge Bases"))
         def zammad_list_knowledge_bases(params: ListKnowledgeBasesParams) -> str:
@@ -2716,6 +2726,9 @@ class ZammadMCPServer:
                 return _handle_api_error(
                     e, context=f"deleting KB category {params.category_id} in KB {params.kb_id}"
                 )
+
+    def _setup_kb_answer_tools(self) -> None:  # noqa: PLR0915
+        """Register KB answer CRUD and status tools."""
 
         @self.mcp.tool(annotations=_read_only_annotations("List KB Answers"))
         def zammad_list_kb_answers(params: ListKBAnswersParams) -> str:
@@ -2928,6 +2941,9 @@ class ZammadMCPServer:
                     e, context=f"deleting KB answer {params.answer_id} in KB {params.kb_id}"
                 )
 
+    def _setup_kb_attachment_tools(self) -> None:
+        """Register KB answer attachment tools."""
+
         @self.mcp.tool(annotations=_idempotent_write_annotations("Publish KB Answer"))
         def zammad_publish_kb_answer(params: KBAnswerPublishParams) -> str:
             """Publish a knowledge base answer publicly.
@@ -3029,7 +3045,7 @@ class ZammadMCPServer:
                     e, context=f"unarchiving KB answer {params.answer_id} in KB {params.kb_id}"
                 )
 
-        @self.mcp.tool(annotations=_write_annotations("Add KB Answer Attachment"))
+        @self.mcp.tool(annotations=_write_annotations("Add KB Answer Attachment"))  # noqa: PLR0915
         def zammad_add_kb_answer_attachment(params: KBAnswerAttachmentAddParams) -> str:
             """Add an attachment to a knowledge base answer.
 
