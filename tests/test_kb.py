@@ -259,7 +259,42 @@ class TestKBClientMethods:
     # --- get_kb_answer ---
 
     def test_get_kb_answer(self, mock_zammad_api: Mock) -> None:
-        """get_kb_answer calls correct URL."""
+        """get_kb_answer makes two GET calls: first plain, then with include_contents."""
+        mock_instance = mock_zammad_api.return_value
+        mock_instance.url = KB_BASE_URL
+        answer_payload = {
+            "id": 100,
+            "assets": {
+                "KnowledgeBaseAnswer": {
+                    "100": {"id": 100, "category_id": 10, "translation_ids": [55]}
+                }
+            },
+        }
+        content_payload = {
+            "id": 100,
+            "assets": {
+                "KnowledgeBaseAnswer": {
+                    "100": {"id": 100, "category_id": 10, "translation_ids": [55]}
+                },
+                "KnowledgeBaseAnswerTranslationContent": {
+                    "55": {"id": 55, "body": "<p>Answer body</p>"}
+                },
+            },
+        }
+        mock_instance.session.get.side_effect = [
+            _make_mock_response(answer_payload),
+            _make_mock_response(content_payload),
+        ]
+        client = _make_client(mock_zammad_api)
+        result = client.get_kb_answer(1, 100)
+        assert result["assets"]["KnowledgeBaseAnswerTranslationContent"]["55"]["body"] == "<p>Answer body</p>"
+        assert mock_instance.session.get.call_count == 2
+        # Second call includes include_contents param
+        second_call = mock_instance.session.get.call_args_list[1]
+        assert second_call.kwargs["params"] == {"include_contents": 55}
+
+    def test_get_kb_answer_no_translation_ids(self, mock_zammad_api: Mock) -> None:
+        """get_kb_answer falls back to single call when no translation_ids."""
         mock_instance = mock_zammad_api.return_value
         mock_instance.url = KB_BASE_URL
         answer_data = {"id": 100, "category_id": 10}
@@ -313,9 +348,9 @@ class TestKBClientMethods:
         mock_instance = mock_zammad_api.return_value
         mock_instance.url = KB_BASE_URL
         category_data = {"id": 10, "knowledge_base_id": 1, "answer_ids": [100, 101]}
-        # Real Zammad structure: answer data nested under assets.KnowledgeBaseAnswer
-        answer_100_payload = {"id": 100, "assets": {"KnowledgeBaseAnswer": {"100": {"id": 100, "category_id": 10, "published_at": "2024-01-01T00:00:00Z"}}}}
-        answer_101_payload = {"id": 101, "assets": {"KnowledgeBaseAnswer": {"101": {"id": 101, "category_id": 10, "published_at": None}}}}
+        # Answers without translation_ids → single GET each (no include_contents call)
+        answer_100_payload = {"id": 100, "assets": {"KnowledgeBaseAnswer": {"100": {"id": 100, "category_id": 10, "published_at": "2024-01-01T00:00:00Z", "translation_ids": []}}}}
+        answer_101_payload = {"id": 101, "assets": {"KnowledgeBaseAnswer": {"101": {"id": 101, "category_id": 10, "published_at": None, "translation_ids": []}}}}
         mock_instance.session.get.side_effect = [
             _make_mock_response(category_data),
             _make_mock_response(answer_100_payload),
@@ -333,7 +368,8 @@ class TestKBClientMethods:
         mock_instance = mock_zammad_api.return_value
         mock_instance.url = KB_BASE_URL
         category_data = {"id": 10, "knowledge_base_id": 1, "answer_ids": [100, 101]}
-        answer_100_payload = {"id": 100, "assets": {"KnowledgeBaseAnswer": {"100": {"id": 100, "category_id": 10}}}}
+        # No translation_ids → single GET (no include_contents call)
+        answer_100_payload = {"id": 100, "assets": {"KnowledgeBaseAnswer": {"100": {"id": 100, "category_id": 10, "translation_ids": []}}}}
         error_response = Mock()
         error_response.status_code = 404
         error_response.content = b"not found"

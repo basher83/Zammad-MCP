@@ -587,17 +587,31 @@ class ZammadClient:
         return self._kb_raise_or_return(response)
 
     def get_kb_answer(self, kb_id: int, answer_id: int) -> dict[str, Any]:
-        """Get a single KB answer.
+        """Get a single KB answer including body content.
+
+        Fetches the answer, then re-fetches with ?include_contents={translation_id}
+        so that KnowledgeBaseAnswerTranslationContent (body) is included.
 
         Args:
             kb_id: Knowledge base ID
             answer_id: Answer ID
 
         Returns:
-            Answer dict (compound payload including translations/attachments)
+            Answer dict (compound payload including translations, attachments, and body)
         """
-        response = self.api.session.get(self._kb_url(kb_id, "answers", answer_id))
-        return self._kb_raise_or_return(response)
+        url = self._kb_url(kb_id, "answers", answer_id)
+        response = self.api.session.get(url)
+        payload = self._kb_raise_or_return(response)
+        # Extract translation_id to request body content
+        assets = payload.get("assets") or {}
+        answer_entry = (assets.get("KnowledgeBaseAnswer") or {}).get(str(answer_id)) or {}
+        translation_ids: list[int] = answer_entry.get("translation_ids") or []
+        if translation_ids:
+            translation_id = translation_ids[0]
+            response2 = self.api.session.get(url, params={"include_contents": translation_id})
+            if response2.ok:
+                return self._kb_raise_or_return(response2)
+        return payload
 
     def list_kb_answers(self, kb_id: int, category_id: int) -> list[dict[str, Any]]:
         """List answers in a KB category by fetching the category and expanding answer IDs.
@@ -694,9 +708,23 @@ class ZammadClient:
             Body string (HTML stripped), or empty string if not found.
         """
         assets = raw_payload.get("assets") or {}
+        # Primary: KnowledgeBaseAnswerTranslationContent (present when include_contents was used)
+        contents = assets.get("KnowledgeBaseAnswerTranslationContent") or {}
+        if contents:
+            translation_ids: list[int] = answer.get("translation_ids") or []
+            for tid in translation_ids:
+                c = contents.get(str(tid))
+                if c and c.get("body"):
+                    plain = _re.sub(r"<[^>]+>", " ", c["body"])
+                    return _html.unescape(plain)
+            first = next(iter(contents.values()), {})
+            if first.get("body"):
+                plain = _re.sub(r"<[^>]+>", " ", first["body"])
+                return _html.unescape(plain)
+        # Fallback: content_attributes.body in translation (older payload style)
         translations = assets.get("KnowledgeBaseAnswerTranslation") or {}
         if translations:
-            translation_ids: list[int] = answer.get("translation_ids") or []
+            translation_ids = answer.get("translation_ids") or []
             for tid in translation_ids:
                 t = translations.get(str(tid))
                 if t:
@@ -704,11 +732,6 @@ class ZammadClient:
                     if body:
                         plain = _re.sub(r"<[^>]+>", " ", body)
                         return _html.unescape(plain)
-            first = next(iter(translations.values()), {})
-            body = (first.get("content_attributes") or {}).get("body") or ""
-            if body:
-                plain = _re.sub(r"<[^>]+>", " ", body)
-                return _html.unescape(plain)
         return ""
 
     def _extract_kb_answer_from_payload(self, payload: dict[str, Any], answer_id: int) -> dict[str, Any] | None:
