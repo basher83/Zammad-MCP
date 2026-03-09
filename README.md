@@ -4,7 +4,7 @@
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9cc0ebac926a4d56b0bdf2271d46bbf7)](https://app.codacy.com/gh/basher83/Zammad-MCP/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 ![Coverage](https://img.shields.io/badge/coverage-90.08%25-brightgreen)
 
-An MCP server that connects AI assistants to Zammad, providing tools for managing tickets, users, organizations, and attachments.
+An MCP server that connects AI assistants to Zammad, providing tools for managing tickets, users, organizations, attachments, and the Knowledge Base.
 
 > **Disclaimer**: This project is not affiliated with or endorsed by Zammad GmbH or the Zammad Foundation. This is an independent integration that uses the Zammad API.
 
@@ -36,6 +36,25 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_list_ticket_priorities` - Get all priority levels (cached for performance)
   - `zammad_get_ticket_stats` - Get ticket statistics (optimized with pagination)
 
+- **Knowledge Base** *(requires `knowledge_base.reader` / `knowledge_base.editor` permission)*
+  - `zammad_list_knowledge_bases` - List all knowledge bases
+  - `zammad_get_knowledge_base` - Get details of a knowledge base (category/answer IDs, locale IDs)
+  - `zammad_get_kb_category` - Get a category with child/answer IDs
+  - `zammad_create_kb_category` - Create a new category (root or nested)
+  - `zammad_update_kb_category` - Update category title, parent, or icon
+  - `zammad_delete_kb_category` - Permanently delete a category
+  - `zammad_list_kb_answers` - List all answers in a category
+  - `zammad_get_kb_answer` - Get answer details including translations and attachments
+  - `zammad_create_kb_answer` - Create a new answer (starts in draft)
+  - `zammad_update_kb_answer` - Update answer title, body, or move to another category
+  - `zammad_delete_kb_answer` - Permanently delete an answer
+  - `zammad_publish_kb_answer` - Publish an answer publicly
+  - `zammad_internalize_kb_answer` - Make an answer internal (agents only)
+  - `zammad_archive_kb_answer` - Archive an answer (hidden but recoverable)
+  - `zammad_unarchive_kb_answer` - Restore an archived answer to draft
+  - `zammad_add_kb_answer_attachment` - Upload an attachment to an answer (base64)
+  - `zammad_delete_kb_answer_attachment` - Delete an attachment from an answer
+
 ### Resources
 
 Access Zammad data directly:
@@ -44,6 +63,9 @@ Access Zammad data directly:
 - `zammad://user/{id}` - User profile information
 - `zammad://organization/{id}` - Organization details
 - `zammad://queue/{group}` - Ticket queue for a group
+- `zammad://kb/{kb_id}` - Knowledge base overview
+- `zammad://kb/{kb_id}/category/{category_id}` - Knowledge base category
+- `zammad://kb/{kb_id}/answer/{answer_id}` - Knowledge base answer
 
 ### Prompts
 

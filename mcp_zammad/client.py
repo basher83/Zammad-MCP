@@ -401,3 +401,394 @@ class ZammadClient:
         article = self.api.ticket_article.find(article_id)
         attachments = article.get("attachments", [])
         return list(attachments)
+
+    # ------------------------------------------------------------------
+    # Knowledge Base methods (direct HTTP – not covered by zammad_py)
+    # ------------------------------------------------------------------
+
+    def _kb_url(self, *parts: str | int) -> str:
+        """Build a knowledge-base API URL from path components.
+
+        Args:
+            *parts: URL path segments joined with '/'
+
+        Returns:
+            Full API URL string
+        """
+        path = "/".join(str(p) for p in parts)
+        return f"{self.api.url}knowledge_bases/{path}"
+
+    def _kb_raise_or_return(self, response: Any) -> dict[str, Any] | list[Any]:
+        """Raise on HTTP error; return parsed JSON body.
+
+        Args:
+            response: requests.Response object
+
+        Returns:
+            Parsed JSON (dict or list)
+
+        Raises:
+            Exception: if HTTP status is 4xx/5xx
+        """
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content:
+            return {}
+        data = response.json()
+        if isinstance(data, list):
+            return data
+        return dict(data)
+
+    def list_knowledge_bases(self) -> list[dict[str, Any]]:
+        """List all knowledge bases.
+
+        Returns:
+            List of knowledge base dicts
+        """
+        response = self.api.session.get(self.api.url + "knowledge_bases")
+        data = self._kb_raise_or_return(response)
+        if isinstance(data, list):
+            return list(data)
+        return [data] if data else []
+
+    def get_knowledge_base(self, kb_id: int) -> dict[str, Any]:
+        """Get a single knowledge base by ID.
+
+        Args:
+            kb_id: Knowledge base ID
+
+        Returns:
+            Knowledge base dict
+        """
+        response = self.api.session.get(self._kb_url(kb_id))
+        return self._kb_raise_or_return(response)
+
+    def get_kb_category(self, kb_id: int, category_id: int) -> dict[str, Any]:
+        """Get a single KB category.
+
+        Args:
+            kb_id: Knowledge base ID
+            category_id: Category ID
+
+        Returns:
+            Category dict
+        """
+        response = self.api.session.get(self._kb_url(kb_id, "categories", category_id))
+        return self._kb_raise_or_return(response)
+
+    def create_kb_category(
+        self,
+        kb_id: int,
+        title: str,
+        kb_locale_id: int,
+        parent_id: int | None = None,
+        category_icon: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new KB category.
+
+        Args:
+            kb_id: Knowledge base ID
+            title: Category title (for the given locale)
+            kb_locale_id: KB locale ID to attach the title translation to
+            parent_id: Optional parent category ID
+            category_icon: Optional FontAwesome icon code
+
+        Returns:
+            Created category dict
+        """
+        payload: dict[str, Any] = {
+            "translations_attributes": [{"title": title, "kb_locale_id": kb_locale_id}],
+        }
+        if parent_id is not None:
+            payload["parent_id"] = parent_id
+        if category_icon is not None:
+            payload["category_icon"] = category_icon
+        response = self.api.session.post(self._kb_url(kb_id, "categories"), json=payload)
+        return self._kb_raise_or_return(response)
+
+    def update_kb_category(
+        self,
+        kb_id: int,
+        category_id: int,
+        title: str | None = None,
+        translation_id: int | None = None,
+        parent_id: int | None = None,
+        category_icon: str | None = None,
+    ) -> dict[str, Any]:
+        """Update an existing KB category.
+
+        Args:
+            kb_id: Knowledge base ID
+            category_id: Category ID
+            title: New title for the category translation
+            translation_id: Translation ID to update (required when title is provided)
+            parent_id: New parent category ID
+            category_icon: New FontAwesome icon code
+
+        Returns:
+            Updated category dict
+        """
+        payload: dict[str, Any] = {}
+        if title is not None:
+            translation_entry: dict[str, Any] = {"title": title}
+            if translation_id is not None:
+                translation_entry["id"] = translation_id
+            payload["translations_attributes"] = [translation_entry]
+        if parent_id is not None:
+            payload["parent_id"] = parent_id
+        if category_icon is not None:
+            payload["category_icon"] = category_icon
+        response = self.api.session.patch(
+            self._kb_url(kb_id, "categories", category_id), json=payload
+        )
+        return self._kb_raise_or_return(response)
+
+    def delete_kb_category(self, kb_id: int, category_id: int) -> dict[str, Any]:
+        """Delete a KB category.
+
+        Args:
+            kb_id: Knowledge base ID
+            category_id: Category ID
+
+        Returns:
+            Empty dict on success
+        """
+        response = self.api.session.delete(self._kb_url(kb_id, "categories", category_id))
+        return self._kb_raise_or_return(response)
+
+    def get_kb_answer(self, kb_id: int, answer_id: int) -> dict[str, Any]:
+        """Get a single KB answer.
+
+        Args:
+            kb_id: Knowledge base ID
+            answer_id: Answer ID
+
+        Returns:
+            Answer dict (compound payload including translations/attachments)
+        """
+        response = self.api.session.get(self._kb_url(kb_id, "answers", answer_id))
+        return self._kb_raise_or_return(response)
+
+    def list_kb_answers(self, kb_id: int, category_id: int) -> list[dict[str, Any]]:
+        """List answers in a KB category by fetching the category and expanding answer IDs.
+
+        Args:
+            kb_id: Knowledge base ID
+            category_id: Category ID
+
+        Returns:
+            List of answer dicts
+        """
+        category = self.get_kb_category(kb_id, category_id)
+        answer_ids: list[int] = category.get("answer_ids") or []
+        answers = []
+        for aid in answer_ids:
+            try:
+                answer_data = self.get_kb_answer(kb_id, aid)
+                answer_entry = self._extract_kb_answer_from_payload(answer_data, aid)
+                if answer_entry:
+                    answers.append(answer_entry)
+            except Exception:
+                logger.warning("Failed to fetch KB answer %d in category %d", aid, category_id)
+        return answers
+
+    def _extract_kb_answer_from_payload(self, payload: dict[str, Any], answer_id: int) -> dict[str, Any] | None:
+        """Extract the answer dict from a compound KB answer payload.
+
+        Zammad's KB answer endpoint may return a compound payload keyed by
+        'KnowledgeBaseAnswer'. If so, extract the entry for answer_id.
+
+        Args:
+            payload: Raw API response dict
+            answer_id: The answer ID to extract
+
+        Returns:
+            Answer dict or None
+        """
+        if "KnowledgeBaseAnswer" in payload:
+            answers_map = payload["KnowledgeBaseAnswer"]
+            return answers_map.get(str(answer_id)) or next(iter(answers_map.values()), None)
+        return payload if payload else None
+
+    def create_kb_answer(
+        self,
+        kb_id: int,
+        category_id: int,
+        title: str,
+        body: str,
+        kb_locale_id: int,
+    ) -> dict[str, Any]:
+        """Create a new KB answer.
+
+        Args:
+            kb_id: Knowledge base ID
+            category_id: Category ID
+            title: Answer title
+            body: Answer body (HTML or plain text)
+            kb_locale_id: KB locale ID
+
+        Returns:
+            Created answer dict (compound payload)
+        """
+        payload: dict[str, Any] = {
+            "category_id": category_id,
+            "translations_attributes": [
+                {
+                    "title": title,
+                    "kb_locale_id": kb_locale_id,
+                    "content_attributes": {"body": body},
+                }
+            ],
+        }
+        response = self.api.session.post(self._kb_url(kb_id, "answers"), json=payload)
+        return self._kb_raise_or_return(response)
+
+    def update_kb_answer(
+        self,
+        kb_id: int,
+        answer_id: int,
+        title: str | None = None,
+        translation_id: int | None = None,
+        body: str | None = None,
+        category_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Update an existing KB answer.
+
+        Args:
+            kb_id: Knowledge base ID
+            answer_id: Answer ID
+            title: New title
+            translation_id: Translation ID (required when updating title/body)
+            body: New body content
+            category_id: Move answer to a different category
+
+        Returns:
+            Updated answer dict (compound payload)
+        """
+        payload: dict[str, Any] = {}
+        if title is not None or body is not None:
+            translation_entry: dict[str, Any] = {}
+            if translation_id is not None:
+                translation_entry["id"] = translation_id
+            if title is not None:
+                translation_entry["title"] = title
+            if body is not None:
+                translation_entry["content_attributes"] = {"body": body}
+            payload["translations_attributes"] = [translation_entry]
+        if category_id is not None:
+            payload["category_id"] = category_id
+        response = self.api.session.patch(
+            self._kb_url(kb_id, "answers", answer_id), json=payload
+        )
+        return self._kb_raise_or_return(response)
+
+    def delete_kb_answer(self, kb_id: int, answer_id: int) -> dict[str, Any]:
+        """Delete a KB answer.
+
+        Args:
+            kb_id: Knowledge base ID
+            answer_id: Answer ID
+
+        Returns:
+            Empty dict on success
+        """
+        response = self.api.session.delete(self._kb_url(kb_id, "answers", answer_id))
+        return self._kb_raise_or_return(response)
+
+    def publish_kb_answer(self, kb_id: int, answer_id: int) -> dict[str, Any]:
+        """Publish a KB answer publicly.
+
+        Args:
+            kb_id: Knowledge base ID
+            answer_id: Answer ID
+
+        Returns:
+            Updated answer dict (compound payload)
+        """
+        response = self.api.session.post(self._kb_url(kb_id, "answers", answer_id, "publish"))
+        return self._kb_raise_or_return(response)
+
+    def internalize_kb_answer(self, kb_id: int, answer_id: int) -> dict[str, Any]:
+        """Publish a KB answer for internal use only.
+
+        Args:
+            kb_id: Knowledge base ID
+            answer_id: Answer ID
+
+        Returns:
+            Updated answer dict (compound payload)
+        """
+        response = self.api.session.post(self._kb_url(kb_id, "answers", answer_id, "internal"))
+        return self._kb_raise_or_return(response)
+
+    def archive_kb_answer(self, kb_id: int, answer_id: int) -> dict[str, Any]:
+        """Archive a KB answer.
+
+        Args:
+            kb_id: Knowledge base ID
+            answer_id: Answer ID
+
+        Returns:
+            Updated answer dict (compound payload)
+        """
+        response = self.api.session.post(self._kb_url(kb_id, "answers", answer_id, "archive"))
+        return self._kb_raise_or_return(response)
+
+    def unarchive_kb_answer(self, kb_id: int, answer_id: int) -> dict[str, Any]:
+        """Unarchive a KB answer.
+
+        Args:
+            kb_id: Knowledge base ID
+            answer_id: Answer ID
+
+        Returns:
+            Updated answer dict (compound payload)
+        """
+        response = self.api.session.post(self._kb_url(kb_id, "answers", answer_id, "unarchive"))
+        return self._kb_raise_or_return(response)
+
+    def add_kb_answer_attachment(
+        self, kb_id: int, answer_id: int, filename: str, data: str, mime_type: str
+    ) -> dict[str, Any]:
+        """Add a base64-encoded attachment to a KB answer.
+
+        Args:
+            kb_id: Knowledge base ID
+            answer_id: Answer ID
+            filename: Attachment filename
+            data: Base64-encoded file content
+            mime_type: MIME type of the attachment
+
+        Returns:
+            Updated answer dict (compound payload)
+        """
+        payload = {
+            "attachments": [
+                {
+                    "filename": filename,
+                    "data": data,
+                    "mime-type": mime_type,
+                }
+            ]
+        }
+        response = self.api.session.post(
+            self._kb_url(kb_id, "answers", answer_id, "attachments"), json=payload
+        )
+        return self._kb_raise_or_return(response)
+
+    def delete_kb_answer_attachment(
+        self, kb_id: int, answer_id: int, attachment_id: int
+    ) -> dict[str, Any]:
+        """Delete an attachment from a KB answer.
+
+        Args:
+            kb_id: Knowledge base ID
+            answer_id: Answer ID
+            attachment_id: Attachment ID to delete
+
+        Returns:
+            Empty dict on success
+        """
+        response = self.api.session.delete(
+            self._kb_url(kb_id, "answers", answer_id, "attachments", attachment_id)
+        )
+        return self._kb_raise_or_return(response)

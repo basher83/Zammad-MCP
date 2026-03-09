@@ -25,15 +25,30 @@ from .models import (
     ArticleCreate,
     Attachment,
     AttachmentDownloadError,
+    CreateKBAnswerParams,
+    CreateKBCategoryParams,
     DeleteAttachmentParams,
     DeleteAttachmentResult,
+    DeleteKBAnswerParams,
+    DeleteKBCategoryParams,
     DownloadAttachmentParams,
     GetArticleAttachmentsParams,
+    GetKBAnswerParams,
+    GetKBCategoryParams,
+    GetKnowledgeBaseParams,
     GetOrganizationParams,
     GetTicketParams,
     GetTicketStatsParams,
     GetUserParams,
     Group,
+    KBAnswerAttachmentAddParams,
+    KBAnswerAttachmentDeleteParams,
+    KBAnswerPublishParams,
+    KnowledgeBase,
+    KnowledgeBaseAnswer,
+    KnowledgeBaseCategory,
+    ListKBAnswersParams,
+    ListKnowledgeBasesParams,
     ListParams,
     Organization,
     PriorityBrief,
@@ -51,6 +66,8 @@ from .models import (
     TicketState,
     TicketStats,
     TicketUpdateParams,
+    UpdateKBAnswerParams,
+    UpdateKBCategoryParams,
     User,
     UserBrief,
     UserCreate,
@@ -751,6 +768,128 @@ def _format_organization_detail_markdown(org: Organization) -> str:
     return "\n".join(lines)
 
 
+def _kb_answer_status(answer: dict[str, Any]) -> str:
+    """Derive human-readable publication status from a KB answer dict.
+
+    Args:
+        answer: KB answer dict (flat, not compound payload)
+
+    Returns:
+        'published', 'internal', 'archived', or 'draft'
+    """
+    if answer.get("archived_at"):
+        return "archived"
+    if answer.get("published_at"):
+        return "published"
+    if answer.get("internal_at"):
+        return "internal"
+    return "draft"
+
+
+def _format_kb_markdown(kb: dict[str, Any]) -> str:
+    """Format a KnowledgeBase dict as markdown.
+
+    Args:
+        kb: Knowledge base dict from API
+
+    Returns:
+        Markdown-formatted string
+    """
+    lines = [f"# Knowledge Base (ID: {kb.get('id', 'N/A')})", ""]
+    lines.append(f"**Active**: {kb.get('active', False)}")
+    if kb.get("custom_address"):
+        lines.append(f"**Address**: {kb['custom_address']}")
+    lines.append(f"**Homepage Layout**: {kb.get('homepage_layout', 'N/A')}")
+    lines.append(f"**Category Layout**: {kb.get('category_layout', 'N/A')}")
+    cat_ids = kb.get("category_ids") or []
+    ans_ids = kb.get("answer_ids") or []
+    lines.append(f"**Root Categories**: {len(cat_ids)} (IDs: {cat_ids})")
+    lines.append(f"**Answers**: {len(ans_ids)} total")
+    lines.append(f"**Updated**: {kb.get('updated_at', 'N/A')}")
+    return "\n".join(lines)
+
+
+def _format_kb_category_markdown(category: dict[str, Any]) -> str:
+    """Format a KnowledgeBaseCategory dict as markdown.
+
+    Args:
+        category: Category dict from API
+
+    Returns:
+        Markdown-formatted string
+    """
+    lines = [f"# KB Category (ID: {category.get('id', 'N/A')})", ""]
+    lines.append(f"**Knowledge Base ID**: {category.get('knowledge_base_id', 'N/A')}")
+    lines.append(f"**Parent ID**: {category.get('parent_id', 'None (root)')}")
+    lines.append(f"**Icon**: {category.get('category_icon', 'N/A')}")
+    lines.append(f"**Position**: {category.get('position', 0)}")
+    child_ids = category.get("child_ids") or []
+    answer_ids = category.get("answer_ids") or []
+    translation_ids = category.get("translation_ids") or []
+    lines.append(f"**Child Categories**: {len(child_ids)} (IDs: {child_ids})")
+    lines.append(f"**Answers**: {len(answer_ids)} (IDs: {answer_ids})")
+    lines.append(f"**Translation IDs**: {translation_ids}")
+    lines.append(f"**Updated**: {category.get('updated_at', 'N/A')}")
+    return "\n".join(lines)
+
+
+def _format_kb_answer_markdown(answer: dict[str, Any]) -> str:
+    """Format a KnowledgeBaseAnswer dict as markdown.
+
+    Args:
+        answer: Answer dict from API (flat, extracted from compound payload)
+
+    Returns:
+        Markdown-formatted string
+    """
+    status = _kb_answer_status(answer)
+    lines = [f"# KB Answer (ID: {answer.get('id', 'N/A')})", ""]
+    lines.append(f"**Category ID**: {answer.get('category_id', 'N/A')}")
+    lines.append(f"**Status**: {status}")
+    lines.append(f"**Promoted**: {answer.get('promoted', False)}")
+    lines.append(f"**Position**: {answer.get('position', 0)}")
+    translation_ids = answer.get("translation_ids") or []
+    lines.append(f"**Translation IDs**: {translation_ids}")
+    attachments = answer.get("attachments") or []
+    if attachments:
+        lines.append("")
+        lines.append("## Attachments")
+        lines.append("")
+        for att in attachments:
+            lines.append(f"- **{att.get('filename', 'N/A')}** (ID: {att.get('id', 'N/A')}, size: {att.get('size', '?')} bytes)")
+    tags = answer.get("tags") or []
+    if tags:
+        lines.append("")
+        lines.append(f"**Tags**: {', '.join(tags)}")
+    lines.append("")
+    lines.append(f"**Updated**: {answer.get('updated_at', 'N/A')}")
+    return "\n".join(lines)
+
+
+def _format_kb_answers_list_markdown(answers: list[dict[str, Any]], kb_id: int, category_id: int) -> str:
+    """Format a list of KB answers as markdown.
+
+    Args:
+        answers: List of answer dicts
+        kb_id: Knowledge base ID (for context)
+        category_id: Category ID (for context)
+
+    Returns:
+        Markdown-formatted string
+    """
+    lines = [f"# KB Answers in Category {category_id} (KB: {kb_id})", ""]
+    lines.append(f"Found {len(answers)} answer(s)")
+    lines.append("")
+    for answer in answers:
+        status = _kb_answer_status(answer)
+        lines.append(f"## Answer ID: {answer.get('id', 'N/A')}")
+        lines.append(f"- **Status**: {status}")
+        lines.append(f"- **Promoted**: {answer.get('promoted', False)}")
+        lines.append(f"- **Position**: {answer.get('position', 0)}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def _handle_api_error(e: Exception, context: str = "operation") -> str:
     """Format errors with actionable guidance for LLM agents.
 
@@ -858,6 +997,7 @@ class ZammadMCPServer:
         self._setup_ticket_tools()
         self._setup_user_org_tools()
         self._setup_system_tools()
+        self._setup_kb_tools()
 
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
@@ -2288,12 +2428,533 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
+    def _setup_kb_tools(self) -> None:  # noqa: PLR0915
+        """Register Knowledge Base tools."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("List Knowledge Bases"))
+        def zammad_list_knowledge_bases(params: ListKnowledgeBasesParams) -> str:
+            """List all knowledge bases available in Zammad.
+
+            Args:
+                params (ListKnowledgeBasesParams): Parameters containing:
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+
+            Returns:
+                str: Formatted list of knowledge bases.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+            """
+            client = self.get_client()
+            try:
+                kbs = client.list_knowledge_bases()
+                if params.response_format == ResponseFormat.JSON:
+                    result = json.dumps({"items": kbs, "count": len(kbs)}, indent=2, default=str)
+                else:
+                    lines = ["# Knowledge Bases", "", f"Found {len(kbs)} knowledge base(s)", ""]
+                    for kb in kbs:
+                        lines.append(f"## KB ID: {kb.get('id', 'N/A')}")
+                        lines.append(f"- **Active**: {kb.get('active', False)}")
+                        if kb.get("custom_address"):
+                            lines.append(f"- **Address**: {kb['custom_address']}")
+                        cat_ids = kb.get("category_ids") or []
+                        lines.append(f"- **Root Categories**: {len(cat_ids)}")
+                        lines.append("")
+                    result = "\n".join(lines)
+                return truncate_response(result)
+            except Exception as e:
+                return _handle_api_error(e, context="listing knowledge bases")
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get Knowledge Base"))
+        def zammad_get_knowledge_base(params: GetKnowledgeBaseParams) -> str:
+            """Get details of a specific knowledge base by ID.
+
+            Args:
+                params (GetKnowledgeBaseParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+
+            Returns:
+                str: Knowledge base details including category/answer IDs.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+                Use zammad_list_knowledge_bases to discover available KB IDs.
+            """
+            client = self.get_client()
+            try:
+                kb = client.get_knowledge_base(params.kb_id)
+                if params.response_format == ResponseFormat.JSON:
+                    result = json.dumps(kb, indent=2, default=str)
+                else:
+                    result = _format_kb_markdown(kb)
+                return truncate_response(result)
+            except Exception as e:
+                return _handle_api_error(e, context=f"retrieving knowledge base {params.kb_id}")
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get KB Category"))
+        def zammad_get_kb_category(params: GetKBCategoryParams) -> str:
+            """Get a knowledge base category by ID.
+
+            Args:
+                params (GetKBCategoryParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - category_id (int): Category ID (required)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+
+            Returns:
+                str: Category details including child category IDs and answer IDs.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+                Use answer_ids to find answers within this category.
+            """
+            client = self.get_client()
+            try:
+                category = client.get_kb_category(params.kb_id, params.category_id)
+                if params.response_format == ResponseFormat.JSON:
+                    result = json.dumps(category, indent=2, default=str)
+                else:
+                    result = _format_kb_category_markdown(category)
+                return truncate_response(result)
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"retrieving KB category {params.category_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_write_annotations("Create KB Category"))
+        def zammad_create_kb_category(params: CreateKBCategoryParams) -> str:
+            """Create a new category in a knowledge base.
+
+            Args:
+                params (CreateKBCategoryParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - title (str): Category title (required)
+                    - kb_locale_id (int): Locale ID for the title translation (required)
+                    - parent_id (int | None): Parent category ID (None = root category)
+                    - category_icon (str | None): FontAwesome icon code (e.g. 'f115')
+
+            Returns:
+                str: Created category details as JSON or markdown.
+
+            Note:
+                Requires knowledge_base.editor permission.
+                Use zammad_get_knowledge_base to find kb_locale_id values.
+            """
+            client = self.get_client()
+            try:
+                category = client.create_kb_category(
+                    kb_id=params.kb_id,
+                    title=params.title,
+                    kb_locale_id=params.kb_locale_id,
+                    parent_id=params.parent_id,
+                    category_icon=params.category_icon,
+                )
+                return truncate_response(json.dumps(category, indent=2, default=str))
+            except Exception as e:
+                return _handle_api_error(e, context=f"creating KB category in KB {params.kb_id}")
+
+        @self.mcp.tool(annotations=_write_annotations("Update KB Category"))
+        def zammad_update_kb_category(params: UpdateKBCategoryParams) -> str:
+            """Update an existing knowledge base category.
+
+            Args:
+                params (UpdateKBCategoryParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - category_id (int): Category ID to update (required)
+                    - title (str | None): New category title
+                    - translation_id (int | None): Translation ID to update (use when changing title)
+                    - parent_id (int | None): New parent category ID
+                    - category_icon (str | None): New FontAwesome icon code
+
+            Returns:
+                str: Updated category details as JSON.
+
+            Note:
+                Requires knowledge_base.editor permission.
+                Provide translation_id alongside title to update an existing translation.
+                Use zammad_get_kb_category to find translation_ids.
+            """
+            client = self.get_client()
+            try:
+                category = client.update_kb_category(
+                    kb_id=params.kb_id,
+                    category_id=params.category_id,
+                    title=params.title,
+                    translation_id=params.translation_id,
+                    parent_id=params.parent_id,
+                    category_icon=params.category_icon,
+                )
+                return truncate_response(json.dumps(category, indent=2, default=str))
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"updating KB category {params.category_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Delete KB Category"))
+        def zammad_delete_kb_category(params: DeleteKBCategoryParams) -> str:
+            """Delete a knowledge base category.
+
+            Args:
+                params (DeleteKBCategoryParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - category_id (int): Category ID to delete (required)
+
+            Returns:
+                str: Confirmation message.
+
+            Note:
+                Requires knowledge_base.editor permission.
+                WARNING: This permanently deletes the category and may affect child categories.
+                Categories containing answers may need to be emptied first.
+            """
+            client = self.get_client()
+            try:
+                client.delete_kb_category(params.kb_id, params.category_id)
+                return f"KB category {params.category_id} deleted from knowledge base {params.kb_id}."
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"deleting KB category {params.category_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_read_only_annotations("List KB Answers"))
+        def zammad_list_kb_answers(params: ListKBAnswersParams) -> str:
+            """List all answers in a knowledge base category.
+
+            Args:
+                params (ListKBAnswersParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - category_id (int): Category ID (required)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+
+            Returns:
+                str: List of answers with status and basic metadata.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+                Uses zammad_get_kb_category to discover answer_ids, then fetches each.
+                Large categories may be slow due to individual answer fetches.
+            """
+            client = self.get_client()
+            try:
+                answers = client.list_kb_answers(params.kb_id, params.category_id)
+                if params.response_format == ResponseFormat.JSON:
+                    result = json.dumps(
+                        {"items": answers, "count": len(answers), "kb_id": params.kb_id, "category_id": params.category_id},
+                        indent=2,
+                        default=str,
+                    )
+                else:
+                    result = _format_kb_answers_list_markdown(answers, params.kb_id, params.category_id)
+                return truncate_response(result)
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"listing KB answers in category {params.category_id} of KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get KB Answer"))
+        def zammad_get_kb_answer(params: GetKBAnswerParams) -> str:
+            """Get a knowledge base answer by ID.
+
+            Args:
+                params (GetKBAnswerParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - answer_id (int): Answer ID (required)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+
+            Returns:
+                str: Answer details including status, translation IDs, and attachments.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+                The API returns a compound payload; JSON format exposes the full payload.
+                Answer body/title are stored in translations; use translation_ids to look them up.
+            """
+            client = self.get_client()
+            try:
+                payload = client.get_kb_answer(params.kb_id, params.answer_id)
+                if params.response_format == ResponseFormat.JSON:
+                    result = json.dumps(payload, indent=2, default=str)
+                else:
+                    answer = client._extract_kb_answer_from_payload(payload, params.answer_id) or payload
+                    result = _format_kb_answer_markdown(answer)
+                return truncate_response(result)
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"retrieving KB answer {params.answer_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_write_annotations("Create KB Answer"))
+        def zammad_create_kb_answer(params: CreateKBAnswerParams) -> str:
+            """Create a new answer in a knowledge base category.
+
+            Args:
+                params (CreateKBAnswerParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - category_id (int): Category to place the answer in (required)
+                    - title (str): Answer title (required)
+                    - body (str): Answer body content, HTML or plain text (default: "")
+                    - kb_locale_id (int): Locale ID for this translation (required)
+
+            Returns:
+                str: Created answer details as JSON (compound payload).
+
+            Note:
+                Requires knowledge_base.editor permission.
+                The answer is created in 'draft' status. Use zammad_publish_kb_answer
+                or zammad_internalize_kb_answer to make it visible.
+                Use zammad_get_knowledge_base to find kb_locale_id values.
+            """
+            client = self.get_client()
+            try:
+                payload = client.create_kb_answer(
+                    kb_id=params.kb_id,
+                    category_id=params.category_id,
+                    title=params.title,
+                    body=params.body,
+                    kb_locale_id=params.kb_locale_id,
+                )
+                return truncate_response(json.dumps(payload, indent=2, default=str))
+            except Exception as e:
+                return _handle_api_error(e, context=f"creating KB answer in KB {params.kb_id}")
+
+        @self.mcp.tool(annotations=_write_annotations("Update KB Answer"))
+        def zammad_update_kb_answer(params: UpdateKBAnswerParams) -> str:
+            """Update an existing knowledge base answer.
+
+            Args:
+                params (UpdateKBAnswerParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - answer_id (int): Answer ID to update (required)
+                    - title (str | None): New answer title
+                    - translation_id (int | None): Translation ID to update (use with title/body)
+                    - body (str | None): New answer body content
+                    - category_id (int | None): Move answer to a different category
+
+            Returns:
+                str: Updated answer details as JSON (compound payload).
+
+            Note:
+                Requires knowledge_base.editor permission.
+                Provide translation_id alongside title/body to update an existing translation.
+                Use zammad_get_kb_answer to find translation_ids.
+            """
+            client = self.get_client()
+            try:
+                payload = client.update_kb_answer(
+                    kb_id=params.kb_id,
+                    answer_id=params.answer_id,
+                    title=params.title,
+                    translation_id=params.translation_id,
+                    body=params.body,
+                    category_id=params.category_id,
+                )
+                return truncate_response(json.dumps(payload, indent=2, default=str))
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"updating KB answer {params.answer_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Delete KB Answer"))
+        def zammad_delete_kb_answer(params: DeleteKBAnswerParams) -> str:
+            """Delete a knowledge base answer permanently.
+
+            Args:
+                params (DeleteKBAnswerParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - answer_id (int): Answer ID to delete (required)
+
+            Returns:
+                str: Confirmation message.
+
+            Note:
+                Requires knowledge_base.editor permission.
+                WARNING: This permanently deletes the answer and all its translations/attachments.
+                Consider archiving (zammad_archive_kb_answer) instead of deleting.
+            """
+            client = self.get_client()
+            try:
+                client.delete_kb_answer(params.kb_id, params.answer_id)
+                return f"KB answer {params.answer_id} deleted from knowledge base {params.kb_id}."
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"deleting KB answer {params.answer_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_idempotent_write_annotations("Publish KB Answer"))
+        def zammad_publish_kb_answer(params: KBAnswerPublishParams) -> str:
+            """Publish a knowledge base answer publicly.
+
+            Args:
+                params (KBAnswerPublishParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - answer_id (int): Answer ID (required)
+
+            Returns:
+                str: Updated answer payload as JSON.
+
+            Note:
+                Requires knowledge_base.editor permission.
+                Makes the answer publicly visible. Sets published_at timestamp.
+            """
+            client = self.get_client()
+            try:
+                payload = client.publish_kb_answer(params.kb_id, params.answer_id)
+                return truncate_response(json.dumps(payload, indent=2, default=str))
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"publishing KB answer {params.answer_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_idempotent_write_annotations("Internalize KB Answer"))
+        def zammad_internalize_kb_answer(params: KBAnswerPublishParams) -> str:
+            """Make a knowledge base answer internal (visible to agents only).
+
+            Args:
+                params (KBAnswerPublishParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - answer_id (int): Answer ID (required)
+
+            Returns:
+                str: Updated answer payload as JSON.
+
+            Note:
+                Requires knowledge_base.editor permission.
+                Sets internal_at timestamp; hides the answer from public KB portal.
+            """
+            client = self.get_client()
+            try:
+                payload = client.internalize_kb_answer(params.kb_id, params.answer_id)
+                return truncate_response(json.dumps(payload, indent=2, default=str))
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"internalizing KB answer {params.answer_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_idempotent_write_annotations("Archive KB Answer"))
+        def zammad_archive_kb_answer(params: KBAnswerPublishParams) -> str:
+            """Archive a knowledge base answer (hide without deleting).
+
+            Args:
+                params (KBAnswerPublishParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - answer_id (int): Answer ID (required)
+
+            Returns:
+                str: Updated answer payload as JSON.
+
+            Note:
+                Requires knowledge_base.editor permission.
+                Sets archived_at timestamp; answer is hidden but recoverable.
+                Use zammad_unarchive_kb_answer to restore.
+            """
+            client = self.get_client()
+            try:
+                payload = client.archive_kb_answer(params.kb_id, params.answer_id)
+                return truncate_response(json.dumps(payload, indent=2, default=str))
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"archiving KB answer {params.answer_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_idempotent_write_annotations("Unarchive KB Answer"))
+        def zammad_unarchive_kb_answer(params: KBAnswerPublishParams) -> str:
+            """Unarchive a previously archived knowledge base answer.
+
+            Args:
+                params (KBAnswerPublishParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - answer_id (int): Answer ID (required)
+
+            Returns:
+                str: Updated answer payload as JSON.
+
+            Note:
+                Requires knowledge_base.editor permission.
+                Clears archived_at; answer returns to draft state.
+            """
+            client = self.get_client()
+            try:
+                payload = client.unarchive_kb_answer(params.kb_id, params.answer_id)
+                return truncate_response(json.dumps(payload, indent=2, default=str))
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"unarchiving KB answer {params.answer_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_write_annotations("Add KB Answer Attachment"))
+        def zammad_add_kb_answer_attachment(params: KBAnswerAttachmentAddParams) -> str:
+            """Add an attachment to a knowledge base answer.
+
+            Args:
+                params (KBAnswerAttachmentAddParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - answer_id (int): Answer ID (required)
+                    - filename (str): Attachment filename (required)
+                    - data (str): Base64-encoded file content (required)
+                    - mime_type (str): MIME type (default: application/octet-stream)
+
+            Returns:
+                str: Updated answer payload as JSON with attachment metadata.
+
+            Note:
+                Requires knowledge_base.editor permission.
+                Encode file content as base64 before passing in 'data'.
+                Attachment IDs are returned in the payload for later deletion.
+            """
+            client = self.get_client()
+            try:
+                payload = client.add_kb_answer_attachment(
+                    kb_id=params.kb_id,
+                    answer_id=params.answer_id,
+                    filename=params.filename,
+                    data=params.data,
+                    mime_type=params.mime_type,
+                )
+                return truncate_response(json.dumps(payload, indent=2, default=str))
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"adding attachment to KB answer {params.answer_id} in KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Delete KB Answer Attachment"))
+        def zammad_delete_kb_answer_attachment(params: KBAnswerAttachmentDeleteParams) -> str:
+            """Delete an attachment from a knowledge base answer.
+
+            Args:
+                params (KBAnswerAttachmentDeleteParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - answer_id (int): Answer ID (required)
+                    - attachment_id (int): Attachment ID to delete (required)
+
+            Returns:
+                str: Confirmation message.
+
+            Note:
+                Requires knowledge_base.editor permission.
+                WARNING: Attachment deletion is permanent and cannot be undone.
+                Use zammad_get_kb_answer to find attachment IDs.
+            """
+            client = self.get_client()
+            try:
+                client.delete_kb_answer_attachment(params.kb_id, params.answer_id, params.attachment_id)
+                return (
+                    f"Attachment {params.attachment_id} deleted from KB answer {params.answer_id} "
+                    f"in knowledge base {params.kb_id}."
+                )
+            except Exception as e:
+                return _handle_api_error(
+                    e,
+                    context=f"deleting attachment {params.attachment_id} from KB answer {params.answer_id} in KB {params.kb_id}",
+                )
+
     def _setup_resources(self) -> None:
         """Register all resources with the MCP server."""
         self._setup_ticket_resource()
         self._setup_user_resource()
         self._setup_organization_resource()
         self._setup_queue_resource()
+        self._setup_kb_resources()
 
     def _setup_ticket_resource(self) -> None:
         """Register ticket resource."""
@@ -2443,6 +3104,44 @@ class ZammadMCPServer:
                 return truncate_response("\n".join(lines))
             except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving queue for group '{group}'")
+
+    def _setup_kb_resources(self) -> None:
+        """Register Knowledge Base resources."""
+
+        @self.mcp.resource("zammad://kb/{kb_id}")
+        def get_kb_resource(kb_id: str) -> str:
+            """Get a knowledge base as a resource."""
+            client = self.get_client()
+            try:
+                kb = client.get_knowledge_base(int(kb_id))
+                return _format_kb_markdown(kb)
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
+                return _handle_api_error(e, context=f"retrieving knowledge base {kb_id}")
+
+        @self.mcp.resource("zammad://kb/{kb_id}/category/{category_id}")
+        def get_kb_category_resource(kb_id: str, category_id: str) -> str:
+            """Get a knowledge base category as a resource."""
+            client = self.get_client()
+            try:
+                category = client.get_kb_category(int(kb_id), int(category_id))
+                return _format_kb_category_markdown(category)
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
+                return _handle_api_error(
+                    e, context=f"retrieving KB category {category_id} in KB {kb_id}"
+                )
+
+        @self.mcp.resource("zammad://kb/{kb_id}/answer/{answer_id}")
+        def get_kb_answer_resource(kb_id: str, answer_id: str) -> str:
+            """Get a knowledge base answer as a resource."""
+            client = self.get_client()
+            try:
+                payload = client.get_kb_answer(int(kb_id), int(answer_id))
+                answer = client._extract_kb_answer_from_payload(payload, int(answer_id)) or payload
+                return _format_kb_answer_markdown(answer)
+            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
+                return _handle_api_error(
+                    e, context=f"retrieving KB answer {answer_id} in KB {kb_id}"
+                )
 
     def _setup_prompts(self) -> None:
         """Register all prompts with the MCP server."""
