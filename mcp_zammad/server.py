@@ -836,23 +836,32 @@ def _format_kb_category_markdown(category: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _format_kb_answer_markdown(answer: dict[str, Any]) -> str:
+def _format_kb_answer_markdown(answer: dict[str, Any], title: str = "", body: str = "") -> str:
     """Format a KnowledgeBaseAnswer dict as markdown.
 
     Args:
         answer: Answer dict from API (flat, extracted from compound payload)
+        title: Answer title extracted from translations (optional)
+        body: Plain-text body extracted from translation content (optional)
 
     Returns:
         Markdown-formatted string
     """
     status = _kb_answer_status(answer)
-    lines = [f"# KB Answer (ID: {answer.get('id', 'N/A')})", ""]
+    heading = title or f"KB Answer (ID: {answer.get('id', 'N/A')})"
+    lines = [f"# {heading}", ""]
+    lines.append(f"**ID**: {answer.get('id', 'N/A')}")
     lines.append(f"**Category ID**: {answer.get('category_id', 'N/A')}")
     lines.append(f"**Status**: {status}")
     lines.append(f"**Promoted**: {answer.get('promoted', False)}")
     lines.append(f"**Position**: {answer.get('position', 0)}")
     translation_ids = answer.get("translation_ids") or []
     lines.append(f"**Translation IDs**: {translation_ids}")
+    if body:
+        lines.append("")
+        lines.append("## Content")
+        lines.append("")
+        lines.append(body.strip())
     attachments = answer.get("attachments") or []
     if attachments:
         lines.append("")
@@ -2740,7 +2749,9 @@ class ZammadMCPServer:
                     result = json.dumps(payload, indent=2, default=str)
                 else:
                     answer = client._extract_kb_answer_from_payload(payload, params.answer_id) or payload
-                    result = _format_kb_answer_markdown(answer)
+                    title = client._extract_kb_answer_title(payload, answer)
+                    body = client._extract_kb_answer_body(payload, answer)
+                    result = _format_kb_answer_markdown(answer, title=title, body=body)
                 return truncate_response(result)
             except Exception as e:
                 return _handle_api_error(
@@ -3294,7 +3305,9 @@ class ZammadMCPServer:
             try:
                 payload = client.get_kb_answer(int(kb_id), int(answer_id))
                 answer = client._extract_kb_answer_from_payload(payload, int(answer_id)) or payload
-                return _format_kb_answer_markdown(answer)
+                title = client._extract_kb_answer_title(payload, answer)
+                body = client._extract_kb_answer_body(payload, answer)
+                return _format_kb_answer_markdown(answer, title=title, body=body)
             except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(
                     e, context=f"retrieving KB answer {answer_id} in KB {kb_id}"

@@ -811,6 +811,8 @@ class TestKBServerTools:
         payload = {"id": 100, "category_id": 10, "published_at": "2024-01-01T00:00:00Z"}
         mock_client.get_kb_answer.return_value = payload
         mock_client._extract_kb_answer_from_payload.return_value = payload
+        mock_client._extract_kb_answer_title.return_value = ""
+        mock_client._extract_kb_answer_body.return_value = ""
         fn = self._get_tool(server, "zammad_get_kb_answer")
         result = fn(params=GetKBAnswerParams(kb_id=1, answer_id=100))
         assert "KB Answer (ID: 100)" in result
