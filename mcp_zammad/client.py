@@ -1,7 +1,9 @@
 """Zammad API client wrapper for the MCP server."""
 
+import html as _html
 import logging
 import os
+import re as _re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -616,6 +618,7 @@ class ZammadClient:
                 answer_entry = self._extract_kb_answer_from_payload(answer_data, aid)
                 if answer_entry:
                     answer_entry["_title"] = self._extract_kb_answer_title(answer_data, answer_entry)
+                    answer_entry["_body"] = self._extract_kb_answer_body(answer_data, answer_entry)
                     answers.append(answer_entry)
             except Exception:
                 logger.warning("Failed to fetch KB answer %d in category %d", aid, category_id)
@@ -624,10 +627,10 @@ class ZammadClient:
     def search_kb_answers(
         self, kb_id: int, query: str, category_id: int | None = None
     ) -> list[dict[str, Any]]:
-        """Search KB answers by title (case-insensitive substring match).
+        """Search KB answers by title or body content (case-insensitive substring match).
 
         Searches across all categories in the KB, or within a specific category.
-        Each result includes a '_title' key with the answer title.
+        Each result includes '_title' and '_body' keys extracted from translations.
 
         Args:
             kb_id: Knowledge base ID
@@ -649,7 +652,8 @@ class ZammadClient:
                 answers = self.list_kb_answers(kb_id, cid)
                 for answer in answers:
                     title = answer.get("_title") or ""
-                    if query_lower in title.lower():
+                    body = answer.get("_body") or ""
+                    if query_lower in title.lower() or query_lower in body.lower():
                         answer["_category_id"] = cid
                         results.append(answer)
             except Exception:
@@ -674,10 +678,37 @@ class ZammadClient:
                 t = translations.get(str(tid))
                 if t and t.get("title"):
                     return str(t["title"])
-            # fallback: first translation
             first = next(iter(translations.values()), {})
             if first.get("title"):
                 return str(first["title"])
+        return ""
+
+    def _extract_kb_answer_body(self, raw_payload: dict[str, Any], answer: dict[str, Any]) -> str:
+        """Extract the plain-text body from the translation assets of a KB answer payload.
+
+        Args:
+            raw_payload: The raw API response (compound payload with assets)
+            answer: The extracted answer dict (may have translation_ids)
+
+        Returns:
+            Body string (HTML stripped), or empty string if not found.
+        """
+        assets = raw_payload.get("assets") or {}
+        translations = assets.get("KnowledgeBaseAnswerTranslation") or {}
+        if translations:
+            translation_ids: list[int] = answer.get("translation_ids") or []
+            for tid in translation_ids:
+                t = translations.get(str(tid))
+                if t:
+                    body = (t.get("content_attributes") or {}).get("body") or ""
+                    if body:
+                        plain = _re.sub(r"<[^>]+>", " ", body)
+                        return _html.unescape(plain)
+            first = next(iter(translations.values()), {})
+            body = (first.get("content_attributes") or {}).get("body") or ""
+            if body:
+                plain = _re.sub(r"<[^>]+>", " ", body)
+                return _html.unescape(plain)
         return ""
 
     def _extract_kb_answer_from_payload(self, payload: dict[str, Any], answer_id: int) -> dict[str, Any] | None:

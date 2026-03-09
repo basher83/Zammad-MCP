@@ -2658,11 +2658,11 @@ class ZammadMCPServer:
 
         @self.mcp.tool(annotations=_read_only_annotations("Search KB Answers"))
         def zammad_search_kb_answers(params: SearchKBAnswersParams) -> str:
-            """Search knowledge base answers by title keyword.
+            """Search knowledge base answers by title or body content.
 
             Performs a case-insensitive substring search against answer titles
-            across all categories in the KB (or within a specific category).
-            Use this to find answers without knowing the category or answer ID.
+            and body text across all categories in the KB (or within a specific
+            category). Use this to find answers without knowing the category or ID.
 
             Args:
                 params (SearchKBAnswersParams): Parameters containing:
