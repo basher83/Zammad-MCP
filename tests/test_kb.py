@@ -279,8 +279,18 @@ class TestKBClientMethods:
         payload = {"id": 100, "category_id": 10}
         assert client._extract_kb_answer_from_payload(payload, 100) == payload
 
+    def test_extract_real_zammad_payload(self, mock_zammad_api: Mock) -> None:
+        """_extract_kb_answer_from_payload handles real Zammad assets structure."""
+        mock_zammad_api.return_value.url = KB_BASE_URL
+        client = _make_client(mock_zammad_api)
+        inner = {"id": 100, "category_id": 10, "published_at": "2024-01-01T00:00:00Z"}
+        payload = {"id": 100, "assets": {"KnowledgeBaseAnswer": {"100": inner}}}
+        result = client._extract_kb_answer_from_payload(payload, 100)
+        assert result == inner
+        assert result["published_at"] == "2024-01-01T00:00:00Z"
+
     def test_extract_compound_payload_by_id(self, mock_zammad_api: Mock) -> None:
-        """_extract_kb_answer_from_payload extracts by string key."""
+        """_extract_kb_answer_from_payload extracts by top-level KnowledgeBaseAnswer key (legacy)."""
         mock_zammad_api.return_value.url = KB_BASE_URL
         client = _make_client(mock_zammad_api)
         payload = {"KnowledgeBaseAnswer": {"100": {"id": 100, "category_id": 10}}}
@@ -291,28 +301,30 @@ class TestKBClientMethods:
         """_extract_kb_answer_from_payload falls back to first value if ID key missing."""
         mock_zammad_api.return_value.url = KB_BASE_URL
         client = _make_client(mock_zammad_api)
-        payload = {"KnowledgeBaseAnswer": {"999": {"id": 999}}}
+        payload = {"assets": {"KnowledgeBaseAnswer": {"999": {"id": 999}}}}
         result = client._extract_kb_answer_from_payload(payload, 100)
         assert result == {"id": 999}
 
     # --- list_kb_answers ---
 
     def test_list_kb_answers(self, mock_zammad_api: Mock) -> None:
-        """list_kb_answers fetches category then each answer."""
+        """list_kb_answers fetches category then each answer using real Zammad payload."""
         mock_instance = mock_zammad_api.return_value
         mock_instance.url = KB_BASE_URL
         category_data = {"id": 10, "knowledge_base_id": 1, "answer_ids": [100, 101]}
-        answer_100 = {"id": 100, "category_id": 10}
-        answer_101 = {"id": 101, "category_id": 10}
+        # Real Zammad structure: answer data nested under assets.KnowledgeBaseAnswer
+        answer_100_payload = {"id": 100, "assets": {"KnowledgeBaseAnswer": {"100": {"id": 100, "category_id": 10, "published_at": "2024-01-01T00:00:00Z"}}}}
+        answer_101_payload = {"id": 101, "assets": {"KnowledgeBaseAnswer": {"101": {"id": 101, "category_id": 10, "published_at": None}}}}
         mock_instance.session.get.side_effect = [
             _make_mock_response(category_data),
-            _make_mock_response(answer_100),
-            _make_mock_response(answer_101),
+            _make_mock_response(answer_100_payload),
+            _make_mock_response(answer_101_payload),
         ]
         client = _make_client(mock_zammad_api)
         result = client.list_kb_answers(1, 10)
         assert len(result) == 2
         assert result[0]["id"] == 100
+        assert result[0]["published_at"] == "2024-01-01T00:00:00Z"
         assert result[1]["id"] == 101
 
     def test_list_kb_answers_skips_failed(self, mock_zammad_api: Mock) -> None:
@@ -320,14 +332,14 @@ class TestKBClientMethods:
         mock_instance = mock_zammad_api.return_value
         mock_instance.url = KB_BASE_URL
         category_data = {"id": 10, "knowledge_base_id": 1, "answer_ids": [100, 101]}
-        answer_100 = {"id": 100, "category_id": 10}
+        answer_100_payload = {"id": 100, "assets": {"KnowledgeBaseAnswer": {"100": {"id": 100, "category_id": 10}}}}
         error_response = Mock()
         error_response.status_code = 404
         error_response.content = b"not found"
         error_response.raise_for_status.side_effect = requests.HTTPError("404")
         mock_instance.session.get.side_effect = [
             _make_mock_response(category_data),
-            _make_mock_response(answer_100),
+            _make_mock_response(answer_100_payload),
             error_response,
         ]
         client = _make_client(mock_zammad_api)

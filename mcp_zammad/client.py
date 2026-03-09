@@ -609,8 +609,10 @@ class ZammadClient:
     def _extract_kb_answer_from_payload(self, payload: dict[str, Any], answer_id: int) -> dict[str, Any] | None:
         """Extract the answer dict from a compound KB answer payload.
 
-        Zammad's KB answer endpoint may return a compound payload keyed by
-        'KnowledgeBaseAnswer'. If so, extract the entry for answer_id.
+        Zammad's KB answer endpoint returns:
+          { "id": N, "assets": { "KnowledgeBaseAnswer": { "N": {...} }, ... } }
+
+        Falls back to a flat dict if the payload doesn't match that structure.
 
         Args:
             payload: Raw API response dict
@@ -619,9 +621,16 @@ class ZammadClient:
         Returns:
             Answer dict or None
         """
+        # Real Zammad structure: payload["assets"]["KnowledgeBaseAnswer"]
+        assets = payload.get("assets") or {}
+        kb_answers = assets.get("KnowledgeBaseAnswer")
+        if kb_answers:
+            return kb_answers.get(str(answer_id)) or next(iter(kb_answers.values()), None)
+        # Legacy/test fallback: top-level "KnowledgeBaseAnswer" key
         if "KnowledgeBaseAnswer" in payload:
             answers_map = payload["KnowledgeBaseAnswer"]
             return answers_map.get(str(answer_id)) or next(iter(answers_map.values()), None)
+        # Already a flat answer dict
         return payload if payload else None
 
     def create_kb_answer(
