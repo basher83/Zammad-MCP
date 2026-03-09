@@ -44,6 +44,7 @@ from .models import (
     Group,
     KBAnswerAttachmentAddParams,
     KBAnswerAttachmentDeleteParams,
+    KBAnswerAttachmentDownloadParams,
     KBAnswerPublishParams,
     KnowledgeBase,
     KnowledgeBaseAnswer,
@@ -2969,30 +2970,41 @@ class ZammadMCPServer:
 
         @self.mcp.tool(annotations=_read_only_annotations("Download KB Answer Attachment"))
         def zammad_download_kb_answer_attachment(
-            params: KBAnswerAttachmentDeleteParams,
+            params: KBAnswerAttachmentDownloadParams,
         ) -> str:
             """Download an attachment from a knowledge base answer.
 
+            Two modes depending on whether save_path is provided:
+
+            Mode 1 - Save to disk (recommended for large/binary files):
+                Provide save_path as an absolute path on the host machine.
+                The file is written to disk; only metadata is returned.
+                No binary data enters the context window.
+                Example: save_path=/Users/you/Downloads/figure.png
+
+            Mode 2 - Return base64 in response (for small files or direct processing):
+                Omit save_path. Returns base64-encoded content in the JSON response.
+                Suitable when Claude needs to read/process the content directly
+                (e.g. text files, small images, generated content).
+                Warning: large files (>50KB) will bloat the context window.
+
             Args:
-                params (KBAnswerAttachmentDeleteParams): Parameters containing:
+                params (KBAnswerAttachmentDownloadParams): Parameters containing:
                     - kb_id (int): Knowledge base ID (required)
                     - answer_id (int): Answer ID (required)
                     - attachment_id (int): Attachment ID to download (required)
-                    - save_path (str | None): Absolute path on disk to save the file.
-                      When provided, the file is written to disk and only metadata
-                      is returned (no base64 in context). Recommended for large files.
-                      When omitted, returns base64-encoded content in the response.
+                    - save_path (str | None): Absolute local path to save the file.
+                      See mode descriptions above.
 
             Returns:
-                str: JSON with metadata. If save_path given: {saved_to, size,
-                     content_type}. Otherwise: {data (base64), size, content_type}.
+                str: JSON. With save_path: {saved_to, attachment_id, answer_id,
+                     kb_id, content_type, size}. Without: adds {data} (base64).
 
             Note:
                 Requires knowledge_base.reader or knowledge_base.editor permission.
                 Attachment IDs are listed in zammad_get_kb_answer results.
-                Do NOT use zammad_download_attachment for KB attachments - that
-                tool is for ticket attachments only.
-                Use save_path to avoid bloating the context with binary data.
+                Do NOT use zammad_download_attachment here - that tool is for
+                ticket attachments only.
             """
             client = self.get_client()
             try:

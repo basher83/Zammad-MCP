@@ -953,12 +953,27 @@ class KBAnswerAttachmentAddParams(StrictBaseModel):
 
 
 class KBAnswerAttachmentDeleteParams(StrictBaseModel):
-    """Parameters for deleting or downloading an attachment from a KB answer."""
+    """Parameters for deleting an attachment from a KB answer."""
 
     kb_id: int = Field(gt=0, description="Knowledge base ID")
     answer_id: int = Field(gt=0, description="Answer ID")
-    attachment_id: int = Field(gt=0, description="Attachment ID")
+    attachment_id: int = Field(gt=0, description="Attachment ID to delete")
+
+
+class KBAnswerAttachmentDownloadParams(StrictBaseModel):
+    """Parameters for downloading an attachment from a KB answer."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    answer_id: int = Field(gt=0, description="Answer ID")
+    attachment_id: int = Field(gt=0, description="Attachment ID to download")
     save_path: str | None = Field(
         default=None,
-        description="Absolute path on disk to save the downloaded file (used by download tool; omit to get base64)",
+        description=(
+            "Absolute local path to save the file on the MCP server's host machine "
+            "(e.g. /Users/you/Downloads/file.pdf). "
+            "When provided, the file is written to disk and only metadata is returned — "
+            "no binary data in context. "
+            "When omitted, returns base64-encoded content in the response (suitable for "
+            "small files or when Claude needs to process the content directly)."
+        ),
     )
