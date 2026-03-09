@@ -3227,6 +3227,20 @@ class ZammadMCPServer:
                     e, context=f"retrieving KB answer {answer_id} in KB {kb_id}"
                 )
 
+        @self.mcp.resource("zammad://kb-attachment/{attachment_id}", mime_type="application/octet-stream")
+        def get_kb_attachment_resource(attachment_id: str) -> bytes:
+            """Get a KB answer attachment as a binary resource (BlobResourceContents).
+
+            Using a resource URI avoids putting binary data into the tool response
+            context window. The MCP client fetches the blob separately.
+
+            URI: zammad://kb-attachment/{attachment_id}
+            Example: zammad://kb-attachment/97727
+            """
+            client = self.get_client()
+            content, _content_type = client.download_kb_attachment(int(attachment_id))
+            return content
+
     def _setup_prompts(self) -> None:
         """Register all prompts with the MCP server."""
 
