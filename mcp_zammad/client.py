@@ -535,7 +535,8 @@ class ZammadClient:
             kb_id: Knowledge base ID
             category_id: Category ID
             title: New title for the category translation
-            translation_id: Translation ID to update (required when title is provided)
+            translation_id: Translation ID to update. If omitted and title is provided,
+                the first translation_id is resolved automatically from the category.
             parent_id: New parent category ID
             category_icon: New FontAwesome icon code
 
@@ -544,9 +545,15 @@ class ZammadClient:
         """
         payload: dict[str, Any] = {}
         if title is not None:
+            resolved_translation_id = translation_id
+            if resolved_translation_id is None:
+                category_data = self.get_kb_category(kb_id, category_id)
+                ids = category_data.get("translation_ids") or []
+                if ids:
+                    resolved_translation_id = ids[0]
             translation_entry: dict[str, Any] = {"title": title}
-            if translation_id is not None:
-                translation_entry["id"] = translation_id
+            if resolved_translation_id is not None:
+                translation_entry["id"] = resolved_translation_id
             payload["translations_attributes"] = [translation_entry]
         if parent_id is not None:
             payload["parent_id"] = parent_id
@@ -681,7 +688,8 @@ class ZammadClient:
             kb_id: Knowledge base ID
             answer_id: Answer ID
             title: New title
-            translation_id: Translation ID (required when updating title/body)
+            translation_id: Translation ID. If omitted and title/body are provided,
+                the first translation_id is resolved automatically from the answer.
             body: New body content
             category_id: Move answer to a different category
 
@@ -690,9 +698,18 @@ class ZammadClient:
         """
         payload: dict[str, Any] = {}
         if title is not None or body is not None:
+            # Auto-resolve translation_id if not supplied
+            resolved_translation_id = translation_id
+            if resolved_translation_id is None:
+                answer_data = self.get_kb_answer(kb_id, answer_id)
+                answer = self._extract_kb_answer_from_payload(answer_data, answer_id)
+                if answer:
+                    ids = answer.get("translation_ids") or []
+                    if ids:
+                        resolved_translation_id = ids[0]
             translation_entry: dict[str, Any] = {}
-            if translation_id is not None:
-                translation_entry["id"] = translation_id
+            if resolved_translation_id is not None:
+                translation_entry["id"] = resolved_translation_id
             if title is not None:
                 translation_entry["title"] = title
             if body is not None:
