@@ -45,6 +45,7 @@ from .models import (
     KBAnswerAttachmentAddParams,
     KBAnswerAttachmentDeleteParams,
     KBAnswerAttachmentDownloadParams,
+    SearchKBAnswersParams,
     KBAnswerPublishParams,
     KnowledgeBase,
     KnowledgeBaseAnswer,
@@ -884,7 +885,8 @@ def _format_kb_answers_list_markdown(answers: list[dict[str, Any]], kb_id: int, 
     lines.append("")
     for answer in answers:
         status = _kb_answer_status(answer)
-        lines.append(f"## Answer ID: {answer.get('id', 'N/A')}")
+        title = answer.get("_title") or "(no title)"
+        lines.append(f"## {title} (ID: {answer.get('id', 'N/A')})")
         lines.append(f"- **Status**: {status}")
         lines.append(f"- **Promoted**: {answer.get('promoted', False)}")
         lines.append(f"- **Position**: {answer.get('position', 0)}")
@@ -2652,6 +2654,65 @@ class ZammadMCPServer:
             except Exception as e:
                 return _handle_api_error(
                     e, context=f"listing KB answers in category {params.category_id} of KB {params.kb_id}"
+                )
+
+        @self.mcp.tool(annotations=_read_only_annotations("Search KB Answers"))
+        def zammad_search_kb_answers(params: SearchKBAnswersParams) -> str:
+            """Search knowledge base answers by title keyword.
+
+            Performs a case-insensitive substring search against answer titles
+            across all categories in the KB (or within a specific category).
+            Use this to find answers without knowing the category or answer ID.
+
+            Args:
+                params (SearchKBAnswersParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - query (str): Search string matched against answer titles (required)
+                    - category_id (int | None): Limit to this category (optional)
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+
+            Returns:
+                str: Matching answers with ID, title, status, and category ID.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+                Searches titles only, not answer body content.
+                For large KBs this may be slow (fetches each answer individually).
+                Use category_id to scope the search and improve speed.
+            """
+            client = self.get_client()
+            try:
+                results = client.search_kb_answers(
+                    kb_id=params.kb_id,
+                    query=params.query,
+                    category_id=params.category_id,
+                )
+                if params.response_format == ResponseFormat.JSON:
+                    result = json.dumps(
+                        {"items": results, "count": len(results), "kb_id": params.kb_id, "query": params.query},
+                        indent=2,
+                        default=str,
+                    )
+                else:
+                    if not results:
+                        result = f"No KB answers found matching '{params.query}' in KB {params.kb_id}."
+                    else:
+                        lines = [f"# KB Answer Search: '{params.query}' (KB: {params.kb_id})", ""]
+                        lines.append(f"Found {len(results)} match(es)")
+                        lines.append("")
+                        for answer in results:
+                            title = answer.get("_title") or "(no title)"
+                            status = _kb_answer_status(answer)
+                            lines.append(f"## {title} (ID: {answer.get('id', 'N/A')})")
+                            lines.append(f"- **Category ID**: {answer.get('_category_id', answer.get('category_id', 'N/A'))}")
+                            lines.append(f"- **Status**: {status}")
+                            lines.append(f"- **Promoted**: {answer.get('promoted', False)}")
+                            lines.append("")
+                        result = "\n".join(lines)
+                return truncate_response(result)
+            except Exception as e:
+                return _handle_api_error(
+                    e, context=f"searching KB answers in KB {params.kb_id} for '{params.query}'"
                 )
 
         @self.mcp.tool(annotations=_read_only_annotations("Get KB Answer"))

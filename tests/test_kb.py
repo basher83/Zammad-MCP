@@ -760,11 +760,12 @@ class TestKBServerTools:
         """zammad_list_kb_answers returns markdown."""
         server, mock_client = server_and_client
         mock_client.list_kb_answers.return_value = [
-            {"id": 100, "category_id": 10, "published_at": "2024-01-01T00:00:00Z"}
+            {"id": 100, "category_id": 10, "published_at": "2024-01-01T00:00:00Z", "_title": "My Answer"}
         ]
         fn = self._get_tool(server, "zammad_list_kb_answers")
         result = fn(params=ListKBAnswersParams(kb_id=1, category_id=10))
-        assert "Answer ID: 100" in result
+        assert "My Answer" in result
+        assert "ID: 100" in result
 
     def test_get_kb_answer_markdown(
         self, server_and_client: tuple[ZammadMCPServer, Mock]

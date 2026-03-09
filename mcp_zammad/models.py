@@ -856,6 +856,15 @@ class ListKBAnswersParams(StrictBaseModel):
     response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
 
 
+class SearchKBAnswersParams(StrictBaseModel):
+    """Parameters for searching KB answers by title keyword."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    query: str = Field(min_length=1, max_length=200, description="Search string (case-insensitive substring match against answer titles)")
+    category_id: int | None = Field(default=None, gt=0, description="Limit search to this category ID (optional; searches all categories if omitted)")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
 class CreateKBAnswerParams(StrictBaseModel):
     """Parameters for creating a KB answer."""
 

@@ -605,7 +605,7 @@ class ZammadClient:
             category_id: Category ID
 
         Returns:
-            List of answer dicts
+            List of answer dicts, each with an injected '_title' key if available.
         """
         category = self.get_kb_category(kb_id, category_id)
         answer_ids: list[int] = category.get("answer_ids") or []
@@ -615,10 +615,70 @@ class ZammadClient:
                 answer_data = self.get_kb_answer(kb_id, aid)
                 answer_entry = self._extract_kb_answer_from_payload(answer_data, aid)
                 if answer_entry:
+                    answer_entry["_title"] = self._extract_kb_answer_title(answer_data, answer_entry)
                     answers.append(answer_entry)
             except Exception:
                 logger.warning("Failed to fetch KB answer %d in category %d", aid, category_id)
         return answers
+
+    def search_kb_answers(
+        self, kb_id: int, query: str, category_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Search KB answers by title (case-insensitive substring match).
+
+        Searches across all categories in the KB, or within a specific category.
+        Each result includes a '_title' key with the answer title.
+
+        Args:
+            kb_id: Knowledge base ID
+            query: Search string (case-insensitive, matched against title)
+            category_id: If provided, limit search to this category
+
+        Returns:
+            List of matching answer dicts with '_title' injected.
+        """
+        kb = self.get_knowledge_base(kb_id)
+        if category_id is not None:
+            category_ids = [category_id]
+        else:
+            category_ids = kb.get("category_ids") or []
+        query_lower = query.lower()
+        results = []
+        for cid in category_ids:
+            try:
+                answers = self.list_kb_answers(kb_id, cid)
+                for answer in answers:
+                    title = answer.get("_title") or ""
+                    if query_lower in title.lower():
+                        answer["_category_id"] = cid
+                        results.append(answer)
+            except Exception:
+                logger.warning("Failed to search KB answers in category %d", cid)
+        return results
+
+    def _extract_kb_answer_title(self, raw_payload: dict[str, Any], answer: dict[str, Any]) -> str:
+        """Extract the first available title from the translation assets of a KB answer payload.
+
+        Args:
+            raw_payload: The raw API response (compound payload with assets)
+            answer: The extracted answer dict (may have translation_ids)
+
+        Returns:
+            Title string, or empty string if not found.
+        """
+        assets = raw_payload.get("assets") or {}
+        translations = assets.get("KnowledgeBaseAnswerTranslation") or {}
+        if translations:
+            translation_ids: list[int] = answer.get("translation_ids") or []
+            for tid in translation_ids:
+                t = translations.get(str(tid))
+                if t and t.get("title"):
+                    return str(t["title"])
+            # fallback: first translation
+            first = next(iter(translations.values()), {})
+            if first.get("title"):
+                return str(first["title"])
+        return ""
 
     def _extract_kb_answer_from_payload(self, payload: dict[str, Any], answer_id: int) -> dict[str, Any] | None:
         """Extract the answer dict from a compound KB answer payload.
