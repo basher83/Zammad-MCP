@@ -441,14 +441,29 @@ class ZammadClient:
     def list_knowledge_bases(self) -> list[dict[str, Any]]:
         """List all knowledge bases.
 
+        Zammad's GET /knowledge_bases endpoint is unreliable on some versions
+        (returns 404 even when KBs exist). Falls back to probing IDs 1-10.
+
         Returns:
             List of knowledge base dicts
         """
         response = self.api.session.get(self.api.url + "knowledge_bases")
-        data = self._kb_raise_or_return(response)
-        if isinstance(data, list):
-            return list(data)
-        return [data] if data else []
+        if response.status_code == 200 and response.content:
+            data = response.json()
+            if isinstance(data, list):
+                return list(data)
+            if isinstance(data, dict) and data:
+                return [data]
+
+        # Fallback: probe individual IDs (Zammad typically starts at 1)
+        results = []
+        for kb_id in range(1, 11):
+            r = self.api.session.get(self._kb_url(kb_id))
+            if r.status_code == 404:
+                break
+            if r.status_code == 200 and r.content:
+                results.append(dict(r.json()))
+        return results
 
     def get_knowledge_base(self, kb_id: int) -> dict[str, Any]:
         """Get a single knowledge base by ID.

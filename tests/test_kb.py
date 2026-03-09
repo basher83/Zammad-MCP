@@ -124,7 +124,7 @@ class TestKBClientMethods:
     # --- list_knowledge_bases ---
 
     def test_list_knowledge_bases_returns_list(self, mock_zammad_api: Mock) -> None:
-        """list_knowledge_bases returns a list."""
+        """list_knowledge_bases returns a list when endpoint responds with a list."""
         mock_instance = mock_zammad_api.return_value
         mock_instance.url = KB_BASE_URL
         mock_instance.session.get.return_value = _make_mock_response([{"id": 1}, {"id": 2}])
@@ -142,6 +142,21 @@ class TestKBClientMethods:
         client = _make_client(mock_zammad_api)
         result = client.list_knowledge_bases()
         assert result == [{"id": 1}]
+
+    def test_list_knowledge_bases_fallback_on_404(self, mock_zammad_api: Mock) -> None:
+        """list_knowledge_bases falls back to probing IDs when list endpoint returns 404."""
+        mock_instance = mock_zammad_api.return_value
+        mock_instance.url = KB_BASE_URL
+        not_found = Mock()
+        not_found.status_code = 404
+        not_found.content = b"not found"
+        kb1_response = _make_mock_response({"id": 1, "active": True})
+        # First call: list endpoint → 404; second call: id=1 → 200; third call: id=2 → 404 (stop)
+        mock_instance.session.get.side_effect = [not_found, kb1_response, not_found]
+        client = _make_client(mock_zammad_api)
+        result = client.list_knowledge_bases()
+        assert len(result) == 1
+        assert result[0]["id"] == 1
 
     # --- get_knowledge_base ---
 
