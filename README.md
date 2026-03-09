@@ -52,8 +52,9 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_internalize_kb_answer` - Make an answer internal (agents only)
   - `zammad_archive_kb_answer` - Archive an answer (hidden but recoverable)
   - `zammad_unarchive_kb_answer` - Restore an archived answer to draft
-  - `zammad_add_kb_answer_attachment` - Upload an attachment to an answer (base64)
+  - `zammad_add_kb_answer_attachment` - Upload an attachment to an answer (from file path or base64)
   - `zammad_delete_kb_answer_attachment` - Delete an attachment from an answer
+  - `zammad_download_kb_answer_attachment` - Download an attachment to a local path on the Mac
 
 ### Resources
 
@@ -445,6 +446,31 @@ Use delete_attachment with:
 - article_id: 456
 - attachment_id: 789
 ```
+
+### Download a KB Attachment to Your Mac
+
+```plaintext
+Use zammad_download_kb_answer_attachment with:
+- kb_id: 1
+- answer_id: 58
+- attachment_id: 97727
+- save_path: /Users/you/Downloads/attachment.pdf
+```
+
+The file is written directly to your Mac. No binary data enters the context window.
+To view or process the file, drag it into the Claude Desktop chat window.
+
+### Upload a File from Your Mac to a KB Answer
+
+```plaintext
+Use zammad_add_kb_answer_attachment with:
+- kb_id: 1
+- answer_id: 58
+- file_path: /Users/you/Downloads/figure.png
+```
+
+filename and mime_type are inferred automatically from the path.
+Alternatively pass filename + data (base64-encoded content) if the file is not on disk.
 
 ## Development
 
