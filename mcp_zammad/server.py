@@ -2534,12 +2534,15 @@ class ZammadMCPServer:
 
     def _setup_kb_tools(self) -> None:
         """Register Knowledge Base tools."""
+        self._setup_kb_info_tools()
         self._setup_kb_category_tools()
-        self._setup_kb_answer_tools()
+        self._setup_kb_answer_read_tools()
+        self._setup_kb_answer_write_tools()
+        self._setup_kb_answer_status_tools()
         self._setup_kb_attachment_tools()
 
-    def _setup_kb_category_tools(self) -> None:  # noqa: PLR0915
-        """Register KB knowledge-base and category tools."""
+    def _setup_kb_info_tools(self) -> None:
+        """Register KB list/get knowledge-base tools."""
 
         @self.mcp.tool(annotations=_read_only_annotations("List Knowledge Bases"))
         def zammad_list_knowledge_bases(params: ListKnowledgeBasesParams) -> str:
@@ -2601,6 +2604,9 @@ class ZammadMCPServer:
                 return truncate_response(result)
             except Exception as e:
                 return _handle_api_error(e, context=f"retrieving knowledge base {params.kb_id}")
+
+    def _setup_kb_category_tools(self) -> None:
+        """Register KB category CRUD tools."""
 
         @self.mcp.tool(annotations=_read_only_annotations("Get KB Category"))
         def zammad_get_kb_category(params: GetKBCategoryParams) -> str:
@@ -2727,8 +2733,8 @@ class ZammadMCPServer:
                     e, context=f"deleting KB category {params.category_id} in KB {params.kb_id}"
                 )
 
-    def _setup_kb_answer_tools(self) -> None:  # noqa: PLR0915
-        """Register KB answer CRUD and status tools."""
+    def _setup_kb_answer_read_tools(self) -> None:
+        """Register KB answer read tools (list, search, get)."""
 
         @self.mcp.tool(annotations=_read_only_annotations("List KB Answers"))
         def zammad_list_kb_answers(params: ListKBAnswersParams) -> str:
@@ -2844,6 +2850,9 @@ class ZammadMCPServer:
                     e, context=f"retrieving KB answer {params.answer_id} in KB {params.kb_id}"
                 )
 
+    def _setup_kb_answer_write_tools(self) -> None:
+        """Register KB answer write tools (create, update, delete)."""
+
         @self.mcp.tool(annotations=_write_annotations("Create KB Answer"))
         def zammad_create_kb_answer(params: CreateKBAnswerParams) -> str:
             """Create a new answer in a knowledge base category.
@@ -2941,8 +2950,8 @@ class ZammadMCPServer:
                     e, context=f"deleting KB answer {params.answer_id} in KB {params.kb_id}"
                 )
 
-    def _setup_kb_attachment_tools(self) -> None:
-        """Register KB answer attachment tools."""
+    def _setup_kb_answer_status_tools(self) -> None:
+        """Register KB answer status transition tools (publish, internalize, archive, unarchive)."""
 
         @self.mcp.tool(annotations=_idempotent_write_annotations("Publish KB Answer"))
         def zammad_publish_kb_answer(params: KBAnswerPublishParams) -> str:
@@ -3045,7 +3054,10 @@ class ZammadMCPServer:
                     e, context=f"unarchiving KB answer {params.answer_id} in KB {params.kb_id}"
                 )
 
-        @self.mcp.tool(annotations=_write_annotations("Add KB Answer Attachment"))  # noqa: PLR0915
+    def _setup_kb_attachment_tools(self) -> None:
+        """Register KB answer attachment tools (add, delete, download)."""
+
+        @self.mcp.tool(annotations=_write_annotations("Add KB Answer Attachment"))
         def zammad_add_kb_answer_attachment(params: KBAnswerAttachmentAddParams) -> str:
             """Add an attachment to a knowledge base answer.
 
