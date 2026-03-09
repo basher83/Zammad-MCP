@@ -43,7 +43,8 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_create_kb_category` - Create a new category (root or nested)
   - `zammad_update_kb_category` - Update category title, parent, or icon
   - `zammad_delete_kb_category` - Permanently delete a category
-  - `zammad_list_kb_answers` - List all answers in a category
+  - `zammad_list_kb_answers` - List all answers in a category (with titles)
+  - `zammad_search_kb_answers` - Search answers by title keyword across all categories
   - `zammad_get_kb_answer` - Get answer details including translations and attachments
   - `zammad_create_kb_answer` - Create a new answer (starts in draft)
   - `zammad_update_kb_answer` - Update answer title, body, or move to another category
