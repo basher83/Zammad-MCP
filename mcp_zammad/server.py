@@ -2949,29 +2949,35 @@ class ZammadMCPServer:
                 )
 
         @self.mcp.tool(annotations=_read_only_annotations("Download KB Answer Attachment"))
-        def zammad_download_kb_attachment(attachment_id: int) -> str:
-            """Download a knowledge base answer attachment by its ID.
+        def zammad_download_kb_answer_attachment(
+            params: KBAnswerAttachmentDeleteParams,
+        ) -> str:
+            """Download an attachment from a knowledge base answer.
 
             Args:
-                attachment_id (int): Attachment ID from the answer's attachments list.
+                params (KBAnswerAttachmentDeleteParams): Parameters containing:
+                    - kb_id (int): Knowledge base ID (required)
+                    - answer_id (int): Answer ID (required)
+                    - attachment_id (int): Attachment ID to download (required)
 
             Returns:
-                str: JSON with base64-encoded content and metadata, or error message.
+                str: JSON with base64-encoded content, content_type, and size.
 
             Note:
                 Requires knowledge_base.reader or knowledge_base.editor permission.
                 Attachment IDs are listed in zammad_get_kb_answer results.
-                This uses the generic /api/v1/attachments/{id} endpoint, NOT the
-                ticket attachment endpoint. Do NOT use zammad_download_attachment
-                for KB attachments - use this tool instead.
+                Do NOT use zammad_download_attachment for KB attachments - that
+                tool is for ticket attachments only.
             """
             client = self.get_client()
             try:
-                content, content_type = client.download_kb_attachment(attachment_id)
+                content, content_type = client.download_kb_attachment(params.attachment_id)
                 encoded = base64.b64encode(content).decode("ascii")
                 result = json.dumps(
                     {
-                        "attachment_id": attachment_id,
+                        "attachment_id": params.attachment_id,
+                        "answer_id": params.answer_id,
+                        "kb_id": params.kb_id,
                         "content_type": content_type,
                         "size": len(content),
                         "data": encoded,
@@ -2980,7 +2986,9 @@ class ZammadMCPServer:
                 )
                 return truncate_response(result)
             except Exception as e:
-                return _handle_api_error(e, context=f"downloading KB attachment {attachment_id}")
+                return _handle_api_error(
+                    e, context=f"downloading attachment {params.attachment_id} from KB answer {params.answer_id}"
+                )
 
     def _setup_resources(self) -> None:
         """Register all resources with the MCP server."""
