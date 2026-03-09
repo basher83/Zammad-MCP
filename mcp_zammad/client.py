@@ -703,17 +703,27 @@ class ZammadClient:
         Returns:
             Updated answer dict (compound payload)
         """
-        payload: dict[str, Any] = {}
-        if title is not None or body is not None:
-            # Auto-resolve translation_id if not supplied
-            resolved_translation_id = translation_id
-            if resolved_translation_id is None:
-                answer_data = self.get_kb_answer(kb_id, answer_id)
-                answer = self._extract_kb_answer_from_payload(answer_data, answer_id)
-                if answer:
+        # Zammad PATCH always requires category_id - fetch the answer upfront if we
+        # need to resolve it or the translation_id
+        resolved_category_id = category_id
+        resolved_translation_id = translation_id
+        needs_fetch = (title is not None or body is not None) and resolved_translation_id is None
+        needs_fetch = needs_fetch or resolved_category_id is None
+        if needs_fetch:
+            answer_data = self.get_kb_answer(kb_id, answer_id)
+            answer = self._extract_kb_answer_from_payload(answer_data, answer_id)
+            if answer:
+                if resolved_translation_id is None and (title is not None or body is not None):
                     ids = answer.get("translation_ids") or []
                     if ids:
                         resolved_translation_id = ids[0]
+                if resolved_category_id is None:
+                    resolved_category_id = answer.get("category_id")
+
+        payload: dict[str, Any] = {}
+        if resolved_category_id is not None:
+            payload["category_id"] = resolved_category_id
+        if title is not None or body is not None:
             translation_entry: dict[str, Any] = {}
             if resolved_translation_id is not None:
                 translation_entry["id"] = resolved_translation_id
@@ -722,8 +732,6 @@ class ZammadClient:
             if body is not None:
                 translation_entry["content_attributes"] = {"body": body}
             payload["translations_attributes"] = [translation_entry]
-        if category_id is not None:
-            payload["category_id"] = category_id
         response = self.api.session.patch(
             self._kb_url(kb_id, "answers", answer_id), json=payload
         )
