@@ -13,6 +13,16 @@ from zammad_py.exceptions import ConfigException
 logger = logging.getLogger(__name__)
 
 
+class ZammadAPIError(Exception):
+    """Raised when the Zammad API returns a non-2xx response."""
+
+    def __init__(self, status_code: int, url: str, body: object) -> None:
+        self.status_code = status_code
+        self.url = url
+        self.body = body
+        super().__init__(f"HTTP {status_code} from Zammad: {body} (URL: {url})")
+
+
 class ZammadClient:
     """Wrapper around zammad_py ZammadAPI with additional functionality."""
 
@@ -437,9 +447,7 @@ class ZammadClient:
                 body = response.json()
             except Exception:
                 body = response.text
-            raise Exception(
-                f"HTTP {response.status_code} from Zammad: {body} (URL: {response.url})"
-            )
+            raise ZammadAPIError(response.status_code, response.url, body)
         if response.status_code == 204 or not response.content:
             return {}
         data = response.json()
@@ -619,6 +627,27 @@ class ZammadClient:
             if response2.ok:
                 return self._kb_raise_or_return(response2)
         return payload
+
+    def get_kb_answer_with_content(self, kb_id: int, answer_id: int) -> dict[str, Any]:
+        """Get a KB answer with extracted title and body as a single processed dict.
+
+        Wraps get_kb_answer and the internal extraction helpers into a single
+        public call so callers (e.g. MCP resources) avoid using private methods.
+
+        Args:
+            kb_id: Knowledge base ID
+            answer_id: Answer ID
+
+        Returns:
+            Dict with keys: 'answer' (flat answer dict), 'title' (str), 'body' (str)
+        """
+        payload = self.get_kb_answer(kb_id, answer_id)
+        answer = self._extract_kb_answer_from_payload(payload, answer_id) or payload
+        return {
+            "answer": answer,
+            "title": self._extract_kb_answer_title(payload, answer),
+            "body": self._extract_kb_answer_body(payload, answer),
+        }
 
     def list_kb_answers(self, kb_id: int, category_id: int) -> list[dict[str, Any]]:
         """List answers in a KB category by fetching the category and expanding answer IDs.
@@ -824,6 +853,7 @@ class ZammadClient:
         answer: dict[str, Any],
         category_id: int | None,
         translation_id: int | None,
+        *,
         updating_text: bool,
     ) -> tuple[int | None, int | None]:
         """Fill missing category_id / translation_id from a fetched answer dict."""
@@ -860,7 +890,7 @@ class ZammadClient:
         )
         if answer is None:
             return category_id, translation_id
-        return self._fill_ids_from_answer(answer, category_id, translation_id, updating_text)
+        return self._fill_ids_from_answer(answer, category_id, translation_id, updating_text=updating_text)
 
     def update_kb_answer(
         self,

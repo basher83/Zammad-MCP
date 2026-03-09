@@ -965,33 +965,50 @@ def _build_kb_attachment_result(
     return json.dumps(base, indent=2)
 
 
-_KB_UPLOAD_ROOT: str | None = os.environ.get("KB_UPLOAD_ROOT")
-_KB_DOWNLOAD_ROOT: str | None = os.environ.get("KB_DOWNLOAD_ROOT")
-_KB_MAX_INLINE_BYTES: int = int(os.environ.get("KB_MAX_INLINE_BYTES", str(512 * 1024)))
+def _kb_upload_root() -> str | None:
+    """Return KB_UPLOAD_ROOT from env (read at call time so load_dotenv() is respected)."""
+    return os.environ.get("KB_UPLOAD_ROOT")
+
+
+def _kb_download_root() -> str | None:
+    """Return KB_DOWNLOAD_ROOT from env (read at call time so load_dotenv() is respected)."""
+    return os.environ.get("KB_DOWNLOAD_ROOT")
+
+
+def _kb_max_inline_bytes() -> int:
+    """Return KB_MAX_INLINE_BYTES from env (read at call time so load_dotenv() is respected)."""
+    return int(os.environ.get("KB_MAX_INLINE_BYTES", str(512 * 1024)))
 
 
 def _validate_path_within_root(path: str, root: str | None, label: str) -> str:
-    """Resolve path and verify it lies within root (if configured).
+    """Resolve path and verify it lies within root.
+
+    Fails closed: if root is None (env var not set), access is denied so operators
+    must explicitly configure an allowed directory via KB_UPLOAD_ROOT / KB_DOWNLOAD_ROOT.
 
     Args:
         path: User-supplied path string
-        root: Configured root directory (None = unrestricted)
-        label: Human-readable label for error messages
+        root: Configured root directory (None = deny)
+        label: Human-readable label for error messages (e.g. 'upload', 'download')
 
     Returns:
         Resolved absolute path
 
     Raises:
-        ValueError: If root is configured and path escapes it, or path is not a file/accessible
+        ValueError: If root is not configured, or path escapes the configured root
     """
+    if root is None:
+        env_var = f"KB_{label.upper()}_ROOT"
+        raise ValueError(
+            f"{label.title()} path access is disabled. "
+            f"Set the {env_var} environment variable to an allowed directory to enable it."
+        )
     resolved = os.path.realpath(os.path.abspath(path))
-    if root is not None:
-        root_resolved = os.path.realpath(root)
-        if not resolved.startswith(root_resolved + os.sep) and resolved != root_resolved:
-            raise ValueError(
-                f"{label} path '{resolved}' is outside the configured root '{root_resolved}'. "
-                f"Set {label.upper().replace(' ', '_')}_ROOT env var to allow a different directory."
-            )
+    root_resolved = os.path.realpath(root)
+    if os.path.commonpath([root_resolved, resolved]) != root_resolved:
+        raise ValueError(
+            f"{label.title()} path '{resolved}' is outside the configured root '{root_resolved}'.'"
+        )
     return resolved
 
 
@@ -1008,7 +1025,7 @@ def _resolve_attachment_upload_params(params: Any) -> tuple[str, str, str]:
         Tuple of (filename, data_b64, mime_type)
     """
     if params.file_path:
-        file_path = _validate_path_within_root(params.file_path, _KB_UPLOAD_ROOT, "upload")
+        file_path = _validate_path_within_root(params.file_path, _kb_upload_root(), "upload")
         if not os.path.isfile(file_path):
             raise ValueError(f"Upload path is not a regular file: '{file_path}'")
         if not os.access(file_path, os.R_OK):
@@ -2826,9 +2843,9 @@ class ZammadMCPServer:
 
             Note:
                 Requires knowledge_base.reader or knowledge_base.editor permission.
-                Searches titles only, not answer body content.
-                For large KBs this may be slow (fetches each answer individually).
-                Use category_id to scope the search and improve speed.
+                Searches both answer titles and body content (case-insensitive).
+                For large KBs this may be slow as each answer is fetched individually.
+                Use category_id to scope the search to a specific category and improve speed.
             """
             client = self.get_client()
             try:
@@ -3184,17 +3201,18 @@ class ZammadMCPServer:
                 save_path: str | None = None
                 if params.save_path:
                     save_path = _validate_path_within_root(
-                        params.save_path, _KB_DOWNLOAD_ROOT, "download"
+                        params.save_path, _kb_download_root(), "download"
                     )
                     os.makedirs(os.path.dirname(save_path), exist_ok=True)
                     with open(save_path, "wb") as f:
                         f.write(content)
                 else:
-                    if len(content) > _KB_MAX_INLINE_BYTES:
+                    max_bytes = _kb_max_inline_bytes()
+                    if len(content) > max_bytes:
                         return json.dumps({
                             "error": (
                                 f"Attachment is {len(content)} bytes which exceeds the inline limit "
-                                f"of {_KB_MAX_INLINE_BYTES} bytes. Provide save_path to write to disk."
+                                f"of {max_bytes} bytes. Provide save_path to write to disk."
                             )
                         })
                 result = _build_kb_attachment_result(content, content_type, params, save_path)
@@ -3391,11 +3409,10 @@ class ZammadMCPServer:
             """Get a knowledge base answer as a resource."""
             client = self.get_client()
             try:
-                payload = client.get_kb_answer(int(kb_id), int(answer_id))
-                answer = client._extract_kb_answer_from_payload(payload, int(answer_id)) or payload
-                title = client._extract_kb_answer_title(payload, answer)
-                body = client._extract_kb_answer_body(payload, answer)
-                return _format_kb_answer_markdown(answer, title=title, body=body)
+                result = client.get_kb_answer_with_content(int(kb_id), int(answer_id))
+                return _format_kb_answer_markdown(
+                    result["answer"], title=result["title"], body=result["body"]
+                )
             except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(
                     e, context=f"retrieving KB answer {answer_id} in KB {kb_id}"

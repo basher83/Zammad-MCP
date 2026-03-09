@@ -2,7 +2,7 @@
 
 import base64
 import json
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
@@ -56,12 +56,14 @@ def _make_mock_response(json_data: object, status_code: int = 200) -> Mock:
     return response
 
 
-def _make_client(mock_api: Mock) -> ZammadClient:
-    """Return a ZammadClient backed by a mock ZammadAPI."""
-    client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
-    # The mock_api fixture replaces ZammadAPI at class-creation time, so
-    # self.api is the mock instance returned by mock_api().
-    return client
+def _make_client(mock_api: Mock) -> ZammadClient:  # noqa: ARG001
+    """Return a ZammadClient backed by a mock ZammadAPI.
+
+    mock_api is intentionally unused here: it exists solely to ensure the
+    ZammadAPI patch fixture is active before ZammadClient is instantiated,
+    so self.api inside ZammadClient resolves to the mock instance.
+    """
+    return ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
 
 
 # ---------------------------------------------------------------------------
@@ -521,7 +523,7 @@ class TestKBClientMethods:
 
     def test_add_kb_answer_attachment_from_file_path(self, mock_zammad_api: Mock, tmp_path: Any) -> None:
         """_resolve_attachment_upload_params reads file from disk and infers mime type."""
-        import tempfile
+        import os
         from mcp_zammad.server import _resolve_attachment_upload_params
 
         file = tmp_path / "document.pdf"
@@ -532,7 +534,8 @@ class TestKBClientMethods:
             filename = None
             mime_type = "application/octet-stream"
 
-        filename, data, mime_type = _resolve_attachment_upload_params(FakeParams())
+        with patch.dict(os.environ, {"KB_UPLOAD_ROOT": str(tmp_path)}):
+            filename, data, mime_type = _resolve_attachment_upload_params(FakeParams())
         assert filename == "document.pdf"
         assert data == base64.b64encode(b"%PDF-test").decode()
         assert mime_type == "application/pdf"
@@ -554,6 +557,31 @@ class TestKBClientMethods:
         save_file.write_bytes(content)
         assert save_file.read_bytes() == raw_content
         assert content_type == "application/octet-stream"
+
+    def test_get_kb_answer_with_content(self, mock_zammad_api: Mock) -> None:
+        """get_kb_answer_with_content returns answer, title, and body keys."""
+        mock_instance = mock_zammad_api.return_value
+        mock_instance.url = KB_BASE_URL
+        payload = {
+            "id": 100,
+            "assets": {
+                "KnowledgeBaseAnswer": {
+                    "100": {"id": 100, "category_id": 10, "translation_ids": [55]}
+                },
+                "KnowledgeBaseAnswerTranslation": {
+                    "55": {"id": 55, "title": "My Answer", "kb_locale_id": 1}
+                },
+            },
+        }
+        mock_instance.session.get.side_effect = [
+            _make_mock_response(payload),
+            _make_mock_response(payload),
+        ]
+        client = _make_client(mock_zammad_api)
+        result = client.get_kb_answer_with_content(1, 100)
+        assert "answer" in result
+        assert result["answer"]["id"] == 100
+        assert result["title"] == "My Answer"
 
     # --- delete_kb_answer_attachment ---
 
@@ -746,7 +774,7 @@ class TestKBServerTools:
             server.client = mock_client
             yield server, mock_client
 
-    def _get_tool(self, server: ZammadMCPServer, name: str):
+    def _get_tool(self, server: ZammadMCPServer, name: str) -> Callable[..., str]:
         """Extract a registered tool function by name."""
         for tool in server.mcp._tool_manager._tools.values():
             if tool.name == name:
@@ -970,6 +998,32 @@ class TestKBServerTools:
         )
         data = json.loads(result)
         assert data["id"] == 100
+
+    def test_add_kb_answer_attachment_file_path_e2e(
+        self, server_and_client: tuple[ZammadMCPServer, Mock], tmp_path: Any
+    ) -> None:
+        """zammad_add_kb_answer_attachment reads file from disk, detects MIME, calls client."""
+        import os
+
+        server, mock_client = server_and_client
+        mock_client.add_kb_answer_attachment.return_value = {"id": 42}
+
+        pdf_file = tmp_path / "doc.pdf"
+        pdf_file.write_bytes(b"%PDF-test-content")
+
+        fn = self._get_tool(server, "zammad_add_kb_answer_attachment")
+        with patch.dict(os.environ, {"KB_UPLOAD_ROOT": str(tmp_path)}):
+            result = fn(
+                params=KBAnswerAttachmentAddParams(
+                    kb_id=1, answer_id=100, file_path=str(pdf_file)
+                )
+            )
+        data = json.loads(result)
+        assert data["id"] == 42
+        _, call_kwargs = mock_client.add_kb_answer_attachment.call_args
+        assert call_kwargs["filename"] == "doc.pdf"
+        assert call_kwargs["mime_type"] == "application/pdf"
+        assert call_kwargs["data"] == base64.b64encode(b"%PDF-test-content").decode()
 
     def test_delete_kb_answer_attachment(
         self, server_and_client: tuple[ZammadMCPServer, Mock]
