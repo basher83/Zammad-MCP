@@ -710,24 +710,57 @@ class ZammadClient:
                     raise
         return results
 
+    def _expand_category_ids(self, kb_id: int, root_ids: list[int]) -> list[int]:
+        """BFS-expand root category IDs into a flat list including all descendants.
+
+        Uses the 'child_ids' field returned by get_kb_category to traverse the
+        category tree so nested subcategories are included in searches.
+
+        Args:
+            kb_id: Knowledge base ID
+            root_ids: Top-level category IDs to start from
+
+        Returns:
+            Flat list of all category IDs (roots + all descendants)
+        """
+        visited: list[int] = []
+        queue = list(root_ids)
+        seen: set[int] = set()
+        while queue:
+            cid = queue.pop(0)
+            if cid in seen:
+                continue
+            seen.add(cid)
+            visited.append(cid)
+            try:
+                category = self.get_kb_category(kb_id, cid)
+                for child_id in category.get("child_ids") or []:
+                    if child_id not in seen:
+                        queue.append(child_id)
+            except (ZammadAPIError, KeyError, ValueError):
+                logger.warning("Failed to expand child categories of category %d", cid)
+        return visited
+
     def search_kb_answers(
         self, kb_id: int, query: str, category_id: int | None = None
     ) -> list[dict[str, Any]]:
         """Search KB answers by title or body content (case-insensitive substring match).
 
-        Searches across all categories in the KB, or within a specific category.
+        Searches across all categories in the KB (including nested subcategories),
+        or within a specific category and its descendants.
         Each result includes '_title' and '_body' keys extracted from translations.
 
         Args:
             kb_id: Knowledge base ID
-            query: Search string (case-insensitive, matched against title)
-            category_id: If provided, limit search to this category
+            query: Search string (case-insensitive, matched against title and body)
+            category_id: If provided, limit search to this category and its children
 
         Returns:
             List of matching answer dicts with '_title' injected.
         """
         kb = self.get_knowledge_base(kb_id)
-        category_ids = [category_id] if category_id is not None else (kb.get("category_ids") or [])
+        root_ids = [category_id] if category_id is not None else (kb.get("category_ids") or [])
+        category_ids = self._expand_category_ids(kb_id, root_ids)
         return self._answers_matching_query(kb_id, category_ids, query.lower())
 
     def _first_translation_field(

@@ -424,6 +424,51 @@ class TestKBClientMethods:
         assert len(result) == 1
         assert result[0]["id"] == 100
 
+    # --- _expand_category_ids / search_kb_answers nested ---
+
+    def test_expand_category_ids_includes_descendants(self, mock_zammad_api: Mock) -> None:
+        """_expand_category_ids BFS-expands root categories into all descendants."""
+        mock_instance = mock_zammad_api.return_value
+        mock_instance.url = KB_BASE_URL
+        # root cat 10 has child 11; child 11 has no children
+        cat_10 = {"id": 10, "child_ids": [11], "answer_ids": []}
+        cat_11 = {"id": 11, "child_ids": [], "answer_ids": []}
+        mock_instance.session.get.side_effect = [
+            _make_mock_response(cat_10),
+            _make_mock_response(cat_11),
+        ]
+        client = _make_client(mock_zammad_api)
+        result = client._expand_category_ids(1, [10])
+        assert result == [10, 11]
+
+    def test_search_kb_answers_includes_nested_categories(self, mock_zammad_api: Mock) -> None:
+        """search_kb_answers finds answers in nested subcategories, not just root."""
+        mock_instance = mock_zammad_api.return_value
+        mock_instance.url = KB_BASE_URL
+        kb_data = {"id": 1, "category_ids": [10]}
+        cat_10 = {"id": 10, "child_ids": [11], "answer_ids": []}
+        cat_11 = {"id": 11, "child_ids": [], "answer_ids": [200]}
+        answer_payload = {
+            "id": 200,
+            "assets": {
+                "KnowledgeBaseAnswer": {
+                    "200": {"id": 200, "category_id": 11, "translation_ids": []}
+                },
+                "KnowledgeBaseAnswerTranslation": {},
+            },
+        }
+        mock_instance.session.get.side_effect = [
+            _make_mock_response(kb_data),   # get_knowledge_base
+            _make_mock_response(cat_10),    # _expand: cat 10
+            _make_mock_response(cat_11),    # _expand: cat 11
+            _make_mock_response(cat_10),    # list_kb_answers cat 10 (get_kb_category)
+            _make_mock_response(cat_11),    # list_kb_answers cat 11 (get_kb_category)
+            _make_mock_response(answer_payload),  # get_kb_answer for answer 200
+        ]
+        client = _make_client(mock_zammad_api)
+        results = client.search_kb_answers(1, "")
+        assert any(r["id"] == 200 for r in results)
+
     # --- create_kb_answer ---
 
     def test_create_kb_answer(self, mock_zammad_api: Mock) -> None:

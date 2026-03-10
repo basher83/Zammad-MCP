@@ -3388,7 +3388,7 @@ class ZammadMCPServer:
             client = self.get_client()
             try:
                 kb = client.get_knowledge_base(int(kb_id))
-                return _format_kb_markdown(kb)
+                return truncate_response(_format_kb_markdown(kb))
             except (requests.exceptions.RequestException, ValueError, ValidationError, ZammadAPIError) as e:
                 return _handle_api_error(e, context=f"retrieving knowledge base {kb_id}")
 
@@ -3398,7 +3398,7 @@ class ZammadMCPServer:
             client = self.get_client()
             try:
                 category = client.get_kb_category(int(kb_id), int(category_id))
-                return _format_kb_category_markdown(category)
+                return truncate_response(_format_kb_category_markdown(category))
             except (requests.exceptions.RequestException, ValueError, ValidationError, ZammadAPIError) as e:
                 return _handle_api_error(
                     e, context=f"retrieving KB category {category_id} in KB {kb_id}"
