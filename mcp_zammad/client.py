@@ -688,26 +688,38 @@ class ZammadClient:
                     raise
         return answers
 
+    def _answer_matches_query(self, answer: dict[str, Any], query_lower: str) -> bool:
+        """Return True if query_lower appears in the answer's title or body."""
+        title = answer.get("_title") or ""
+        body = answer.get("_body") or ""
+        return query_lower in title.lower() or query_lower in body.lower()
+
+    def _collect_category_answers(
+        self, kb_id: int, cid: int, query_lower: str
+    ) -> list[dict[str, Any]]:
+        """Return matching answers from a single category, tolerating 404 and parse errors."""
+        matches = []
+        try:
+            for answer in self.list_kb_answers(kb_id, cid):
+                if self._answer_matches_query(answer, query_lower):
+                    answer["_category_id"] = cid
+                    matches.append(answer)
+        except (KeyError, IndexError, ValueError):
+            logger.warning("Failed to parse KB answers in category %d", cid)
+        except ZammadAPIError as e:
+            if e.status_code == 404:
+                logger.warning("KB category %d not found during search", cid)
+            else:
+                raise
+        return matches
+
     def _answers_matching_query(
         self, kb_id: int, category_ids: list[int], query_lower: str
     ) -> list[dict[str, Any]]:
         """Return answers from the given categories whose title or body matches query_lower."""
         results = []
         for cid in category_ids:
-            try:
-                for answer in self.list_kb_answers(kb_id, cid):
-                    title = answer.get("_title") or ""
-                    body = answer.get("_body") or ""
-                    if query_lower in title.lower() or query_lower in body.lower():
-                        answer["_category_id"] = cid
-                        results.append(answer)
-            except (KeyError, IndexError, ValueError):
-                logger.warning("Failed to parse KB answers in category %d", cid)
-            except ZammadAPIError as e:
-                if e.status_code == 404:
-                    logger.warning("KB category %d not found during search", cid)
-                else:
-                    raise
+            results.extend(self._collect_category_answers(kb_id, cid, query_lower))
         return results
 
     def _expand_category_ids(self, kb_id: int, root_ids: list[int]) -> list[int]:
