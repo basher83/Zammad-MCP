@@ -154,6 +154,7 @@ class TestKBClientMethods:
         mock_instance.url = KB_BASE_URL
         not_found = Mock()
         not_found.status_code = 404
+        not_found.ok = False
         not_found.content = b"not found"
         kb1_response = _make_mock_response({"id": 1, "active": True})
         # First call: list endpoint → 404; id=1 → 200; ids 2-10 → 404 (skipped, not stopped)
@@ -162,6 +163,37 @@ class TestKBClientMethods:
         result = client.list_knowledge_bases()
         assert len(result) == 1
         assert result[0]["id"] == 1
+
+    def test_list_knowledge_bases_empty_body_raises(self, mock_zammad_api: Mock) -> None:
+        """list_knowledge_bases raises ValueError on 200 with empty body."""
+        mock_instance = mock_zammad_api.return_value
+        mock_instance.url = KB_BASE_URL
+        empty_response = Mock()
+        empty_response.status_code = 200
+        empty_response.ok = True
+        empty_response.content = b""
+        mock_instance.session.get.return_value = empty_response
+        client = _make_client(mock_zammad_api)
+        with pytest.raises(ValueError, match="empty body"):
+            client.list_knowledge_bases()
+
+    def test_probe_kb_ids_raises_on_non_404_error(self, mock_zammad_api: Mock) -> None:
+        """_probe_kb_ids propagates non-404 HTTP errors instead of silently skipping."""
+        mock_instance = mock_zammad_api.return_value
+        mock_instance.url = KB_BASE_URL
+        auth_error = Mock()
+        auth_error.status_code = 401
+        auth_error.ok = False
+        auth_error.raise_for_status.side_effect = requests.HTTPError("401 Unauthorized")
+        # list endpoint → 404 (triggers probe); first probe → 401
+        not_found = Mock()
+        not_found.status_code = 404
+        not_found.ok = False
+        not_found.content = b""
+        mock_instance.session.get.side_effect = [not_found, auth_error]
+        client = _make_client(mock_zammad_api)
+        with pytest.raises(requests.HTTPError, match="401"):
+            client.list_knowledge_bases()
 
     # --- get_knowledge_base ---
 
@@ -376,7 +408,11 @@ class TestKBClientMethods:
         answer_100_payload = {"id": 100, "assets": {"KnowledgeBaseAnswer": {"100": {"id": 100, "category_id": 10, "translation_ids": []}}}}
         error_response = Mock()
         error_response.status_code = 404
+        error_response.ok = False
         error_response.content = b"not found"
+        error_response.text = "not found"
+        error_response.json.return_value = {"error": "Not found"}
+        error_response.url = f"{KB_BASE_URL}knowledge_bases/1/answers/101"
         error_response.raise_for_status.side_effect = requests.HTTPError("404")
         mock_instance.session.get.side_effect = [
             _make_mock_response(category_data),
@@ -557,6 +593,34 @@ class TestKBClientMethods:
         save_file.write_bytes(content)
         assert save_file.read_bytes() == raw_content
         assert content_type == "application/octet-stream"
+
+    def test_get_kb_answer_include_contents_error_propagates(self, mock_zammad_api: Mock) -> None:
+        """get_kb_answer raises on non-ok include_contents response instead of returning empty body."""
+        from mcp_zammad.client import ZammadAPIError
+
+        mock_instance = mock_zammad_api.return_value
+        mock_instance.url = KB_BASE_URL
+        payload = {
+            "id": 100,
+            "assets": {
+                "KnowledgeBaseAnswer": {
+                    "100": {"id": 100, "category_id": 10, "translation_ids": [55]}
+                }
+            },
+        }
+        ok_response = _make_mock_response(payload)
+        # Second request (include_contents) returns 403
+        forbidden = Mock()
+        forbidden.status_code = 403
+        forbidden.ok = False
+        forbidden.content = b"forbidden"
+        forbidden.json.return_value = {"error": "Access denied"}
+        forbidden.url = f"{KB_BASE_URL}knowledge_bases/1/answers/100"
+        mock_instance.session.get.side_effect = [ok_response, forbidden]
+        client = _make_client(mock_zammad_api)
+        with pytest.raises(ZammadAPIError) as exc_info:
+            client.get_kb_answer(1, 100)
+        assert exc_info.value.status_code == 403
 
     def test_get_kb_answer_with_content(self, mock_zammad_api: Mock) -> None:
         """get_kb_answer_with_content returns answer, title, and body keys."""

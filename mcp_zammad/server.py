@@ -20,7 +20,7 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from .client import ZammadClient
+from .client import ZammadAPIError, ZammadClient
 from .models import (
     Article,
     ArticleCreate,
@@ -3389,7 +3389,7 @@ class ZammadMCPServer:
             try:
                 kb = client.get_knowledge_base(int(kb_id))
                 return _format_kb_markdown(kb)
-            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
+            except (requests.exceptions.RequestException, ValueError, ValidationError, ZammadAPIError) as e:
                 return _handle_api_error(e, context=f"retrieving knowledge base {kb_id}")
 
         @self.mcp.resource("zammad://kb/{kb_id}/category/{category_id}")
@@ -3399,7 +3399,7 @@ class ZammadMCPServer:
             try:
                 category = client.get_kb_category(int(kb_id), int(category_id))
                 return _format_kb_category_markdown(category)
-            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
+            except (requests.exceptions.RequestException, ValueError, ValidationError, ZammadAPIError) as e:
                 return _handle_api_error(
                     e, context=f"retrieving KB category {category_id} in KB {kb_id}"
                 )
@@ -3410,10 +3410,11 @@ class ZammadMCPServer:
             client = self.get_client()
             try:
                 result = client.get_kb_answer_with_content(int(kb_id), int(answer_id))
+                body = truncate_response(result["body"]) if result["body"] else ""
                 return _format_kb_answer_markdown(
-                    result["answer"], title=result["title"], body=result["body"]
+                    result["answer"], title=result["title"], body=body
                 )
-            except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
+            except (requests.exceptions.RequestException, ValueError, ValidationError, ZammadAPIError) as e:
                 return _handle_api_error(
                     e, context=f"retrieving KB answer {answer_id} in KB {kb_id}"
                 )

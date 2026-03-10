@@ -459,12 +459,17 @@ class ZammadClient:
         """Probe KB IDs 1-10 individually as a fallback for unreliable list endpoints.
 
         Skips 404 responses (ID not found) but continues probing the full range
-        so non-contiguous IDs are still discovered.
+        so non-contiguous IDs are still discovered. Raises on non-404 errors
+        (e.g. 401/403/500) so auth and server failures are not silently hidden.
         """
         results = []
         for kb_id in range(1, 11):
             r = self.api.session.get(self._kb_url(kb_id))
-            if r.status_code == 200 and r.content:
+            if r.status_code == 404:
+                continue
+            if not r.ok:
+                r.raise_for_status()
+            if r.content:
                 results.append(dict(r.json()))
         return results
 
@@ -473,21 +478,26 @@ class ZammadClient:
 
         Zammad's GET /knowledge_bases endpoint is unreliable on some versions
         (returns 404 even when KBs exist). Falls back to probing IDs 1-10 only
-        on 404; other error statuses are propagated as exceptions.
+        on 404; other error statuses (401/403/500) are propagated as exceptions.
+        A 200 with an empty or non-list/dict body is treated as an error rather
+        than silently falling back.
 
         Returns:
             List of knowledge base dicts
         """
         response = self.api.session.get(self.api.url + "knowledge_bases")
-        if response.status_code == 200 and response.content:
-            data = response.json()
-            if isinstance(data, list):
-                return list(data)
-            if isinstance(data, dict) and data:
-                return [data]
-        if response.status_code != 404:
+        if response.status_code == 404:
+            return self._probe_kb_ids()
+        if not response.ok:
             response.raise_for_status()
-        return self._probe_kb_ids()
+        if not response.content:
+            raise ValueError("Zammad returned an empty body for knowledge_bases listing")
+        data = response.json()
+        if isinstance(data, list):
+            return list(data)
+        if isinstance(data, dict) and data:
+            return [data]
+        raise ValueError(f"Unexpected knowledge_bases response shape: {type(data).__name__}")
 
     def get_knowledge_base(self, kb_id: int) -> dict[str, Any]:
         """Get a single knowledge base by ID.
@@ -624,8 +634,7 @@ class ZammadClient:
         if translation_ids:
             translation_id = translation_ids[0]
             response2 = self.api.session.get(url, params={"include_contents": translation_id})
-            if response2.ok:
-                return self._kb_raise_or_return(response2)
+            return self._kb_raise_or_return(response2)
         return payload
 
     def get_kb_answer_with_content(self, kb_id: int, answer_id: int) -> dict[str, Any]:
@@ -670,8 +679,13 @@ class ZammadClient:
                     answer_entry["_title"] = self._extract_kb_answer_title(answer_data, answer_entry)
                     answer_entry["_body"] = self._extract_kb_answer_body(answer_data, answer_entry)
                     answers.append(answer_entry)
-            except Exception:
-                logger.warning("Failed to fetch KB answer %d in category %d", aid, category_id)
+            except (KeyError, IndexError, ValueError):
+                logger.warning("Failed to parse KB answer %d in category %d", aid, category_id)
+            except ZammadAPIError as e:
+                if e.status_code == 404:
+                    logger.warning("KB answer %d not found in category %d", aid, category_id)
+                else:
+                    raise
         return answers
 
     def _answers_matching_query(
@@ -687,8 +701,13 @@ class ZammadClient:
                     if query_lower in title.lower() or query_lower in body.lower():
                         answer["_category_id"] = cid
                         results.append(answer)
-            except Exception:
-                logger.warning("Failed to search KB answers in category %d", cid)
+            except (KeyError, IndexError, ValueError):
+                logger.warning("Failed to parse KB answers in category %d", cid)
+            except ZammadAPIError as e:
+                if e.status_code == 404:
+                    logger.warning("KB category %d not found during search", cid)
+                else:
+                    raise
         return results
 
     def search_kb_answers(
