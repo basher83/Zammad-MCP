@@ -322,6 +322,10 @@ class ArticleCreate(StrictBaseModel):
     article_type: ArticleType = Field(default=ArticleType.NOTE, alias="type", description="Article type")
     internal: bool = Field(default=False, description="Whether the article is internal")
     sender: ArticleSender = Field(default=ArticleSender.AGENT, description="Sender type")
+    subject: str | None = Field(default=None, description="Article subject (for emails)")
+    to: str | None = Field(default=None, description="Email recipient (for email type)")
+    cc: str | None = Field(default=None, description="Email CC recipients")
+    content_type: str | None = Field(default=None, description="Content type (text/plain or text/html)")
     attachments: list[AttachmentUpload] | None = Field(
         default=None, description="Optional attachments to include", max_length=10
     )

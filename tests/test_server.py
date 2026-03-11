@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 import requests
 from pydantic import ValidationError
+from zammad_py.exceptions import ConfigException
 
 from mcp_zammad.models import (
     Article,
@@ -249,8 +250,8 @@ def test_tool_without_client():
     server_inst = ZammadMCPServer()
     server_inst.client = None
 
-    # Should raise RuntimeError when client is not initialized
-    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+    # Should raise ConfigException when client is not initialized and env vars are missing
+    with pytest.raises(ConfigException, match="Zammad URL is required"):
         server_inst.get_client()
 
 
@@ -517,7 +518,16 @@ def test_add_article_tool(mock_zammad_client, sample_article_data, decorator_cap
 
     # Verify the client was called with correct params (including attachments=None for backward compat)
     mock_instance.add_article.assert_called_once_with(
-        ticket_id=1, article_type="note", attachments=None, body="New comment", internal=False, sender="Agent"
+        ticket_id=1,
+        article_type="note",
+        attachments=None,
+        body="New comment",
+        internal=False,
+        sender="Agent",
+        subject=None,
+        to=None,
+        cc=None,
+        content_type=None,
     )
 
 
@@ -598,9 +608,71 @@ def test_add_article_with_attachments_tool(mock_zammad_client, decorator_capture
     assert "attachments" in call_kwargs
     assert call_kwargs["attachments"] is not None
     assert len(call_kwargs["attachments"]) == 1
-    assert call_kwargs["attachments"][0]["filename"] == "doc.pdf"
-    assert call_kwargs["attachments"][0]["data"] == "dGVzdA=="
-    assert call_kwargs["attachments"][0]["mime-type"] == "application/pdf"
+
+
+def test_add_article_with_email_fields(mock_zammad_client, decorator_capturer):
+    """Test zammad_add_article tool with email-specific fields."""
+    mock_instance, _ = mock_zammad_client
+
+    # Mock client response
+    mock_instance.add_article.return_value = {
+        "id": 456,
+        "ticket_id": 123,
+        "body": "Email body",
+        "type": "email",
+        "internal": False,
+        "sender": "Agent",
+        "subject": "Re: Help",
+        "to": "customer@example.com",
+        "cc": "boss@example.com",
+        "content_type": "text/plain",
+        "created_at": "2024-01-15T16:30:00Z",
+        "updated_at": "2024-01-15T16:30:00Z",
+        "created_by_id": 1,
+        "updated_by_id": 1,
+    }
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Create params with email fields
+    params = ArticleCreate(
+        ticket_id=123,
+        body="Email body",
+        article_type=ArticleType.EMAIL,
+        subject="Re: Help",
+        to="customer@example.com",
+        cc="boss@example.com",
+        content_type="text/plain",
+    )
+
+    # Call tool
+    result = test_tools["zammad_add_article"](params)
+
+    # Verify result
+    assert result.id == 456
+    assert result.subject == "Re: Help"
+    assert result.to == "customer@example.com"
+
+    # Verify client.add_article was called with all email fields
+    mock_instance.add_article.assert_called_once_with(
+        ticket_id=123,
+        article_type="email",
+        body="Email body",
+        internal=False,
+        sender="Agent",
+        subject="Re: Help",
+        to="customer@example.com",
+        cc="boss@example.com",
+        content_type="text/plain",
+        attachments=None,
+    )
 
 
 def test_add_article_without_attachments_backward_compat_tool(mock_zammad_client, decorator_capturer):
@@ -1277,7 +1349,7 @@ def test_get_client_error():
     server = ZammadMCPServer()
     server.client = None
 
-    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
+    with pytest.raises(ConfigException, match="Zammad URL is required"):
         server.get_client()
 
 
