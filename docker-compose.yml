@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  zammad-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - ZAMMAD_URL=${ZAMMAD_URL}
+      - ZAMMAD_HTTP_TOKEN=${ZAMMAD_HTTP_TOKEN}
+      - MCP_TRANSPORT=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+    ports:
+      - "9146:8000"
+    restart: unless-stopped

@@ -1,7 +1,7 @@
 """Entry point for the Zammad MCP server."""
 
 from .config import TransportConfig, TransportType
-from .server import mcp
+from .server import _configure_logging, mcp
 
 
 def main() -> None:
@@ -12,6 +12,9 @@ def main() -> None:
     - MCP_HOST: Host for HTTP transport (default: 127.0.0.1)
     - MCP_PORT: Port for HTTP transport (required if transport=http)
     """
+    # Configure logging first to prevent output leakage
+    _configure_logging()
+
     # Load transport configuration from environment
     config = TransportConfig.from_env()
     config.validate()
