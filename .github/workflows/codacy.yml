@@ -41,7 +41,7 @@ jobs:
 
       # Login to Docker Hub to avoid rate limits
       - name: Login to Docker Hub
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
         if: github.repository == 'basher83/Zammad-MCP' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
