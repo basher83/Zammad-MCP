@@ -1119,6 +1119,7 @@ class ZammadMCPServer:
                     - group (str | None): New group name
                     - owner (str | None): New owner email/login
                     - customer (str | None): New customer email/login
+                    - time_unit (float | None): Time spent for time accounting
 
             Returns:
                 Ticket: The updated ticket object with schema:

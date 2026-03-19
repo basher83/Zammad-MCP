@@ -186,6 +186,40 @@ def test_add_article_without_attachments_backward_compat(mock_api: MagicMock) ->
 
 
 @patch("mcp_zammad.client.ZammadAPI")
+def test_add_article_with_time_unit(mock_api: MagicMock) -> None:
+    """Test adding article with time_unit for time accounting."""
+    mock_instance = mock_api.return_value
+    mock_instance.ticket_article.create.return_value = {"id": 789, "ticket_id": 123, "body": "Worked on this"}
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        result = client.add_article(ticket_id=123, body="Worked on this", time_unit=45.5)
+
+    assert result["id"] == 789
+    call_args = mock_instance.ticket_article.create.call_args[0][0]
+    assert call_args["time_unit"] == 45.5
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_add_article_without_time_unit_excludes_field(mock_api: MagicMock) -> None:
+    """Test that time_unit is not included in payload when None."""
+    mock_instance = mock_api.return_value
+    mock_instance.ticket_article.create.return_value = {"id": 789, "ticket_id": 123, "body": "Simple comment"}
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        result = client.add_article(ticket_id=123, body="Simple comment")
+
+    assert result["id"] == 789
+    call_args = mock_instance.ticket_article.create.call_args[0][0]
+    assert "time_unit" not in call_args
+
+
+@patch("mcp_zammad.client.ZammadAPI")
 def test_delete_attachment_success(mock_api: MagicMock) -> None:
     """Test successful attachment deletion."""
     mock_instance = mock_api.return_value

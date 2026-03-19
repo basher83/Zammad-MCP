@@ -71,6 +71,32 @@ class TestZammadClientMethods:
         assert result["title"] == "Updated Title"
         mock_instance.ticket.update.assert_called_once_with(1, {"title": "Updated Title", "state": "open"})
 
+    def test_update_ticket_with_time_unit(self, mock_zammad_api: Mock) -> None:
+        """Test update_ticket method with time_unit for time accounting."""
+        mock_instance = Mock()
+        mock_instance.ticket.update.return_value = {"id": 1, "title": "Test", "state": "open"}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.update_ticket(1, title="Test", time_unit=2.5)
+
+        assert result["id"] == 1
+        mock_instance.ticket.update.assert_called_once_with(1, {"title": "Test", "time_unit": 2.5})
+
+    def test_update_ticket_without_time_unit_excludes_field(self, mock_zammad_api: Mock) -> None:
+        """Test that time_unit is not included in payload when None."""
+        mock_instance = Mock()
+        mock_instance.ticket.update.return_value = {"id": 1, "title": "Test"}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        client.update_ticket(1, title="Test")
+
+        call_args = mock_instance.ticket.update.call_args[0][1]
+        assert "time_unit" not in call_args
+
     def test_get_groups(self, mock_zammad_api: Mock) -> None:
         """Test get_groups method."""
         mock_instance = Mock()
@@ -365,6 +391,35 @@ class TestZammadClientMethods:
         mock_instance.ticket_article.create.assert_called_once_with(
             {"ticket_id": 1, "body": "Response", "type": "email", "internal": True, "sender": "Customer"}
         )
+
+    def test_add_article_with_time_unit(self, mock_zammad_api: Mock) -> None:
+        """Test add_article method with time_unit."""
+        mock_instance = Mock()
+        mock_instance.ticket_article.create.return_value = {"id": 2, "body": "Worked on it", "type": "note"}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.add_article(ticket_id=1, body="Worked on it", time_unit=15.0)
+
+        assert result["id"] == 2
+        mock_instance.ticket_article.create.assert_called_once_with(
+            {"ticket_id": 1, "body": "Worked on it", "type": "note", "internal": False, "sender": "Agent", "time_unit": 15.0}
+        )
+
+    def test_add_article_without_time_unit(self, mock_zammad_api: Mock) -> None:
+        """Test add_article method without time_unit excludes it from payload."""
+        mock_instance = Mock()
+        mock_instance.ticket_article.create.return_value = {"id": 3, "body": "Simple note", "type": "note"}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.add_article(ticket_id=1, body="Simple note")
+
+        assert result["id"] == 3
+        call_args = mock_instance.ticket_article.create.call_args[0][0]
+        assert "time_unit" not in call_args
 
     def test_get_user(self, mock_zammad_api: Mock) -> None:
         """Test get_user method."""
