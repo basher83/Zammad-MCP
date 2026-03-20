@@ -51,7 +51,7 @@ mise run changelog-bump <version> # Prepare release
 
 **Project Type:** Model Context Protocol (MCP) server for Zammad ticket system
 
-**MCP Version:** 1.21.1 (FastMCP)
+**FastMCP Version:** 3.x (standalone `fastmcp` package)
 
 **Core Files:**
 
