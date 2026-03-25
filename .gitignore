@@ -262,3 +262,6 @@ secrets/
 
 # Hookify local rule configs (personal preferences)
 .claude/hookify.*.local.md
+
+# Vendored dependencies (cloned locally, not committed)
+vendor/

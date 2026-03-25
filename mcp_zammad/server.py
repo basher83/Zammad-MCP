@@ -1140,6 +1140,9 @@ class ZammadMCPServer:
         try:
             self.client = ZammadClient()
             logger.info("Zammad client initialized successfully")
+            from .pii_client import PIIFilteringClient, pii_filter_enabled  # noqa: PLC0415
+            if pii_filter_enabled():
+                self.client = PIIFilteringClient(self.client)  # type: ignore[assignment]
 
             # Test connection
             current_user = self.client.get_current_user()
