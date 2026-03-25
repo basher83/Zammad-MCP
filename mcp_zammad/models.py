@@ -505,8 +505,8 @@ class User(BaseModel):
     note: str | None = None
     last_login: datetime | None = None
     out_of_office: bool = False
-    out_of_office_start_at: datetime | None = None
-    out_of_office_end_at: datetime | None = None
+    out_of_office_start_at: date | None = None
+    out_of_office_end_at: date | None = None
     out_of_office_replacement_id: int | None = None
     created_by_id: int | None = None
     updated_by_id: int | None = None
