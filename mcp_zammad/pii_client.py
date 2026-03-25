@@ -25,14 +25,31 @@ def pii_filter_enabled() -> bool:
     return os.getenv("PII_FILTER_ENABLED", "").lower() in ("1", "true", "yes")
 
 
-def _walk(value: Any, fn: Any) -> Any:
-    """Recursively apply *fn* to every string in *value* (dict/list/str)."""
+# Fields whose values are structurally guaranteed to contain PII.
+# These are anonymized by key name, bypassing Presidio's NLP detection.
+_PII_FIELDS: dict[str, str] = {
+    "email":     "EMAIL_ADDRESS",
+    "login":     "EMAIL_ADDRESS",
+    "firstname": "PERSON",
+    "lastname":  "PERSON",
+    "phone":     "PHONE_NUMBER",
+    "mobile":    "PHONE_NUMBER",
+    "fax":       "PHONE_NUMBER",
+}
+
+
+def _walk(value: Any, fn: Any, key: str | None = None) -> Any:
+    """Recursively apply *fn* to every string in *value* (dict/list/str).
+
+    When descending into a dict, the field key is passed to *fn* so it can
+    apply stronger anonymization for known-PII fields.
+    """
     if isinstance(value, str):
-        return fn(value)
+        return fn(value, key)
     if isinstance(value, dict):
-        return {k: _walk(v, fn) for k, v in value.items()}
+        return {k: _walk(v, fn, key=k) for k, v in value.items()}
     if isinstance(value, list):
-        return [_walk(item, fn) for item in value]
+        return [_walk(item, fn, key=key) for item in value]
     return value
 
 
@@ -84,11 +101,13 @@ class PIIFilteringClient:
     # Internal helpers (defined on the class so __getattr__ is not called)
     # ------------------------------------------------------------------
 
-    def _anonymize(self, text: str) -> str:
+    def _anonymize(self, text: str, key: str | None = None) -> str:
+        if key and (entity_type := _PII_FIELDS.get(key)) and text.strip():
+            return self._vault.get_or_create_pseudonym(text, entity_type)
         result = self._service.anonymize_text(text, self._vault)
         return result.anonymized_text
 
-    def _deanonymize(self, text: str) -> str:
+    def _deanonymize(self, text: str, key: str | None = None) -> str:
         result = self._deanonymize_text(text, self._vault)
         return result.restored_text
 
