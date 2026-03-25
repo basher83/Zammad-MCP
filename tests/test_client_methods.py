@@ -284,7 +284,8 @@ class TestZammadClientMethods:
     def test_get_ticket_with_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with article pagination."""
         mock_instance = Mock()
-        mock_instance.ticket.find.return_value = {"id": 1, "title": "Test Ticket"}
+        ticket_data = {"id": 1, "title": "Test Ticket"}
+        mock_instance.ticket._raise_or_return_json.return_value = ticket_data
         mock_instance.ticket.articles.return_value = [
             {"id": 1, "body": "Article 1"},
             {"id": 2, "body": "Article 2"},
@@ -307,7 +308,7 @@ class TestZammadClientMethods:
     def test_get_ticket_all_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with all articles."""
         mock_instance = Mock()
-        mock_instance.ticket.find.return_value = {"id": 1, "title": "Test Ticket"}
+        mock_instance.ticket._raise_or_return_json.return_value = {"id": 1, "title": "Test Ticket"}
         mock_instance.ticket.articles.return_value = [{"id": 1, "body": "Article 1"}, {"id": 2, "body": "Article 2"}]
         mock_zammad_api.return_value = mock_instance
 

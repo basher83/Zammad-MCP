@@ -30,6 +30,11 @@ def pii_filter_enabled() -> bool:
 _PII_FIELDS: dict[str, str] = {
     "email":     "EMAIL_ADDRESS",
     "login":     "EMAIL_ADDRESS",
+    "customer":    "EMAIL_ADDRESS",  # expanded ticket field: customer email
+    "owner":       "PERSON",        # expanded ticket field: owner login
+    "from":        "EMAIL_ADDRESS", # article sender
+    "to":          "EMAIL_ADDRESS", # article recipient
+    "created_by":  "EMAIL_ADDRESS", # article created_by
     "firstname": "PERSON",
     "lastname":  "PERSON",
     "phone":     "PHONE_NUMBER",
