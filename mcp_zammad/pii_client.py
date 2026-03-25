@@ -89,7 +89,7 @@ class PIIFilteringClient:
                 "Install it with: uv sync --extra pii"
             ) from exc
 
-        cfg = AnonymizationConfig(known_persons_min_length=6)
+        cfg = AnonymizationConfig(known_persons_min_length=5)
         cfg.entities.pop("DATE_TIME", None)  # Dates are not PII — keep them readable
         # Err on the side of over-anonymization: lower thresholds so borderline
         # detections (names in greetings, informal locations) are still masked.
@@ -147,6 +147,16 @@ class PIIFilteringClient:
                     v = getattr(u, field, None) or ""
                     if v.strip():
                         names.append(v.strip())
+
+        # Filter out common generic words that appear as user names in Zammad
+        # (e.g. "Support", "Admin", "System") but are not real person names.
+        _STOPWORDS = {
+            "admin", "administrator", "support", "helpdesk", "service",
+            "system", "test", "demo", "guest", "user", "unknown",
+            "team", "group", "partner", "logistics", "transport",
+            "info", "noreply", "no-reply", "postmaster", "webmaster",
+        }
+        names = [n for n in names if n.lower() not in _STOPWORDS]
 
         self._list_recognizer.update(names)
         logger.info("Known-persons list refreshed: %d name terms from %d users", len(names), len(all_users))
