@@ -90,7 +90,8 @@ class PIIFilteringClient:
             ) from exc
 
         cfg = AnonymizationConfig(known_persons_min_length=5)
-        cfg.entities.pop("DATE_TIME", None)  # Dates are not PII — keep them readable
+        cfg.entities.pop("DATE_TIME", None)   # Dates are not PII — keep them readable
+        cfg.entities.pop("LOCATION", None)   # Too many false positives (product names, German words)
         # Err on the side of over-anonymization: lower thresholds so borderline
         # detections (names in greetings, informal locations) are still masked.
         # Name list handles known persons — NLP is just a safety net, so keep
@@ -151,12 +152,21 @@ class PIIFilteringClient:
                         names.append(v.strip())
 
         # Filter out common generic words that appear as user names in Zammad
-        # (e.g. "Support", "Admin", "System") but are not real person names.
+        # (e.g. "Support", "Admin", "System", month names) but are not real person names.
         _STOPWORDS = {
+            # Generic account names
             "admin", "administrator", "support", "helpdesk", "service",
             "system", "test", "demo", "guest", "user", "unknown",
             "team", "group", "partner", "logistics", "transport",
             "info", "noreply", "no-reply", "postmaster", "webmaster",
+            # Common words that are also valid German/English surnames
+            "blank", "stage", "gross", "klein", "braun", "weiss", "black",
+            "white", "brown", "green", "young", "king", "new",
+            # Month names (EN + DE) — appear as surnames but cause false positives
+            "january", "february", "march", "april", "june", "july",
+            "august", "september", "october", "november", "december",
+            "januar", "februar", "maerz", "april", "juni", "juli",
+            "oktober", "november", "dezember",
         }
         names = [n for n in names if n.lower() not in _STOPWORDS]
 
