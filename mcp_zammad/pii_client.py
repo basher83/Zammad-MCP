@@ -84,7 +84,7 @@ class PIIFilteringClient:
                 "Install it with: uv sync --extra pii"
             ) from exc
 
-        cfg = AnonymizationConfig(languages=["en", "de", "fr", "es", "it", "pl"])
+        cfg = AnonymizationConfig()
         cfg.entities.pop("DATE_TIME", None)  # Dates are not PII — keep them readable
         # Err on the side of over-anonymization: lower thresholds so borderline
         # detections (names in greetings, informal locations) are still masked.
