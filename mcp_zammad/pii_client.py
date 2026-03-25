@@ -89,12 +89,12 @@ class PIIFilteringClient:
                 "Install it with: uv sync --extra pii"
             ) from exc
 
-        cfg = AnonymizationConfig()
+        cfg = AnonymizationConfig(known_persons_min_length=6)
         cfg.entities.pop("DATE_TIME", None)  # Dates are not PII — keep them readable
         # Err on the side of over-anonymization: lower thresholds so borderline
         # detections (names in greetings, informal locations) are still masked.
-        cfg.entities["PERSON"].confidence_threshold = 0.4
-        cfg.entities["LOCATION"].confidence_threshold = 0.4
+        cfg.entities["PERSON"].confidence_threshold = 0.6
+        cfg.entities["LOCATION"].confidence_threshold = 0.6
         cfg.entities["EMAIL_ADDRESS"].confidence_threshold = 0.7
         cfg.entities["PHONE_NUMBER"].confidence_threshold = 0.5
         analyzer, list_recognizer = build_analyzer(cfg)
