@@ -97,7 +97,8 @@ class PIIFilteringClient:
         cfg.entities["LOCATION"].confidence_threshold = 0.4
         cfg.entities["EMAIL_ADDRESS"].confidence_threshold = 0.7
         cfg.entities["PHONE_NUMBER"].confidence_threshold = 0.5
-        service = AnonymizerService(build_analyzer(cfg), build_anonymizer(), cfg)
+        analyzer, list_recognizer = build_analyzer(cfg)
+        service = AnonymizerService(analyzer, build_anonymizer(), cfg)
         vault = SessionVault(session_id="mcp-session")
 
         # Use object.__setattr__ to bypass our own __getattr__ for private attrs
@@ -105,12 +106,51 @@ class PIIFilteringClient:
         object.__setattr__(self, "_service", service)
         object.__setattr__(self, "_vault", vault)
         object.__setattr__(self, "_deanonymize_text", deanonymize_text)
+        object.__setattr__(self, "_list_recognizer", list_recognizer)
 
         logger.info("PIIFilteringClient ready — PII anonymization active")
 
     # ------------------------------------------------------------------
     # Internal helpers (defined on the class so __getattr__ is not called)
     # ------------------------------------------------------------------
+
+    def refresh_known_persons(self) -> int:
+        """Fetch all Zammad users and update the known-persons recognizer.
+
+        Returns the number of name terms loaded.
+        """
+        try:
+            users = self._client.search_users("*", per_page=200, page=1)
+            # Collect all pages
+            all_users = list(users) if not isinstance(users, list) else users
+            page = 2
+            while True:
+                batch = self._client.search_users("*", per_page=200, page=page)
+                batch = list(batch) if not isinstance(batch, list) else batch
+                if not batch:
+                    break
+                all_users.extend(batch)
+                page += 1
+        except Exception:
+            logger.exception("Failed to fetch users for known-persons list")
+            return 0
+
+        names: list[str] = []
+        for u in all_users:
+            if isinstance(u, dict):
+                for field in ("firstname", "lastname"):
+                    v = u.get(field) or ""
+                    if v.strip():
+                        names.append(v.strip())
+            else:
+                for field in ("firstname", "lastname"):
+                    v = getattr(u, field, None) or ""
+                    if v.strip():
+                        names.append(v.strip())
+
+        self._list_recognizer.update(names)
+        logger.info("Known-persons list refreshed: %d name terms from %d users", len(names), len(all_users))
+        return len(names)
 
     def _anonymize(self, text: str, key: str | None = None) -> str:
         if key and (entity_type := _PII_FIELDS.get(key)) and text.strip():

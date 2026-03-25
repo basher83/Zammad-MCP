@@ -1,5 +1,6 @@
 """Zammad MCP Server implementation."""
 
+import asyncio
 import base64
 import html
 import json
@@ -1089,6 +1090,8 @@ class ZammadMCPServer:
             port: Port to bind for HTTP transport (default: 8000)
         """
         self.client: ZammadClient | None = None
+        # How often (seconds) to refresh the known-persons list. 0 = disabled.
+        self._pii_refresh_interval: int = int(os.getenv("PII_REFRESH_INTERVAL", "1800"))
         # Create FastMCP with lifespan configured
         self.mcp = FastMCP("zammad_mcp", host=host, port=port, lifespan=self._create_lifespan())
         self._setup_tools()
@@ -1101,15 +1104,35 @@ class ZammadMCPServer:
         @asynccontextmanager
         async def lifespan(_app: FastMCP) -> AsyncIterator[None]:
             """Initialize resources on startup and cleanup on shutdown."""
+            import asyncio
+
             await self.initialize()
+            refresh_task: asyncio.Task[None] | None = None
             try:
+                if self._pii_refresh_interval > 0:
+                    refresh_task = asyncio.create_task(self._pii_refresh_loop())
                 yield
             finally:
+                if refresh_task is not None:
+                    refresh_task.cancel()
                 if self.client is not None:
                     self.client = None
                     logger.info("Zammad client cleaned up")
 
         return lifespan
+
+    async def _pii_refresh_loop(self) -> None:
+        """Background task: refresh known-persons list on a fixed interval."""
+        from .pii_client import PIIFilteringClient
+
+        while True:
+            await asyncio.sleep(self._pii_refresh_interval)
+            if isinstance(self.client, PIIFilteringClient):
+                await asyncio.get_event_loop().run_in_executor(
+                    None, self.client.refresh_known_persons
+                )
+            else:
+                logger.debug("PII refresh skipped — client is not a PIIFilteringClient")
 
     def get_client(self) -> ZammadClient:
         """Get the Zammad client, ensuring it's initialized."""
@@ -1143,6 +1166,9 @@ class ZammadMCPServer:
             from .pii_client import PIIFilteringClient, pii_filter_enabled  # noqa: PLC0415
             if pii_filter_enabled():
                 self.client = PIIFilteringClient(self.client)  # type: ignore[assignment]
+                await asyncio.get_event_loop().run_in_executor(
+                    None, self.client.refresh_known_persons
+                )
 
             # Test connection
             current_user = self.client.get_current_user()
