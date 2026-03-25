@@ -208,6 +208,70 @@ The server requires Zammad API credentials. Use a `.env` file:
 
 **Important**: Keep your `.env` file out of version control (already in `.gitignore`).
 
+## PII Anonymization *(optional)*
+
+When enabled, the server intercepts all Zammad API calls and anonymizes personally identifiable information before it reaches the AI assistant — and restores original values when the AI references them back in tool inputs.
+
+```
+Zammad API  ──►  PIIFilteringClient  ──►  Claude
+                  replaces PII with         sees [PERSON_1],
+                  pseudonyms                [EMAIL_1], etc.
+
+Claude      ──►  PIIFilteringClient  ──►  Zammad API
+                  restores originals        receives real values
+                  from pseudonyms
+```
+
+Detected and replaced automatically: person names, email addresses, phone numbers, credit card numbers, IBANs, IP addresses, URLs, locations, dates, national IDs, medical license numbers, and crypto wallet addresses.
+
+The mapping is kept **in memory** for the lifetime of the server process — no external storage required. The same entity always gets the same pseudonym within a session (`Alice Johnson` → `[PERSON_1]` consistently across all tool calls).
+
+### Enabling PII anonymization
+
+**1. Clone the core library into the vendor directory:**
+
+```bash
+git clone https://git.b.picoquant.com/ruettinger/llm-anon-core.git vendor/llm-anon-core
+```
+
+**2. Install with the `pii` extra:**
+
+```bash
+uv sync --extra pii
+```
+
+**3. Set the environment variable:**
+
+```bash
+PII_FILTER_ENABLED=true
+```
+
+### Claude Desktop configuration with PII enabled
+
+```json
+{
+  "mcpServers": {
+    "zammad": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/Zammad-MCP", "mcp-zammad"],
+      "env": {
+        "ZAMMAD_URL": "https://your-instance.zammad.com/api/v1",
+        "ZAMMAD_HTTP_TOKEN": "your-api-token",
+        "PII_FILTER_ENABLED": "true"
+      }
+    }
+  }
+}
+```
+
+### PII configuration reference
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PII_FILTER_ENABLED` | `false` | Set to `true` to enable PII anonymization. |
+
+When `PII_FILTER_ENABLED` is not set (or set to any other value), behaviour is **identical to the unmodified server** — no performance overhead, no changed output.
+
 ## Response Formats
 
 All data-returning tools support two output formats:
@@ -521,6 +585,10 @@ source .venv/bin/activate
 
 # Install in development mode
 uv pip install -e ".[dev]"
+
+# Optional: enable PII anonymization support
+git clone https://git.b.picoquant.com/ruettinger/llm-anon-core.git vendor/llm-anon-core
+uv sync --extra pii
 ```
 
 ### Project Structure
@@ -530,12 +598,14 @@ zammad-mcp/
 ├── mcp_zammad/
 │   ├── __init__.py
 │   ├── __main__.py
-│   ├── server.py      # MCP server implementation
-│   ├── client.py      # Zammad API client wrapper
-│   └── models.py      # Pydantic models
+│   ├── server.py       # MCP server implementation
+│   ├── client.py       # Zammad API client wrapper
+│   ├── models.py       # Pydantic models
+│   └── pii_client.py   # Optional PII anonymization proxy (opt-in)
+├── vendor/             # Local deps (git-ignored); clone llm-anon-core here
 ├── tests/
 ├── scripts/
-│   └── uv/            # UV single-file scripts
+│   └── uv/             # UV single-file scripts
 ├── pyproject.toml
 ├── README.md
 ├── Dockerfile
