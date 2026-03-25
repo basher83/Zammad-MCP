@@ -67,7 +67,8 @@ class PIIFilteringClient:
                 "Install it with: uv sync --extra pii"
             ) from exc
 
-        cfg = AnonymizationConfig()
+        cfg = AnonymizationConfig(languages=["en", "de", "fr", "es", "it"])
+        cfg.entities.pop("DATE_TIME", None)  # Dates are not PII — keep them readable
         service = AnonymizerService(build_analyzer(cfg), build_anonymizer(), cfg)
         vault = SessionVault(session_id="mcp-session")
 
