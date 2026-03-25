@@ -1122,8 +1122,14 @@ class ZammadMCPServer:
         return lifespan
 
     async def _pii_refresh_loop(self) -> None:
-        """Background task: refresh known-persons list on a fixed interval."""
+        """Background task: load known-persons on startup then refresh periodically."""
         from .pii_client import PIIFilteringClient
+
+        # Initial load — runs immediately after server starts serving requests.
+        if isinstance(self.client, PIIFilteringClient):
+            await asyncio.get_event_loop().run_in_executor(
+                None, self.client.refresh_known_persons
+            )
 
         while True:
             await asyncio.sleep(self._pii_refresh_interval)
@@ -1131,8 +1137,6 @@ class ZammadMCPServer:
                 await asyncio.get_event_loop().run_in_executor(
                     None, self.client.refresh_known_persons
                 )
-            else:
-                logger.debug("PII refresh skipped — client is not a PIIFilteringClient")
 
     def get_client(self) -> ZammadClient:
         """Get the Zammad client, ensuring it's initialized."""
@@ -1166,9 +1170,8 @@ class ZammadMCPServer:
             from .pii_client import PIIFilteringClient, pii_filter_enabled  # noqa: PLC0415
             if pii_filter_enabled():
                 self.client = PIIFilteringClient(self.client)  # type: ignore[assignment]
-                await asyncio.get_event_loop().run_in_executor(
-                    None, self.client.refresh_known_persons
-                )
+                # Known-persons list is loaded in the background after startup
+                # (see _pii_refresh_loop) to avoid blocking the server start.
 
             # Test connection
             current_user = self.client.get_current_user()
