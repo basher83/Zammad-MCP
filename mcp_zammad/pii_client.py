@@ -18,10 +18,16 @@ import os
 import re
 from typing import Any
 
-# Matches product/model codes like DC485S, MH1504P, DC640S.
-# Pattern: 1-4 uppercase letters + 2+ digits + optional uppercase letter.
-# This prevents spaCy from falsely classifying alphanumeric codes as PERSON.
-_PRODUCT_CODE_RE = re.compile(r"\b[A-Z]{1,4}\d{2,}[A-Z]?\b")
+try:
+    from llm_anon_core.known_persons import (  # type: ignore[import]
+        DEFAULT_STOPWORDS as _STOPWORDS,
+        build_allow_list as _build_allow_list,
+        extract_names as _extract_names_shared,
+    )
+except ImportError:
+    _STOPWORDS = frozenset()
+    _build_allow_list = None
+    _extract_names_shared = None
 
 # Additional product/brand names that don't match the alphanumeric regex above.
 # Two sources, merged at startup:
@@ -58,29 +64,6 @@ _EXTRA_PRODUCT_NAMES: frozenset[str] = _load_extra_product_names()
 # before Presidio runs, then restore afterward.
 _URL_RE = re.compile(r'https?://[^\s<>"\']+')
 
-# Words that must never be anonymized even if spaCy detects them.
-# These are passed as Presidio allow_list entries so NLP results for them are dropped.
-# Lower-cased; matched case-insensitively against the actual text at anonymization time.
-_STOPWORDS: frozenset[str] = frozenset({
-    # Generic account names
-    "admin", "administrator", "support", "helpdesk", "service",
-    "system", "test", "demo", "guest", "user", "unknown",
-    "team", "group", "partner", "logistics", "transport",
-    "info", "noreply", "no-reply", "postmaster", "webmaster",
-    # Common German words that appear as user fields in Zammad
-    "nicht", "kein", "keine", "nein", "null", "leer",
-    # Company/brand names registered as Zammad users — not person names
-    "picoquant", "nikon", "zeiss", "abberior", "etsc", "opton", "crisel",
-    "distex", "shipping", "tracking",
-    # Common words that are also valid German/English surnames
-    "blank", "stage", "gross", "klein", "braun", "weiss", "black",
-    "white", "brown", "green", "young", "king", "new",
-    # Month names (EN + DE) — appear as surnames but cause false positives
-    "january", "february", "march", "april", "june", "july",
-    "august", "september", "october", "november", "december",
-    "januar", "februar", "maerz", "juni", "juli",
-    "oktober", "dezember",
-})
 
 logger = logging.getLogger(__name__)
 
@@ -196,22 +179,6 @@ class PIIFilteringClient:
     # Internal helpers (defined on the class so __getattr__ is not called)
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _extract_names(users: list[Any], stopwords: set[str]) -> list[str]:
-        names: list[str] = []
-        for u in users:
-            if isinstance(u, dict):
-                for field in ("firstname", "lastname"):
-                    v = u.get(field) or ""
-                    if v.strip():
-                        names.append(v.strip())
-            else:
-                for field in ("firstname", "lastname"):
-                    v = getattr(u, field, None) or ""
-                    if v.strip():
-                        names.append(v.strip())
-        return [n for n in names if n.lower() not in stopwords]
-
     def refresh_known_persons(self) -> int:
         """Fetch all Zammad users and update the known-persons recognizer.
 
@@ -228,7 +195,7 @@ class PIIFilteringClient:
 
         # Quick load: make the first page available immediately so the very
         # first request after startup already has some PII filtering active.
-        self._list_recognizer.update(self._extract_names(first_page, _STOPWORDS))
+        self._list_recognizer.update(_extract_names_shared(first_page, _STOPWORDS))
         logger.info("Known-persons list: quick-loaded %d users (page 1)", len(first_page))
 
         # Fetch remaining pages and do a full reload.
@@ -245,7 +212,7 @@ class PIIFilteringClient:
         except Exception:
             logger.exception("Failed to fetch remaining user pages")
 
-        names = self._extract_names(all_users, _STOPWORDS)
+        names = _extract_names_shared(all_users, _STOPWORDS)
         self._list_recognizer.update(names)
         logger.info("Known-persons list refreshed: %d name terms from %d users", len(names), len(all_users))
         return len(names)
@@ -267,14 +234,7 @@ class PIIFilteringClient:
 
         # Step 2: build allow_list — Presidio will skip any detected entity
         # whose exact matched text appears in this list.
-        allow_list: list[str] = []
-        allow_list.extend(_PRODUCT_CODE_RE.findall(protected))
-        allow_list.extend(n for n in _EXTRA_PRODUCT_NAMES if n in protected)
-        # Add each stopword occurrence as-is (case-preserved) so NLP detections
-        # for company/generic names are suppressed even at high spaCy confidence.
-        for sw in _STOPWORDS:
-            for m in re.finditer(re.escape(sw), protected, re.IGNORECASE):
-                allow_list.append(m.group())
+        allow_list = _build_allow_list(protected, stopwords=_STOPWORDS, product_names=_EXTRA_PRODUCT_NAMES)
 
         result = self._service.anonymize_text(protected, self._vault, allow_list=allow_list or None)
 
