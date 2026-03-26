@@ -14,6 +14,7 @@ class TransportType(str, Enum):
 
     STDIO = "stdio"
     HTTP = "http"
+    SSE = "sse"
 
 
 @dataclass
@@ -71,7 +72,7 @@ class TransportConfig:
         Raises:
             ValueError: If configuration is invalid
         """
-        if self.transport == TransportType.HTTP:
+        if self.transport in (TransportType.HTTP, TransportType.SSE):
             if self.port is None:
                 raise ValueError("HTTP transport requires MCP_PORT environment variable")
 

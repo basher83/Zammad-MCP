@@ -8,7 +8,7 @@ def main() -> None:
     """Run the MCP server with configured transport.
 
     Transport is configured via environment variables:
-    - MCP_TRANSPORT: 'stdio' (default) or 'http'
+    - MCP_TRANSPORT: 'stdio' (default), 'http' (streamable-http), or 'sse'
     - MCP_HOST: Host for HTTP transport (default: 127.0.0.1)
     - MCP_PORT: Port for HTTP transport (required if transport=http)
     """
@@ -20,6 +20,8 @@ def main() -> None:
     # Host and port are already configured during server initialization
     if config.transport == TransportType.HTTP:
         mcp.run(transport="streamable-http")  # type: ignore[func-returns-value]
+    elif config.transport == TransportType.SSE:
+        mcp.run(transport="sse")  # type: ignore[func-returns-value]
     else:
         mcp.run()  # type: ignore[func-returns-value]
 

@@ -3563,4 +3563,5 @@ def _configure_logging() -> None:
 def main() -> None:
     """Main entry point for the server."""
     _configure_logging()
-    mcp.run()
+    transport = os.getenv("MCP_TRANSPORT", "stdio")
+    mcp.run(transport=transport)  # type: ignore[arg-type]

@@ -1,0 +1,27 @@
+services:
+  zammad-mcp:
+    image: zammad-mcp:local
+    build:
+      context: .
+      target: production
+    ports:
+      - "8765:8000"
+    environment:
+      # Zammad connection — override via .env or environment
+      ZAMMAD_URL: ${ZAMMAD_URL}
+      ZAMMAD_HTTP_TOKEN: ${ZAMMAD_HTTP_TOKEN}
+      # Transport: sse for HTTP mode, stdio for pipe mode
+      MCP_TRANSPORT: http
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "8000"
+      # PII anonymization
+      PII_FILTER_ENABLED: ${PII_FILTER_ENABLED:-false}
+      PII_REFRESH_INTERVAL: ${PII_REFRESH_INTERVAL:-1800}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
