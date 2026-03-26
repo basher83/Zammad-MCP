@@ -222,7 +222,33 @@ Claude      ──►  PIIFilteringClient  ──►  Zammad API
                   from pseudonyms
 ```
 
-Detected and replaced automatically: person names, email addresses, phone numbers, credit card numbers, IBANs, IP addresses, URLs, locations, dates, national IDs, medical license numbers, and crypto wallet addresses.
+### What gets anonymized
+
+Two complementary strategies run on every API response:
+
+**Structural fields** (anonymized by key name, bypassing NLP):
+
+| Zammad field | Pseudonym type |
+|---|---|
+| `email`, `login`, `from`, `to`, `customer`, `created_by` | `[EMAIL_N]` |
+| `firstname`, `lastname`, `owner` | `[PERSON_N]` |
+| `phone`, `mobile`, `fax` | `[PHONE_N]` |
+
+**Free text** (detected by spaCy NER + Presidio, multilingual EN/DE/FR/ES/IT/PL):
+
+| Entity | Pseudonym | Confidence threshold |
+|---|---|---|
+| `PERSON` | `[PERSON_N]` | 0.85 |
+| `EMAIL_ADDRESS` | `[EMAIL_N]` | 0.70 |
+| `PHONE_NUMBER` | `[PHONE_N]` | 0.50 |
+
+Dates and locations are intentionally **not** anonymized — they are context metadata, not PII, in a support-ticket setting.
+
+**Known-persons list**: at startup the server fetches all Zammad users and builds a fast regex-based name matcher (case-insensitive, German umlaut normalization, `@mention` support). This catches names in free text and informal greetings that NLP would miss. The list refreshes every 30 minutes in the background.
+
+**URL protection**: any URL found in a field value is preserved verbatim — no word inside a URL is ever anonymized.
+
+**Product names**: alphanumeric model codes (`DC485S`, `MH1504P`, …) are protected automatically. Additional names can be listed in `mcp_zammad/product_names.txt` (bundled) or supplied via environment variable.
 
 The mapping is kept **in memory** for the lifetime of the server process — no external storage required. The same entity always gets the same pseudonym within a session (`Alice Johnson` → `[PERSON_1]` consistently across all tool calls).
 
@@ -267,10 +293,26 @@ PII_FILTER_ENABLED=true
 ### PII configuration reference
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `PII_FILTER_ENABLED` | `false` | Set to `true` to enable PII anonymization. |
+|---|---|---|
+| `PII_FILTER_ENABLED` | `false` | Set to `true` to enable PII anonymization |
+| `PII_PRODUCT_NAMES_FILE` | `mcp_zammad/product_names.txt` | Path to a text file of product/brand names to never anonymize (one per line, `#` comments supported) |
+| `PII_PRODUCT_NAMES` | — | Comma-separated additional product names; merged with the file above |
+| `PII_REFRESH_INTERVAL` | `1800` | Seconds between known-persons list refreshes from the Zammad user DB |
 
-When `PII_FILTER_ENABLED` is not set (or set to any other value), behaviour is **identical to the unmodified server** — no performance overhead, no changed output.
+### Product names file
+
+`mcp_zammad/product_names.txt` (committed to the repo) lists product and brand names that must never be anonymized. Edit it to match your catalogue. Alphanumeric model codes (`DC485S`, `MH1504P`) are handled automatically and don't need to be listed.
+
+```
+# mcp_zammad/product_names.txt
+FLIMbee
+SepiaII
+TimeHarp
+```
+
+To use a custom file outside the repo set `PII_PRODUCT_NAMES_FILE` in your MCP server config.
+
+When `PII_FILTER_ENABLED` is not set the behaviour is **identical to the unmodified server** — no performance overhead, no changed output.
 
 ## Response Formats
 
@@ -601,7 +643,8 @@ zammad-mcp/
 │   ├── server.py       # MCP server implementation
 │   ├── client.py       # Zammad API client wrapper
 │   ├── models.py       # Pydantic models
-│   └── pii_client.py   # Optional PII anonymization proxy (opt-in)
+│   ├── pii_client.py   # Optional PII anonymization proxy (opt-in)
+│   └── product_names.txt  # Bundled product/brand names excluded from PII masking
 ├── vendor/             # Local deps (git-ignored); clone llm-anon-core here
 ├── tests/
 ├── scripts/
