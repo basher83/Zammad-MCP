@@ -1,0 +1,19 @@
+# Product and brand names that should never be anonymized.
+# One entry per line. Lines starting with # are ignored.
+#
+# Alphanumeric model codes (e.g. DC485S, MH1504P) are handled automatically
+# by regex — add only names that regex would miss.
+#
+# Override location with PII_PRODUCT_NAMES_FILE env var if needed.
+
+# PicoQuant product lines
+FLIMbee
+SepiaII
+VarPSF
+2k SPAD
+TimeHarp
+TimeTagger
+MultiHarp
+HydraHarp
+FluoTime
+SymPhoTime

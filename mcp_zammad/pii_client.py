@@ -15,7 +15,72 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
+
+# Matches product/model codes like DC485S, MH1504P, DC640S.
+# Pattern: 1-4 uppercase letters + 2+ digits + optional uppercase letter.
+# This prevents spaCy from falsely classifying alphanumeric codes as PERSON.
+_PRODUCT_CODE_RE = re.compile(r"\b[A-Z]{1,4}\d{2,}[A-Z]?\b")
+
+# Additional product/brand names that don't match the alphanumeric regex above.
+# Two sources, merged at startup:
+#   PII_PRODUCT_NAMES_FILE — path to a text file, one name per line,
+#                            lines starting with # are comments.
+#   PII_PRODUCT_NAMES      — comma-separated fallback / quick overrides.
+def _load_extra_product_names() -> frozenset[str]:
+    import sys
+    from pathlib import Path
+
+    names: set[str] = set()
+    # File source — default to product_names.txt next to this module
+    _default = str(Path(__file__).parent / "product_names.txt")
+    path = os.getenv("PII_PRODUCT_NAMES_FILE", _default)
+    if path:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        names.add(line)
+        except OSError as exc:
+            print(f"[pii_client] WARNING: cannot read PII_PRODUCT_NAMES_FILE {path!r}: {exc}", file=sys.stderr)
+    # Env-var source (comma-separated)
+    for name in os.getenv("PII_PRODUCT_NAMES", "").split(","):
+        name = name.strip()
+        if name:
+            names.add(name)
+    return frozenset(names)
+
+_EXTRA_PRODUCT_NAMES: frozenset[str] = _load_extra_product_names()
+
+# URLs must never be (partially) masked — replace them with null-byte placeholders
+# before Presidio runs, then restore afterward.
+_URL_RE = re.compile(r'https?://[^\s<>"\']+')
+
+# Words that must never be anonymized even if spaCy detects them.
+# These are passed as Presidio allow_list entries so NLP results for them are dropped.
+# Lower-cased; matched case-insensitively against the actual text at anonymization time.
+_STOPWORDS: frozenset[str] = frozenset({
+    # Generic account names
+    "admin", "administrator", "support", "helpdesk", "service",
+    "system", "test", "demo", "guest", "user", "unknown",
+    "team", "group", "partner", "logistics", "transport",
+    "info", "noreply", "no-reply", "postmaster", "webmaster",
+    # Common German words that appear as user fields in Zammad
+    "nicht", "kein", "keine", "nein", "null", "leer",
+    # Company/brand names registered as Zammad users — not person names
+    "picoquant", "nikon", "zeiss", "abberior", "etsc", "opton", "crisel",
+    "distex", "shipping", "tracking",
+    # Common words that are also valid German/English surnames
+    "blank", "stage", "gross", "klein", "braun", "weiss", "black",
+    "white", "brown", "green", "young", "king", "new",
+    # Month names (EN + DE) — appear as surnames but cause false positives
+    "january", "february", "march", "april", "june", "july",
+    "august", "september", "october", "november", "december",
+    "januar", "februar", "maerz", "juni", "juli",
+    "oktober", "dezember",
+})
 
 logger = logging.getLogger(__name__)
 
@@ -97,12 +162,26 @@ class PIIFilteringClient:
         # Name list handles known persons — NLP is just a safety net, so keep
         # thresholds high to avoid product codes / common words being flagged.
         cfg.entities["PERSON"].confidence_threshold = 0.85
-        cfg.entities["LOCATION"].confidence_threshold = 0.80
         cfg.entities["EMAIL_ADDRESS"].confidence_threshold = 0.7
         cfg.entities["PHONE_NUMBER"].confidence_threshold = 0.5
         analyzer, list_recognizer = build_analyzer(cfg)
         service = AnonymizerService(analyzer, build_anonymizer(), cfg)
         vault = SessionVault(session_id="mcp-session")
+
+        # Pre-warm spaCy models and Presidio's internal language graph.
+        # The very first analyze() call triggers lazy initialization which can
+        # cause it to miss results — dummy calls here ensure real calls work
+        # correctly from the first request onward.
+        dummy_vault = SessionVault(session_id="warmup")
+        _WARMUP_TEXTS = [
+            "John Doe called jane@example.com about the invoice.",       # English
+            "Hans Müller schrieb an beispiel@test.de wegen der Rechnung.",  # German
+        ]
+        for text in _WARMUP_TEXTS:
+            try:
+                service.anonymize_text(text, dummy_vault)
+            except Exception:
+                pass
 
         # Use object.__setattr__ to bypass our own __getattr__ for private attrs
         object.__setattr__(self, "_client", client)
@@ -117,29 +196,10 @@ class PIIFilteringClient:
     # Internal helpers (defined on the class so __getattr__ is not called)
     # ------------------------------------------------------------------
 
-    def refresh_known_persons(self) -> int:
-        """Fetch all Zammad users and update the known-persons recognizer.
-
-        Returns the number of name terms loaded.
-        """
-        try:
-            users = self._client.search_users("*", per_page=200, page=1)
-            # Collect all pages
-            all_users = list(users) if not isinstance(users, list) else users
-            page = 2
-            while True:
-                batch = self._client.search_users("*", per_page=200, page=page)
-                batch = list(batch) if not isinstance(batch, list) else batch
-                if not batch:
-                    break
-                all_users.extend(batch)
-                page += 1
-        except Exception:
-            logger.exception("Failed to fetch users for known-persons list")
-            return 0
-
+    @staticmethod
+    def _extract_names(users: list[Any], stopwords: set[str]) -> list[str]:
         names: list[str] = []
-        for u in all_users:
+        for u in users:
             if isinstance(u, dict):
                 for field in ("firstname", "lastname"):
                     v = u.get(field) or ""
@@ -150,26 +210,42 @@ class PIIFilteringClient:
                     v = getattr(u, field, None) or ""
                     if v.strip():
                         names.append(v.strip())
+        return [n for n in names if n.lower() not in stopwords]
 
-        # Filter out common generic words that appear as user names in Zammad
-        # (e.g. "Support", "Admin", "System", month names) but are not real person names.
-        _STOPWORDS = {
-            # Generic account names
-            "admin", "administrator", "support", "helpdesk", "service",
-            "system", "test", "demo", "guest", "user", "unknown",
-            "team", "group", "partner", "logistics", "transport",
-            "info", "noreply", "no-reply", "postmaster", "webmaster",
-            # Common words that are also valid German/English surnames
-            "blank", "stage", "gross", "klein", "braun", "weiss", "black",
-            "white", "brown", "green", "young", "king", "new",
-            # Month names (EN + DE) — appear as surnames but cause false positives
-            "january", "february", "march", "april", "june", "july",
-            "august", "september", "october", "november", "december",
-            "januar", "februar", "maerz", "april", "juni", "juli",
-            "oktober", "november", "dezember",
-        }
-        names = [n for n in names if n.lower() not in _STOPWORDS]
+    def refresh_known_persons(self) -> int:
+        """Fetch all Zammad users and update the known-persons recognizer.
 
+        Loads the first page immediately so PII filtering is active within
+        seconds of startup, then fetches remaining pages and reloads the full
+        list.  Returns the total number of name terms loaded.
+        """
+        try:
+            first_page = self._client.search_users("*", per_page=200, page=1)
+            first_page = list(first_page) if not isinstance(first_page, list) else first_page
+        except Exception:
+            logger.exception("Failed to fetch users for known-persons list")
+            return 0
+
+        # Quick load: make the first page available immediately so the very
+        # first request after startup already has some PII filtering active.
+        self._list_recognizer.update(self._extract_names(first_page, _STOPWORDS))
+        logger.info("Known-persons list: quick-loaded %d users (page 1)", len(first_page))
+
+        # Fetch remaining pages and do a full reload.
+        all_users = list(first_page)
+        page = 2
+        try:
+            while True:
+                batch = self._client.search_users("*", per_page=200, page=page)
+                batch = list(batch) if not isinstance(batch, list) else batch
+                if not batch:
+                    break
+                all_users.extend(batch)
+                page += 1
+        except Exception:
+            logger.exception("Failed to fetch remaining user pages")
+
+        names = self._extract_names(all_users, _STOPWORDS)
         self._list_recognizer.update(names)
         logger.info("Known-persons list refreshed: %d name terms from %d users", len(names), len(all_users))
         return len(names)
@@ -177,8 +253,36 @@ class PIIFilteringClient:
     def _anonymize(self, text: str, key: str | None = None) -> str:
         if key and (entity_type := _PII_FIELDS.get(key)) and text.strip():
             return self._vault.get_or_create_pseudonym(text, entity_type)
-        result = self._service.anonymize_text(text, self._vault)
-        return result.anonymized_text
+
+        # Step 1: protect URLs by replacing them with null-byte placeholders.
+        # This prevents any word inside a URL from being anonymized.
+        _url_map: dict[str, str] = {}
+
+        def _protect_url(m: re.Match[str]) -> str:
+            ph = f"\x00URL{len(_url_map)}\x00"
+            _url_map[ph] = m.group()
+            return ph
+
+        protected = _URL_RE.sub(_protect_url, text)
+
+        # Step 2: build allow_list — Presidio will skip any detected entity
+        # whose exact matched text appears in this list.
+        allow_list: list[str] = []
+        allow_list.extend(_PRODUCT_CODE_RE.findall(protected))
+        allow_list.extend(n for n in _EXTRA_PRODUCT_NAMES if n in protected)
+        # Add each stopword occurrence as-is (case-preserved) so NLP detections
+        # for company/generic names are suppressed even at high spaCy confidence.
+        for sw in _STOPWORDS:
+            for m in re.finditer(re.escape(sw), protected, re.IGNORECASE):
+                allow_list.append(m.group())
+
+        result = self._service.anonymize_text(protected, self._vault, allow_list=allow_list or None)
+
+        # Step 3: restore URLs
+        anon = result.anonymized_text
+        for ph, url in _url_map.items():
+            anon = anon.replace(ph, url)
+        return anon
 
     def _deanonymize(self, text: str, key: str | None = None) -> str:
         result = self._deanonymize_text(text, self._vault)
