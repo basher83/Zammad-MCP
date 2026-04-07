@@ -1378,7 +1378,8 @@ async def test_lifespan_context_manager():
             assert result is None
 
 
-def test_tool_implementations_are_called():
+@pytest.mark.asyncio
+async def test_tool_implementations_are_called():
     """Test that tool implementations are actually executed."""
     server = ZammadMCPServer()
     server.client = Mock()
@@ -1452,20 +1453,12 @@ def test_tool_implementations_are_called():
         }
     ]
 
-    # Call tool handlers directly through the decorated functions
+    # Call tool handlers directly through the registered tools
     # We need to actually invoke the tools to cover the implementation lines
-    tool_manager = server.mcp._tool_manager
-
-    # Find and call zammad_search_tickets tool
-    search_tickets_tool = None
-    for tool in tool_manager._tools.values():
-        if tool.name == "zammad_search_tickets":
-            search_tickets_tool = tool.fn
-            break
-
+    search_tickets_tool = await server.mcp.get_tool("zammad_search_tickets")
     assert search_tickets_tool is not None
     params = TicketSearchParams(query="test")
-    result = search_tickets_tool(params)
+    result = search_tickets_tool.fn(params)
     assert isinstance(result, str)
     assert "Ticket #12345" in result
     server.client.search_tickets.assert_called_once()

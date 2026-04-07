@@ -51,7 +51,7 @@ mise run changelog-bump <version> # Prepare release
 
 **Project Type:** Model Context Protocol (MCP) server for Zammad ticket system
 
-**MCP Version:** 1.21.1 (FastMCP)
+**FastMCP Version:** 3.x (standalone `fastmcp` package)
 
 **Core Files:**
 
@@ -74,6 +74,14 @@ This unification follows MCP best practices for consistent tool output.
 - Sentinel pattern (`_UNINITIALIZED`) for type safety
 - Type narrowing with `get_zammad_client()` helper
 - Async-first architecture
+
+**FastMCP 3 Migration Rules (do NOT revert):**
+
+- Import: `from fastmcp import FastMCP` (not `from mcp.server.fastmcp`)
+- `FastMCP()` does NOT accept `host`/`port`; pass them to `mcp.run(transport="http", host=..., port=...)`
+- HTTP transport name is `"http"` (not `"streamable-http"`)
+- `ToolAnnotations` is still imported from `mcp.types`
+- In tests, use `await mcp.get_tool(name)` (not `mcp._tool_manager._tools`)
 
 ---
 
