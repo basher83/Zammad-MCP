@@ -39,7 +39,7 @@ dev = [
     "pip-audit>=2.6.0",
     "bandit[sarif]>=1.8.6",
     "semgrep>=1.35.0",
-    "safety>=2.3.1",
+    "safety>=3.7.0",
     "defusedxml>=0.7.1",
     "pre-commit>=3.0.0",
 ]
@@ -114,7 +114,7 @@ dev = [
     "pip-audit>=2.6.0",
     "bandit[sarif]>=1.8.6",
     "semgrep>=1.35.0",
-    "safety>=2.3.1",
+    "safety>=3.7.0",
     "defusedxml>=0.7.1",
     "pre-commit>=3.0.0",
 ]
