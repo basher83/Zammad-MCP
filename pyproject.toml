@@ -26,7 +26,7 @@ dependencies = [
     "zammad-py>=3.2.0",
     "pydantic>=2.11.7",
     "python-dotenv>=1.0.0",
-    "httpx>=0.25.0",
+    "httpx>=0.28.1",
 ]
 
 [project.optional-dependencies]
