@@ -25,7 +25,7 @@ dependencies = [
     "mcp>=1.23.0",
     "zammad-py>=3.2.0",
     "pydantic>=2.11.7",
-    "python-dotenv>=1.0.0",
+    "python-dotenv>=1.2.2",
     "httpx>=0.25.0",
 ]
 
