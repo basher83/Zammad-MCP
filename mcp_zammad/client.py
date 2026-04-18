@@ -5,6 +5,7 @@ import os
 from typing import Any
 from urllib.parse import urlparse
 
+import urllib3
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
@@ -21,6 +22,7 @@ class ZammadClient:
         password: str | None = None,
         http_token: str | None = None,
         oauth2_token: str | None = None,
+        insecure: bool | None = None,
     ):
         """Initialize Zammad client with environment variables or provided credentials.
 
@@ -40,6 +42,7 @@ class ZammadClient:
         self.oauth2_token = (
             oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
         )
+        self.insecure = insecure if insecure is not None else self._parse_bool_env("ZAMMAD_INSECURE")
 
         if not self.url:
             raise ConfigException("Zammad URL is required. Set ZAMMAD_URL environment variable.")
@@ -66,6 +69,20 @@ class ZammadClient:
             http_token=self.http_token,
             oauth2_token=self.oauth2_token,
         )
+        if self.insecure:
+            # Allow connecting to instances with self-signed/missing CA certs.
+            session = getattr(self.api, "session", None)
+            if session is None:
+                connection = getattr(self.api, "_connection", None)
+                session = getattr(connection, "session", None) if connection is not None else None
+            if session is None:
+                raise ConfigException(
+                    "ZAMMAD_INSECURE is enabled but the installed zammad-py client does not expose a "
+                    "requests session; TLS verification cannot be disabled."
+                )
+            session.verify = False
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            logger.warning("TLS certificate verification is disabled (ZAMMAD_INSECURE=true).")
 
     def _validate_url(self, url: str) -> None:
         """Validate URL format to prevent SSRF attacks."""
@@ -121,6 +138,11 @@ class ZammadClient:
         except OSError:
             logger.warning(f"Failed to read secret for environment variable '{env_var}'.")
             return None
+
+    def _parse_bool_env(self, env_var: str) -> bool:
+        """Parse common truthy values from environment variables."""
+        value = os.getenv(env_var, "").strip().lower()
+        return value in {"1", "true", "yes", "on"}
 
     def search_tickets(
         self,

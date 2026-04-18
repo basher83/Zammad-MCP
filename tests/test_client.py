@@ -59,6 +59,36 @@ def test_client_accepts_http_token(mock_api: MagicMock) -> None:
         mock_api.assert_called_once()
 
 
+@patch("mcp_zammad.client.ZammadAPI")
+def test_client_insecure_mode_from_env(mock_api: MagicMock) -> None:
+    """Test that insecure mode disables TLS verification."""
+    mock_instance = mock_api.return_value
+
+    with patch.dict(
+        os.environ,
+        {
+            "ZAMMAD_URL": "https://test.zammad.com/api/v1",
+            "ZAMMAD_HTTP_TOKEN": "test-token",
+            "ZAMMAD_INSECURE": "true",
+        },
+        clear=True,
+    ):
+        client = ZammadClient()
+
+    assert client.insecure is True
+    assert mock_instance.session.verify is False
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_client_insecure_mode_from_param(mock_api: MagicMock) -> None:
+    """Test that insecure constructor flag disables TLS verification."""
+    mock_instance = mock_api.return_value
+    client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token", insecure=True)
+
+    assert client.insecure is True
+    assert mock_instance.session.verify is False
+
+
 def test_url_validation_no_protocol() -> None:
     """Test that URL validation rejects URLs without protocol."""
     with (
