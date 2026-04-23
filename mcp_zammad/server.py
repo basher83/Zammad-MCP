@@ -5,6 +5,7 @@ import html
 import json
 import logging
 import os
+import sys
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -819,7 +820,9 @@ class ZammadMCPServer:
     def get_client(self) -> ZammadClient:
         """Get the Zammad client, ensuring it's initialized."""
         if not self.client:
-            raise RuntimeError("Zammad client not initialized")
+            logger.debug("Zammad client not initialized, performing lazy initialization")
+            # Lazy initialization for cases where lifespan initialization hasn't finished
+            self.client = ZammadClient()
         return self.client
 
     async def initialize(self) -> None:
@@ -2548,7 +2551,7 @@ def _configure_logging() -> None:
 
     # Add handler if none exists
     if not root_logger.handlers:
-        handler = logging.StreamHandler()
+        handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
         root_logger.addHandler(handler)
 
