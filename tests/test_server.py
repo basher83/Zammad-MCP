@@ -24,6 +24,7 @@ from mcp_zammad.models import (
     GetOrganizationParams,
     GetTicketParams,
     GetTicketStatsParams,
+    GetTicketTagsParams,
     GetUserParams,
     Group,
     ListParams,
@@ -685,6 +686,115 @@ def test_tag_operations(mock_zammad_client):
     remove_result = client.remove_ticket_tag(1, "urgent")
     assert remove_result["success"] is True
     mock_instance.remove_ticket_tag.assert_called_once_with(1, "urgent")
+
+
+def test_list_tags_tool_markdown(mock_zammad_client, decorator_capturer):
+    """Test zammad_list_tags returns markdown format by default."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.list_tags.return_value = [
+        {"id": 1, "name": "urgent", "count": 15},
+        {"id": 2, "name": "billing", "count": 8},
+        {"id": 3, "name": "feature-request", "count": 23},
+    ]
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Test with ListParams (default markdown format)
+    params = ListParams()
+    result = test_tools["zammad_list_tags"](params)
+
+    # Verify markdown output format
+    assert "# Tag List" in result
+    assert "Found 3 tag(s)" in result
+    assert "**urgent**" in result
+    assert "**billing**" in result
+    assert "**feature-request**" in result
+    assert "(ID: 1, used 15 times)" in result
+    mock_instance.list_tags.assert_called_once()
+
+
+def test_list_tags_tool_empty(mock_zammad_client, decorator_capturer):
+    """Test zammad_list_tags handles empty tag list."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.list_tags.return_value = []
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Test with ListParams (default markdown format)
+    params = ListParams()
+    result = test_tools["zammad_list_tags"](params)
+
+    # Verify empty list markdown output
+    assert "# Tag List" in result
+    assert "Found 0 tag(s)" in result
+    mock_instance.list_tags.assert_called_once()
+
+
+def test_get_ticket_tags_tool(mock_zammad_client, decorator_capturer):
+    """Test zammad_get_ticket_tags returns tags for a ticket."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.get_ticket_tags.return_value = ["urgent", "billing", "follow-up"]
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Test with GetTicketTagsParams
+    params = GetTicketTagsParams(ticket_id=123)
+    result = test_tools["zammad_get_ticket_tags"](params)
+
+    # Verify markdown output format
+    assert "## Tags for Ticket #123" in result
+    assert "- urgent" in result
+    assert "- billing" in result
+    assert "- follow-up" in result
+    mock_instance.get_ticket_tags.assert_called_once_with(123)
+
+
+def test_get_ticket_tags_tool_empty(mock_zammad_client, decorator_capturer):
+    """Test zammad_get_ticket_tags handles tickets with no tags."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.get_ticket_tags.return_value = []
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Test with GetTicketTagsParams
+    params = GetTicketTagsParams(ticket_id=456)
+    result = test_tools["zammad_get_ticket_tags"](params)
+
+    # Verify empty tags message
+    assert result == "Ticket #456 has no tags."
+    mock_instance.get_ticket_tags.assert_called_once_with(456)
 
 
 def test_update_ticket_tool(mock_zammad_client, sample_ticket_data):
@@ -2615,9 +2725,9 @@ async def test_all_tools_have_title_annotation():
     tools = await server.mcp.list_tools()
 
     for tool in tools:
-        assert hasattr(
-            tool.annotations, "title"
-        ), f"Tool '{tool.name}' missing 'title' annotation. Add title for better UX in MCP clients."
+        assert hasattr(tool.annotations, "title"), (
+            f"Tool '{tool.name}' missing 'title' annotation. Add title for better UX in MCP clients."
+        )
         assert tool.annotations.title, "Title must not be empty"
         # Title should be human-readable (not snake_case)
         assert " " in tool.annotations.title, f"Title '{tool.annotations.title}' should be human-readable with spaces"
