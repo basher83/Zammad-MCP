@@ -4,7 +4,7 @@
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9cc0ebac926a4d56b0bdf2271d46bbf7)](https://app.codacy.com/gh/basher83/Zammad-MCP/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 ![Coverage](https://img.shields.io/badge/coverage-90.08%25-brightgreen)
 
-An MCP server that connects AI assistants to Zammad, providing tools for managing tickets, users, organizations, and attachments.
+An MCP server that connects AI assistants to Zammad, providing tools for managing tickets, users, organizations, attachments, and the Knowledge Base.
 
 > **Disclaimer**: This project is not affiliated with or endorsed by Zammad GmbH or the Zammad Foundation. This is an independent integration that uses the Zammad API.
 
@@ -36,6 +36,27 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_list_ticket_priorities` - Get all priority levels (cached for performance)
   - `zammad_get_ticket_stats` - Get ticket statistics (optimized with pagination)
 
+- **Knowledge Base** *(requires `knowledge_base.reader` / `knowledge_base.editor` permission)*
+  - `zammad_list_knowledge_bases` - List all knowledge bases
+  - `zammad_get_knowledge_base` - Get details of a knowledge base (category/answer IDs, locale IDs)
+  - `zammad_get_kb_category` - Get a category with child/answer IDs
+  - `zammad_create_kb_category` - Create a new category (root or nested)
+  - `zammad_update_kb_category` - Update category title, parent, or icon
+  - `zammad_delete_kb_category` - Permanently delete a category
+  - `zammad_list_kb_answers` - List all answers in a category (with titles)
+  - `zammad_search_kb_answers` - Search answers by title or body content across all categories (or a specific one)
+  - `zammad_get_kb_answer` - Get answer details including title, body content, and attachments
+  - `zammad_create_kb_answer` - Create a new answer (starts in draft)
+  - `zammad_update_kb_answer` - Update answer title, body, or move to another category
+  - `zammad_delete_kb_answer` - Permanently delete an answer
+  - `zammad_publish_kb_answer` - Publish an answer publicly
+  - `zammad_internalize_kb_answer` - Make an answer internal (agents only)
+  - `zammad_archive_kb_answer` - Archive an answer (hidden but recoverable)
+  - `zammad_unarchive_kb_answer` - Restore an archived answer to draft
+  - `zammad_add_kb_answer_attachment` - Upload an attachment to an answer (from file path or base64)
+  - `zammad_delete_kb_answer_attachment` - Delete an attachment from an answer
+  - `zammad_download_kb_answer_attachment` - Download an attachment to a local path on the Mac
+
 ### Resources
 
 Access Zammad data directly:
@@ -44,6 +65,9 @@ Access Zammad data directly:
 - `zammad://user/{id}` - User profile information
 - `zammad://organization/{id}` - Organization details
 - `zammad://queue/{group}` - Ticket queue for a group
+- `zammad://kb/{kb_id}` - Knowledge base overview
+- `zammad://kb/{kb_id}/category/{category_id}` - Knowledge base category
+- `zammad://kb/{kb_id}/answer/{answer_id}` - Knowledge base answer
 
 ### Prompts
 
@@ -423,6 +447,42 @@ Use delete_attachment with:
 - article_id: 456
 - attachment_id: 789
 ```
+
+### Find a KB Answer by Keyword
+
+```plaintext
+Use zammad_search_kb_answers with:
+- kb_id: 1
+- query: EasyTau light source
+```
+
+Returns all answers whose title or body contains the search string.
+Use the returned answer ID with zammad_get_kb_answer to read the full content.
+
+### Download a KB Attachment to Your Mac
+
+```plaintext
+Use zammad_download_kb_answer_attachment with:
+- kb_id: 1
+- answer_id: 58
+- attachment_id: 97727
+- save_path: /Users/you/Downloads/attachment.pdf
+```
+
+The file is written directly to your Mac. No binary data enters the context window.
+To view or process the file, drag it into the Claude Desktop chat window.
+
+### Upload a File from Your Mac to a KB Answer
+
+```plaintext
+Use zammad_add_kb_answer_attachment with:
+- kb_id: 1
+- answer_id: 58
+- file_path: /Users/you/Downloads/figure.png
+```
+
+filename and mime_type are inferred automatically from the path.
+Alternatively pass filename + data (base64-encoded content) if the file is not on disk.
 
 ## Development
 
