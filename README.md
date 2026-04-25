@@ -86,6 +86,9 @@ docker run --rm -i \
   -e ZAMMAD_HTTP_TOKEN=your-api-token \
   ghcr.io/basher83/zammad-mcp:latest
 
+# If you must skip TLS verification (self-signed / internal CA), add:
+#   -e ZAMMAD_INSECURE=true
+
 # Using Docker secrets for better security
 docker run --rm -i \
   -e ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
@@ -161,6 +164,10 @@ The server requires Zammad API credentials. Use a `.env` file:
    # Option 3: Username/Password
    # ZAMMAD_USERNAME=your-username
    # ZAMMAD_PASSWORD=your-password
+
+   # Optional: Disable TLS certificate verification (NOT recommended for production)
+   # Truthy values only: 1, true, yes, on. Unset (default) keeps TLS verification enabled.
+   # ZAMMAD_INSECURE=true
 
    # Optional: Logging level (default: INFO)
    # Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -530,6 +537,7 @@ To generate an API token in Zammad:
 - Verify your Zammad URL includes the protocol (https://)
 - Check that your API token has the necessary permissions
 - Ensure your Zammad instance is accessible from your network
+- For self-signed/internal certs only: set `ZAMMAD_INSECURE=true` to bypass TLS verification
 
 ### Authentication Errors
 
