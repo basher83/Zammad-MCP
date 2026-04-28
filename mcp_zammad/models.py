@@ -280,6 +280,9 @@ class TicketUpdate(StrictBaseModel):
     priority: str | None = Field(None, description="New priority name", max_length=100)
     owner: str | None = Field(None, description="New owner login/email", max_length=255)
     group: str | None = Field(None, description="New group name", max_length=100)
+    time_unit: float | None = Field(
+        None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
+    )
 
     @field_validator("title")
     @classmethod
@@ -322,6 +325,9 @@ class ArticleCreate(StrictBaseModel):
     article_type: ArticleType = Field(default=ArticleType.NOTE, alias="type", description="Article type")
     internal: bool = Field(default=False, description="Whether the article is internal")
     sender: ArticleSender = Field(default=ArticleSender.AGENT, description="Sender type")
+    time_unit: float | None = Field(
+        default=None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
+    )
     attachments: list[AttachmentUpload] | None = Field(
         default=None, description="Optional attachments to include", max_length=10
     )
@@ -354,6 +360,9 @@ class TicketUpdateParams(StrictBaseModel):
     priority: str | None = Field(None, description="New priority name", max_length=100)
     owner: str | None = Field(None, description="New owner login/email", max_length=255)
     group: str | None = Field(None, description="New group name", max_length=100)
+    time_unit: float | None = Field(
+        None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
+    )
 
     @field_validator("title")
     @classmethod

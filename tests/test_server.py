@@ -37,6 +37,7 @@ from mcp_zammad.models import (
     TicketPriority,
     TicketSearchParams,
     TicketState,
+    TicketUpdateParams,
     User,
     UserBrief,
     UserCreate,
@@ -517,8 +518,71 @@ def test_add_article_tool(mock_zammad_client, sample_article_data, decorator_cap
 
     # Verify the client was called with correct params (including attachments=None for backward compat)
     mock_instance.add_article.assert_called_once_with(
-        ticket_id=1, article_type="note", attachments=None, body="New comment", internal=False, sender="Agent"
+        ticket_id=1,
+        article_type="note",
+        attachments=None,
+        body="New comment",
+        internal=False,
+        sender="Agent",
+        time_unit=None,
     )
+
+
+def test_add_article_with_time_unit_tool(mock_zammad_client, sample_article_data, decorator_capturer):
+    """Test zammad_add_article tool with time_unit for time accounting."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.add_article.return_value = sample_article_data
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = ArticleCreate(ticket_id=1, body="Worked on this issue", time_unit=30.5)
+    result = test_tools["zammad_add_article"](params)
+
+    assert result.body == "Test article"
+
+    mock_instance.add_article.assert_called_once()
+    call_kwargs = mock_instance.add_article.call_args[1]
+    assert call_kwargs["time_unit"] == 30.5
+
+
+def test_add_article_without_time_unit_tool(mock_zammad_client, sample_article_data, decorator_capturer):
+    """Test zammad_add_article tool without time_unit passes None."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.add_article.return_value = sample_article_data
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = ArticleCreate(ticket_id=1, body="Simple comment")
+    result = test_tools["zammad_add_article"](params)
+
+    assert result.body == "Test article"
+
+    mock_instance.add_article.assert_called_once()
+    call_kwargs = mock_instance.add_article.call_args[1]
+    assert call_kwargs["time_unit"] is None
+
+
+def test_add_article_invalid_time_unit():
+    """Test that ArticleCreate rejects invalid time_unit values."""
+    with pytest.raises(ValidationError, match="time_unit"):
+        ArticleCreate(ticket_id=1, body="test", time_unit=0)
+
+    with pytest.raises(ValidationError, match="time_unit"):
+        ArticleCreate(ticket_id=1, body="test", time_unit=-5)
 
 
 def test_add_article_invalid_type():
@@ -716,6 +780,59 @@ def test_update_ticket_tool(mock_zammad_client, sample_ticket_data):
     mock_instance.update_ticket.assert_called_once_with(
         1, title="Updated Title", state="open", priority="3 high", owner="agent@example.com", group="Support"
     )
+
+
+def test_update_ticket_with_time_unit_tool(mock_zammad_client, sample_ticket_data):
+    """Test update ticket tool with time_unit for time accounting."""
+    mock_instance, _ = mock_zammad_client
+
+    updated_ticket = sample_ticket_data.copy()
+    updated_ticket["title"] = "Updated Title"
+
+    mock_instance.update_ticket.return_value = updated_ticket
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+    client = server_inst.get_client()
+
+    ticket_data = client.update_ticket(1, title="Updated Title", time_unit=2.5)
+    result = Ticket(**ticket_data)
+
+    assert result.id == 1
+    mock_instance.update_ticket.assert_called_once_with(1, title="Updated Title", time_unit=2.5)
+
+
+def test_update_ticket_without_time_unit_tool(mock_zammad_client, sample_ticket_data):
+    """Test update ticket tool without time_unit does not pass it."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.update_ticket.return_value = sample_ticket_data
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+    client = server_inst.get_client()
+
+    client.update_ticket(1, title="Updated Title")
+
+    mock_instance.update_ticket.assert_called_once_with(1, title="Updated Title")
+
+
+def test_update_ticket_invalid_time_unit():
+    """Test that TicketUpdateParams rejects invalid time_unit values."""
+    with pytest.raises(ValidationError, match="time_unit"):
+        TicketUpdateParams(ticket_id=1, time_unit=0)
+
+    with pytest.raises(ValidationError, match="time_unit"):
+        TicketUpdateParams(ticket_id=1, time_unit=-5)
+
+
+def test_update_ticket_valid_time_unit():
+    """Test that TicketUpdateParams accepts valid time_unit values."""
+    params = TicketUpdateParams(ticket_id=1, time_unit=1.5)
+    assert params.time_unit == 1.5
+
+    params_none = TicketUpdateParams(ticket_id=1)
+    assert params_none.time_unit is None
 
 
 def test_get_organization_tool(mock_zammad_client, sample_organization_data):

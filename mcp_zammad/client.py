@@ -217,6 +217,7 @@ class ZammadClient:
         priority: str | None = None,
         owner: str | None = None,
         group: str | None = None,
+        time_unit: float | None = None,
     ) -> dict[str, Any]:
         """Update an existing ticket."""
         update_data = {}
@@ -230,6 +231,8 @@ class ZammadClient:
             update_data["owner"] = owner
         if group is not None:
             update_data["group"] = group
+        if time_unit is not None:
+            update_data["time_unit"] = time_unit
 
         return dict(self.api.ticket.update(ticket_id, update_data))
 
@@ -240,6 +243,7 @@ class ZammadClient:
         article_type: str = "note",
         internal: bool = False,
         sender: str = "Agent",
+        time_unit: float | None = None,
         attachments: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """Add an article (comment/note) to a ticket with optional attachments.
@@ -250,6 +254,7 @@ class ZammadClient:
             article_type: Article type (note, email, phone)
             internal: Whether the article is internal
             sender: Sender type (Agent, Customer, System)
+            time_unit: Time spent for time accounting (unit defined in Zammad admin settings)
             attachments: Optional list of attachments with keys:
                 - filename: str
                 - data: str (base64-encoded content)
@@ -265,6 +270,9 @@ class ZammadClient:
             "internal": internal,
             "sender": sender,
         }
+
+        if time_unit is not None:
+            article_data["time_unit"] = time_unit
 
         if attachments:
             article_data["attachments"] = attachments
