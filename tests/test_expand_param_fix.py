@@ -156,8 +156,7 @@ class TestUnexpandedResponseFailure:
         assert items == ["tickets", "tickets_count", "assets"]
         assert all(isinstance(item, str) for item in items)
 
-        # This is exactly what fails in server.py line 940:
-        #   tickets = [Ticket(**ticket) for ticket in tickets_data]
+        # This reproduces the server failure mode when a non-mapping item reaches Ticket construction.
         with pytest.raises(TypeError, match="must be a mapping, not str"):
             Ticket(**items[0])
 
@@ -192,4 +191,5 @@ class TestBoolVsStringSerialization:
 
     def test_string_true_stays_lowercase(self) -> None:
         """String "true" stays as-is in query strings."""
-        assert str("true") == "true"
+        value = "true"
+        assert str(value) == "true"
