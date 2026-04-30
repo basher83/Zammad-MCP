@@ -250,7 +250,10 @@ class ZammadClient:
         time_unit: float | None = None,
     ) -> dict[str, Any]:
         """Update an existing ticket."""
-        update_data = {}
+        if time_unit is not None and time_unit <= 0:
+            raise ValueError("time_unit must be greater than 0")
+
+        update_data: dict[str, Any] = {}
         if title is not None:
             update_data["title"] = title
         if state is not None:
@@ -293,6 +296,9 @@ class ZammadClient:
         Returns:
             Created article data with attachment metadata
         """
+        if time_unit is not None and time_unit <= 0:
+            raise ValueError("time_unit must be greater than 0")
+
         article_data = {
             "ticket_id": ticket_id,
             "body": body,

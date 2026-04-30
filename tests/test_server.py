@@ -926,8 +926,8 @@ def test_update_ticket_tool(mock_zammad_client, sample_ticket_data):
     )
 
 
-def test_update_ticket_with_time_unit_tool(mock_zammad_client, sample_ticket_data):
-    """Test update ticket tool with time_unit for time accounting."""
+def test_update_ticket_with_time_unit_tool(mock_zammad_client, sample_ticket_data, decorator_capturer):
+    """Test zammad_update_ticket tool forwards time_unit for time accounting."""
     mock_instance, _ = mock_zammad_client
 
     updated_ticket = sample_ticket_data.copy()
@@ -937,28 +937,37 @@ def test_update_ticket_with_time_unit_tool(mock_zammad_client, sample_ticket_dat
 
     server_inst = ZammadMCPServer()
     server_inst.client = mock_instance
-    client = server_inst.get_client()
 
-    ticket_data = client.update_ticket(1, title="Updated Title", time_unit=2.5)
-    result = Ticket(**ticket_data)
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = TicketUpdateParams(ticket_id=1, title="Updated Title", time_unit=2.5)
+    result = test_tools["zammad_update_ticket"](params)
 
     assert result.id == 1
-    mock_instance.update_ticket.assert_called_once_with(1, title="Updated Title", time_unit=2.5)
+    mock_instance.update_ticket.assert_called_once_with(ticket_id=1, title="Updated Title", time_unit=2.5)
 
 
-def test_update_ticket_without_time_unit_tool(mock_zammad_client, sample_ticket_data):
-    """Test update ticket tool without time_unit does not pass it."""
+def test_update_ticket_without_time_unit_tool(mock_zammad_client, sample_ticket_data, decorator_capturer):
+    """Test zammad_update_ticket tool omits time_unit when not provided."""
     mock_instance, _ = mock_zammad_client
 
     mock_instance.update_ticket.return_value = sample_ticket_data
 
     server_inst = ZammadMCPServer()
     server_inst.client = mock_instance
-    client = server_inst.get_client()
 
-    client.update_ticket(1, title="Updated Title")
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
 
-    mock_instance.update_ticket.assert_called_once_with(1, title="Updated Title")
+    params = TicketUpdateParams(ticket_id=1, title="Updated Title")
+    test_tools["zammad_update_ticket"](params)
+
+    mock_instance.update_ticket.assert_called_once_with(ticket_id=1, title="Updated Title")
 
 
 def test_update_ticket_invalid_time_unit():

@@ -98,6 +98,18 @@ class TestZammadClientMethods:
         call_args = mock_instance.ticket.update.call_args[0][1]
         assert "time_unit" not in call_args
 
+    @pytest.mark.parametrize("time_unit", [0, -5])
+    def test_update_ticket_rejects_invalid_time_unit(self, mock_zammad_api: Mock, time_unit: float) -> None:
+        """Test update_ticket rejects non-positive time_unit values before API calls."""
+        mock_instance = Mock()
+        mock_zammad_api.return_value = mock_instance
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        with pytest.raises(ValueError, match="time_unit must be greater than 0"):
+            client.update_ticket(1, time_unit=time_unit)
+
+        mock_instance.ticket.update.assert_not_called()
+
     def test_get_groups(self, mock_zammad_api: Mock) -> None:
         """Test get_groups method."""
         mock_instance = Mock()
@@ -421,6 +433,18 @@ class TestZammadClientMethods:
         assert result["id"] == 3
         call_args = mock_instance.ticket_article.create.call_args[0][0]
         assert "time_unit" not in call_args
+
+    @pytest.mark.parametrize("time_unit", [0, -5])
+    def test_add_article_rejects_invalid_time_unit(self, mock_zammad_api: Mock, time_unit: float) -> None:
+        """Test add_article rejects non-positive time_unit values before API calls."""
+        mock_instance = Mock()
+        mock_zammad_api.return_value = mock_instance
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        with pytest.raises(ValueError, match="time_unit must be greater than 0"):
+            client.add_article(ticket_id=1, body="Invalid time", time_unit=time_unit)
+
+        mock_instance.ticket_article.create.assert_not_called()
 
     def test_get_user(self, mock_zammad_api: Mock) -> None:
         """Test get_user method."""
