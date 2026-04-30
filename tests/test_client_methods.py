@@ -6,6 +6,7 @@ from collections.abc import Generator
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 
 from mcp_zammad.client import ZammadClient
 
@@ -55,7 +56,7 @@ class TestZammadClientMethods:
         assert len(result) == EXPECTED_TWO_RESULTS
         assert result[0]["name"] == "Org 1"
         mock_instance.organization.search.assert_called_once_with(
-            "test", filters={"page": 1, "per_page": 25, "expand": True}
+            "test", filters={"page": 1, "per_page": 25, "expand": "true"}
         )
 
     def test_update_ticket(self, mock_zammad_api: Mock) -> None:
@@ -70,6 +71,44 @@ class TestZammadClientMethods:
 
         assert result["title"] == "Updated Title"
         mock_instance.ticket.update.assert_called_once_with(1, {"title": "Updated Title", "state": "open"})
+
+    def test_update_ticket_with_time_unit(self, mock_zammad_api: Mock) -> None:
+        """Test update_ticket method with time_unit for time accounting."""
+        mock_instance = Mock()
+        mock_instance.ticket.update.return_value = {"id": 1, "title": "Test", "state": "open"}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.update_ticket(1, title="Test", time_unit=2.5)
+
+        assert result["id"] == 1
+        mock_instance.ticket.update.assert_called_once_with(1, {"title": "Test", "time_unit": 2.5})
+
+    def test_update_ticket_without_time_unit_excludes_field(self, mock_zammad_api: Mock) -> None:
+        """Test that time_unit is not included in payload when None."""
+        mock_instance = Mock()
+        mock_instance.ticket.update.return_value = {"id": 1, "title": "Test"}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        client.update_ticket(1, title="Test")
+
+        call_args = mock_instance.ticket.update.call_args[0][1]
+        assert "time_unit" not in call_args
+
+    @pytest.mark.parametrize("time_unit", [0, -5])
+    def test_update_ticket_rejects_invalid_time_unit(self, mock_zammad_api: Mock, time_unit: float) -> None:
+        """Test update_ticket rejects non-positive time_unit values before API calls."""
+        mock_instance = Mock()
+        mock_zammad_api.return_value = mock_instance
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        with pytest.raises(ValueError, match="time_unit must be greater than 0"):
+            client.update_ticket(1, time_unit=time_unit)
+
+        mock_instance.ticket.update.assert_not_called()
 
     def test_get_groups(self, mock_zammad_api: Mock) -> None:
         """Test get_groups method."""
@@ -128,7 +167,7 @@ class TestZammadClientMethods:
 
         assert len(result) == 2
         assert result[0]["email"] == "user1@example.com"
-        mock_instance.user.search.assert_called_once_with("test", filters={"page": 1, "per_page": 10, "expand": True})
+        mock_instance.user.search.assert_called_once_with("test", filters={"page": 1, "per_page": 10, "expand": "true"})
 
     def test_get_current_user(self, mock_zammad_api: Mock) -> None:
         """Test get_current_user method."""
@@ -265,7 +304,7 @@ class TestZammadClientMethods:
         assert len(result) == 1
         expected_query = "test AND state.name:open AND priority.name:high AND group.name:Support AND owner.login:agent1 AND customer.email:customer@example.com"
         mock_instance.ticket.search.assert_called_once_with(
-            expected_query, filters={"page": 2, "per_page": 50, "expand": True}
+            expected_query, filters={"page": 2, "per_page": 50, "expand": "true"}
         )
 
     def test_search_tickets_no_query(self, mock_zammad_api: Mock) -> None:
@@ -279,7 +318,7 @@ class TestZammadClientMethods:
         result = client.search_tickets()
 
         assert len(result) == 1
-        mock_instance.ticket.all.assert_called_once_with(filters={"page": 1, "per_page": 25, "expand": True})
+        mock_instance.ticket.all.assert_called_once_with(filters={"page": 1, "per_page": 25, "expand": "true"})
 
     def test_get_ticket_with_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with article pagination."""
@@ -365,6 +404,47 @@ class TestZammadClientMethods:
         mock_instance.ticket_article.create.assert_called_once_with(
             {"ticket_id": 1, "body": "Response", "type": "email", "internal": True, "sender": "Customer"}
         )
+
+    def test_add_article_with_time_unit(self, mock_zammad_api: Mock) -> None:
+        """Test add_article method with time_unit."""
+        mock_instance = Mock()
+        mock_instance.ticket_article.create.return_value = {"id": 2, "body": "Worked on it", "type": "note"}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.add_article(ticket_id=1, body="Worked on it", time_unit=15.0)
+
+        assert result["id"] == 2
+        mock_instance.ticket_article.create.assert_called_once_with(
+            {"ticket_id": 1, "body": "Worked on it", "type": "note", "internal": False, "sender": "Agent", "time_unit": 15.0}
+        )
+
+    def test_add_article_without_time_unit(self, mock_zammad_api: Mock) -> None:
+        """Test add_article method without time_unit excludes it from payload."""
+        mock_instance = Mock()
+        mock_instance.ticket_article.create.return_value = {"id": 3, "body": "Simple note", "type": "note"}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.add_article(ticket_id=1, body="Simple note")
+
+        assert result["id"] == 3
+        call_args = mock_instance.ticket_article.create.call_args[0][0]
+        assert "time_unit" not in call_args
+
+    @pytest.mark.parametrize("time_unit", [0, -5])
+    def test_add_article_rejects_invalid_time_unit(self, mock_zammad_api: Mock, time_unit: float) -> None:
+        """Test add_article rejects non-positive time_unit values before API calls."""
+        mock_instance = Mock()
+        mock_zammad_api.return_value = mock_instance
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        with pytest.raises(ValueError, match="time_unit must be greater than 0"):
+            client.add_article(ticket_id=1, body="Invalid time", time_unit=time_unit)
+
+        mock_instance.ticket_article.create.assert_not_called()
 
     def test_get_user(self, mock_zammad_api: Mock) -> None:
         """Test get_user method."""
@@ -478,3 +558,57 @@ class TestZammadClientMethods:
         # This should handle the exception internally and retry
         with pytest.raises(Exception, match="Group error"):
             client.update_ticket(1, group="Support")
+
+    def test_list_tags(self, mock_zammad_api: Mock) -> None:
+        """Test list_tags method returns all system tags."""
+        mock_instance = Mock()
+        # Mock the session.get for direct HTTP call
+        mock_response = Mock()
+        mock_response.json.return_value = [
+            {"id": 1, "name": "urgent", "count": 15},
+            {"id": 2, "name": "billing", "count": 8},
+            {"id": 3, "name": "feature-request", "count": 23},
+        ]
+        mock_response.raise_for_status = Mock()
+        mock_instance.session.get.return_value = mock_response
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.list_tags()
+
+        assert len(result) == 3
+        assert result[0]["name"] == "urgent"
+        assert result[0]["count"] == 15
+        assert result[1]["name"] == "billing"
+        assert result[2]["name"] == "feature-request"
+        mock_instance.session.get.assert_called_once_with("https://test.zammad.com/api/v1/tag_list")
+
+    def test_list_tags_empty(self, mock_zammad_api: Mock) -> None:
+        """Test list_tags returns empty list when no tags defined."""
+        mock_instance = Mock()
+        mock_response = Mock()
+        mock_response.json.return_value = []
+        mock_response.raise_for_status = Mock()
+        mock_instance.session.get.return_value = mock_response
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.list_tags()
+
+        assert result == []
+        mock_instance.session.get.assert_called_once()
+
+    def test_list_tags_permission_denied(self, mock_zammad_api: Mock) -> None:
+        """Test list_tags raises error when lacking admin.tag permission."""
+        mock_instance = Mock()
+        mock_response = Mock()
+        mock_response.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
+        mock_instance.session.get.return_value = mock_response
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        with pytest.raises(requests.HTTPError, match="403"):
+            client.list_tags()

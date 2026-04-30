@@ -33,6 +33,7 @@ from .models import (
     GetOrganizationParams,
     GetTicketParams,
     GetTicketStatsParams,
+    GetTicketTagsParams,
     GetUserParams,
     Group,
     ListParams,
@@ -1122,6 +1123,7 @@ class ZammadMCPServer:
                     - group (str | None): New group name
                     - owner (str | None): New owner email/login
                     - customer (str | None): New customer email/login
+                    - time_unit (float | None): Time spent for time accounting
 
             Returns:
                 Ticket: The updated ticket object with schema:
@@ -2033,7 +2035,7 @@ class ZammadMCPServer:
             avg_resolution_time=None,
         )
 
-    def _setup_system_tools(self) -> None:
+    def _setup_system_tools(self) -> None:  # noqa: PLR0915
         """Register system information tools."""
 
         @self.mcp.tool(annotations=_read_only_annotations("Get Ticket Statistics"))
@@ -2288,6 +2290,170 @@ class ZammadMCPServer:
                 result = _format_list_json(priorities)
             else:
                 result = _format_list_markdown(priorities, "Ticket Priority")
+
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("List Tags"))
+        def zammad_list_tags(params: ListParams) -> str:
+            """Get all tags defined in the Zammad system.
+
+            Args:
+                params (ListParams): Validated parameters containing:
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+
+            Returns:
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                # Tag List
+
+                Found N tag(s)
+
+                - **urgent** (ID: 1, used 15 times)
+                - **billing** (ID: 2, used 8 times)
+                - **feature-request** (ID: 3, used 23 times)
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "items": [
+                        {"id": 1, "name": "urgent", "count": 15},
+                        {"id": 2, "name": "billing", "count": 8},
+                        {"id": 3, "name": "feature-request", "count": 23}
+                    ],
+                    "total": 3,
+                    "count": 3,
+                    "page": 1,
+                    "per_page": 3,
+                    "has_more": false
+                }
+                ```
+
+            Examples:
+                - Use when: "List all available tags" -> get tag vocabulary
+                - Use when: "What tags can I use?" -> get valid tag names
+                - Use when: "Show me tag options for categorizing tickets"
+                - Don't use when: Getting tags for a specific ticket (use zammad_get_ticket_tags)
+
+            Error Handling:
+                - Returns "Error: Permission denied" if user lacks admin.tag permission
+                - Returns "Error: Invalid authentication" on 401 status
+                - Returns empty list if no tags defined in system
+
+            Note:
+                Requires admin.tag permission (not available to regular agents).
+                The 'count' field shows how many tickets use each tag.
+                Use tag 'name' field when adding tags to tickets.
+            """
+            client = self.get_client()
+            tags = sorted(client.list_tags(), key=lambda tag: (str(tag.get("name", "")).lower(), tag.get("id", 0)))
+            total = len(tags)
+
+            # Format response
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(
+                    {
+                        "items": tags,
+                        "total": total,
+                        "count": total,
+                        "page": 1,
+                        "per_page": total,
+                        "offset": 0,
+                        "has_more": False,
+                        "next_page": None,
+                        "next_offset": None,
+                        "_meta": {},
+                    },
+                    indent=2,
+                    default=str,
+                )
+            else:
+                lines = ["# Tag List", "", f"Found {total} tag(s)", ""]
+                for tag in tags:
+                    name = tag.get("name", "Unknown")
+                    tag_id = tag.get("id", "?")
+                    count = tag.get("count", 0)
+                    lines.append(f"- **{name}** (ID: {tag_id}, used {count} times)")
+                result = "\n".join(lines)
+
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get Ticket Tags"))
+        def zammad_get_ticket_tags(params: GetTicketTagsParams) -> str:
+            """Get tags assigned to a specific ticket.
+
+            Args:
+                params (GetTicketTagsParams): Validated parameters containing:
+                    - ticket_id (int): Ticket ID to get tags for
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+
+            Returns:
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                ## Tags for Ticket #123
+
+                - urgent
+                - billing
+                - follow-up
+                ```
+
+                Or if no tags:
+                ```
+                Ticket #123 has no tags.
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "ticket_id": 123,
+                    "tags": ["urgent", "billing", "follow-up"],
+                    "count": 3
+                }
+                ```
+
+            Examples:
+                - Use when: "What tags are on ticket 123?" -> ticket_id=123
+                - Use when: "Show tags for this ticket" -> ticket_id from context
+                - Use when: "Is ticket 456 tagged as urgent?" -> get tags, check list
+                - Don't use when: Listing all system tags (use zammad_list_tags)
+                - Don't use when: Adding/removing tags (use zammad_add_ticket_tag/zammad_remove_ticket_tag)
+
+            Error Handling:
+                - Returns TicketIdGuidanceError if ticket not found
+                - Returns "Error: Permission denied" if no ticket access
+                - Returns "Error: Invalid authentication" on 401 status
+
+            Note:
+                Only returns tag names, not full tag metadata.
+                Use zammad_list_tags to see all available tags with usage counts.
+            """
+            client = self.get_client()
+            try:
+                tags = client.get_ticket_tags(params.ticket_id)
+            except (requests.exceptions.RequestException, ValueError) as e:
+                _handle_ticket_not_found_error(params.ticket_id, e)
+
+            # Format response
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(
+                    {
+                        "ticket_id": params.ticket_id,
+                        "tags": tags,
+                        "count": len(tags),
+                    },
+                    indent=2,
+                )
+            elif not tags:
+                result = f"Ticket #{params.ticket_id} has no tags."
+            else:
+                lines = [f"## Tags for Ticket #{params.ticket_id}", ""]
+                for tag in tags:
+                    lines.append(f"- {tag}")
+                result = "\n".join(lines)
 
             return truncate_response(result)
 

@@ -24,6 +24,7 @@ from mcp_zammad.models import (
     GetOrganizationParams,
     GetTicketParams,
     GetTicketStatsParams,
+    GetTicketTagsParams,
     GetUserParams,
     Group,
     ListParams,
@@ -37,6 +38,7 @@ from mcp_zammad.models import (
     TicketPriority,
     TicketSearchParams,
     TicketState,
+    TicketUpdateParams,
     User,
     UserBrief,
     UserCreate,
@@ -517,8 +519,71 @@ def test_add_article_tool(mock_zammad_client, sample_article_data, decorator_cap
 
     # Verify the client was called with correct params (including attachments=None for backward compat)
     mock_instance.add_article.assert_called_once_with(
-        ticket_id=1, article_type="note", attachments=None, body="New comment", internal=False, sender="Agent"
+        ticket_id=1,
+        article_type="note",
+        attachments=None,
+        body="New comment",
+        internal=False,
+        sender="Agent",
+        time_unit=None,
     )
+
+
+def test_add_article_with_time_unit_tool(mock_zammad_client, sample_article_data, decorator_capturer):
+    """Test zammad_add_article tool with time_unit for time accounting."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.add_article.return_value = sample_article_data
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = ArticleCreate(ticket_id=1, body="Worked on this issue", time_unit=30.5)
+    result = test_tools["zammad_add_article"](params)
+
+    assert result.body == "Test article"
+
+    mock_instance.add_article.assert_called_once()
+    call_kwargs = mock_instance.add_article.call_args[1]
+    assert call_kwargs["time_unit"] == 30.5
+
+
+def test_add_article_without_time_unit_tool(mock_zammad_client, sample_article_data, decorator_capturer):
+    """Test zammad_add_article tool without time_unit passes None."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.add_article.return_value = sample_article_data
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = ArticleCreate(ticket_id=1, body="Simple comment")
+    result = test_tools["zammad_add_article"](params)
+
+    assert result.body == "Test article"
+
+    mock_instance.add_article.assert_called_once()
+    call_kwargs = mock_instance.add_article.call_args[1]
+    assert call_kwargs["time_unit"] is None
+
+
+def test_add_article_invalid_time_unit():
+    """Test that ArticleCreate rejects invalid time_unit values."""
+    with pytest.raises(ValidationError, match="time_unit"):
+        ArticleCreate(ticket_id=1, body="test", time_unit=0)
+
+    with pytest.raises(ValidationError, match="time_unit"):
+        ArticleCreate(ticket_id=1, body="test", time_unit=-5)
 
 
 def test_add_article_invalid_type():
@@ -687,6 +752,149 @@ def test_tag_operations(mock_zammad_client):
     mock_instance.remove_ticket_tag.assert_called_once_with(1, "urgent")
 
 
+def test_list_tags_tool_markdown(mock_zammad_client, decorator_capturer):
+    """Test zammad_list_tags returns markdown format by default."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.list_tags.return_value = [
+        {"id": 1, "name": "urgent", "count": 15},
+        {"id": 2, "name": "billing", "count": 8},
+        {"id": 3, "name": "feature-request", "count": 23},
+    ]
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Test with ListParams (default markdown format)
+    params = ListParams()
+    result = test_tools["zammad_list_tags"](params)
+
+    # Verify markdown output format
+    assert "# Tag List" in result
+    assert "Found 3 tag(s)" in result
+    assert "**urgent**" in result
+    assert "**billing**" in result
+    assert "**feature-request**" in result
+    assert "(ID: 1, used 15 times)" in result
+    mock_instance.list_tags.assert_called_once()
+
+
+def test_list_tags_tool_json(mock_zammad_client, decorator_capturer):
+    """Test zammad_list_tags returns canonical JSON list metadata and sorted tags."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.list_tags.return_value = [
+        {"id": 3, "name": "feature-request", "count": 23},
+        {"id": 1, "name": "urgent", "count": 15},
+        {"id": 2, "name": "billing", "count": 8},
+    ]
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = ListParams(response_format=ResponseFormat.JSON)
+    result = json.loads(test_tools["zammad_list_tags"](params))
+
+    assert [tag["name"] for tag in result["items"]] == ["billing", "feature-request", "urgent"]
+    assert result["total"] == 3
+    assert result["count"] == 3
+    assert result["page"] == 1
+    assert result["per_page"] == 3
+    assert result["offset"] == 0
+    assert result["has_more"] is False
+    assert result["next_page"] is None
+    assert result["next_offset"] is None
+    assert result["_meta"] == {}
+    mock_instance.list_tags.assert_called_once()
+
+
+def test_list_tags_tool_empty(mock_zammad_client, decorator_capturer):
+    """Test zammad_list_tags handles empty tag list."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.list_tags.return_value = []
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Test with ListParams (default markdown format)
+    params = ListParams()
+    result = test_tools["zammad_list_tags"](params)
+
+    # Verify empty list markdown output
+    assert "# Tag List" in result
+    assert "Found 0 tag(s)" in result
+    mock_instance.list_tags.assert_called_once()
+
+
+def test_get_ticket_tags_tool(mock_zammad_client, decorator_capturer):
+    """Test zammad_get_ticket_tags returns tags for a ticket."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.get_ticket_tags.return_value = ["urgent", "billing", "follow-up"]
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Test with GetTicketTagsParams
+    params = GetTicketTagsParams(ticket_id=123)
+    result = test_tools["zammad_get_ticket_tags"](params)
+
+    # Verify markdown output format
+    assert "## Tags for Ticket #123" in result
+    assert "- urgent" in result
+    assert "- billing" in result
+    assert "- follow-up" in result
+    mock_instance.get_ticket_tags.assert_called_once_with(123)
+
+
+def test_get_ticket_tags_tool_empty(mock_zammad_client, decorator_capturer):
+    """Test zammad_get_ticket_tags handles tickets with no tags."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.get_ticket_tags.return_value = []
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    # Capture tools using shared fixture
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    # Test with GetTicketTagsParams
+    params = GetTicketTagsParams(ticket_id=456)
+    result = test_tools["zammad_get_ticket_tags"](params)
+
+    # Verify empty tags message
+    assert result == "Ticket #456 has no tags."
+    mock_instance.get_ticket_tags.assert_called_once_with(456)
+
+
 def test_update_ticket_tool(mock_zammad_client, sample_ticket_data):
     """Test update ticket tool."""
     mock_instance, _ = mock_zammad_client
@@ -716,6 +924,68 @@ def test_update_ticket_tool(mock_zammad_client, sample_ticket_data):
     mock_instance.update_ticket.assert_called_once_with(
         1, title="Updated Title", state="open", priority="3 high", owner="agent@example.com", group="Support"
     )
+
+
+def test_update_ticket_with_time_unit_tool(mock_zammad_client, sample_ticket_data, decorator_capturer):
+    """Test zammad_update_ticket tool forwards time_unit for time accounting."""
+    mock_instance, _ = mock_zammad_client
+
+    updated_ticket = sample_ticket_data.copy()
+    updated_ticket["title"] = "Updated Title"
+
+    mock_instance.update_ticket.return_value = updated_ticket
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = TicketUpdateParams(ticket_id=1, title="Updated Title", time_unit=2.5)
+    result = test_tools["zammad_update_ticket"](params)
+
+    assert result.id == 1
+    mock_instance.update_ticket.assert_called_once_with(ticket_id=1, title="Updated Title", time_unit=2.5)
+
+
+def test_update_ticket_without_time_unit_tool(mock_zammad_client, sample_ticket_data, decorator_capturer):
+    """Test zammad_update_ticket tool omits time_unit when not provided."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.update_ticket.return_value = sample_ticket_data
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = TicketUpdateParams(ticket_id=1, title="Updated Title")
+    test_tools["zammad_update_ticket"](params)
+
+    mock_instance.update_ticket.assert_called_once_with(ticket_id=1, title="Updated Title")
+
+
+def test_update_ticket_invalid_time_unit():
+    """Test that TicketUpdateParams rejects invalid time_unit values."""
+    with pytest.raises(ValidationError, match="time_unit"):
+        TicketUpdateParams(ticket_id=1, time_unit=0)
+
+    with pytest.raises(ValidationError, match="time_unit"):
+        TicketUpdateParams(ticket_id=1, time_unit=-5)
+
+
+def test_update_ticket_valid_time_unit():
+    """Test that TicketUpdateParams accepts valid time_unit values."""
+    params = TicketUpdateParams(ticket_id=1, time_unit=1.5)
+    assert params.time_unit == 1.5
+
+    params_none = TicketUpdateParams(ticket_id=1)
+    assert params_none.time_unit is None
 
 
 def test_get_organization_tool(mock_zammad_client, sample_organization_data):
