@@ -2344,23 +2344,29 @@ class ZammadMCPServer:
                 Use tag 'name' field when adding tags to tickets.
             """
             client = self.get_client()
-            tags = client.list_tags()
+            tags = sorted(client.list_tags(), key=lambda tag: (str(tag.get("name", "")).lower(), tag.get("id", 0)))
+            total = len(tags)
 
             # Format response
             if params.response_format == ResponseFormat.JSON:
                 result = json.dumps(
                     {
                         "items": tags,
-                        "total": len(tags),
-                        "count": len(tags),
+                        "total": total,
+                        "count": total,
                         "page": 1,
-                        "per_page": len(tags),
+                        "per_page": total,
+                        "offset": 0,
                         "has_more": False,
+                        "next_page": None,
+                        "next_offset": None,
+                        "_meta": {},
                     },
                     indent=2,
+                    default=str,
                 )
             else:
-                lines = ["# Tag List", "", f"Found {len(tags)} tag(s)", ""]
+                lines = ["# Tag List", "", f"Found {total} tag(s)", ""]
                 for tag in tags:
                     name = tag.get("name", "Unknown")
                     tag_id = tag.get("id", "?")

@@ -721,6 +721,40 @@ def test_list_tags_tool_markdown(mock_zammad_client, decorator_capturer):
     mock_instance.list_tags.assert_called_once()
 
 
+def test_list_tags_tool_json(mock_zammad_client, decorator_capturer):
+    """Test zammad_list_tags returns canonical JSON list metadata and sorted tags."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.list_tags.return_value = [
+        {"id": 3, "name": "feature-request", "count": 23},
+        {"id": 1, "name": "urgent", "count": 15},
+        {"id": 2, "name": "billing", "count": 8},
+    ]
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = ListParams(response_format=ResponseFormat.JSON)
+    result = json.loads(test_tools["zammad_list_tags"](params))
+
+    assert [tag["name"] for tag in result["items"]] == ["billing", "feature-request", "urgent"]
+    assert result["total"] == 3
+    assert result["count"] == 3
+    assert result["page"] == 1
+    assert result["per_page"] == 3
+    assert result["offset"] == 0
+    assert result["has_more"] is False
+    assert result["next_page"] is None
+    assert result["next_offset"] is None
+    assert result["_meta"] == {}
+    mock_instance.list_tags.assert_called_once()
+
+
 def test_list_tags_tool_empty(mock_zammad_client, decorator_capturer):
     """Test zammad_list_tags handles empty tag list."""
     mock_instance, _ = mock_zammad_client
@@ -2725,9 +2759,9 @@ async def test_all_tools_have_title_annotation():
     tools = await server.mcp.list_tools()
 
     for tool in tools:
-        assert hasattr(tool.annotations, "title"), (
-            f"Tool '{tool.name}' missing 'title' annotation. Add title for better UX in MCP clients."
-        )
+        assert hasattr(
+            tool.annotations, "title"
+        ), f"Tool '{tool.name}' missing 'title' annotation. Add title for better UX in MCP clients."
         assert tool.annotations.title, "Title must not be empty"
         # Title should be human-readable (not snake_case)
         assert " " in tool.annotations.title, f"Title '{tool.annotations.title}' should be human-readable with spaces"
