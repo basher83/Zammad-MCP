@@ -55,7 +55,7 @@ class TestZammadClientMethods:
         assert len(result) == EXPECTED_TWO_RESULTS
         assert result[0]["name"] == "Org 1"
         mock_instance.organization.search.assert_called_once_with(
-            "test", filters={"page": 1, "per_page": 25, "expand": True}
+            "test", filters={"page": 1, "per_page": 25, "expand": "true"}
         )
 
     def test_update_ticket(self, mock_zammad_api: Mock) -> None:
@@ -128,7 +128,7 @@ class TestZammadClientMethods:
 
         assert len(result) == 2
         assert result[0]["email"] == "user1@example.com"
-        mock_instance.user.search.assert_called_once_with("test", filters={"page": 1, "per_page": 10, "expand": True})
+        mock_instance.user.search.assert_called_once_with("test", filters={"page": 1, "per_page": 10, "expand": "true"})
 
     def test_get_current_user(self, mock_zammad_api: Mock) -> None:
         """Test get_current_user method."""
@@ -265,7 +265,7 @@ class TestZammadClientMethods:
         assert len(result) == 1
         expected_query = "test AND state.name:open AND priority.name:high AND group.name:Support AND owner.login:agent1 AND customer.email:customer@example.com"
         mock_instance.ticket.search.assert_called_once_with(
-            expected_query, filters={"page": 2, "per_page": 50, "expand": True}
+            expected_query, filters={"page": 2, "per_page": 50, "expand": "true"}
         )
 
     def test_search_tickets_no_query(self, mock_zammad_api: Mock) -> None:
@@ -279,7 +279,7 @@ class TestZammadClientMethods:
         result = client.search_tickets()
 
         assert len(result) == 1
-        mock_instance.ticket.all.assert_called_once_with(filters={"page": 1, "per_page": 25, "expand": True})
+        mock_instance.ticket.all.assert_called_once_with(filters={"page": 1, "per_page": 25, "expand": "true"})
 
     def test_get_ticket_with_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with article pagination."""

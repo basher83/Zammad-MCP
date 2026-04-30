@@ -159,7 +159,7 @@ class ZammadClient:
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
         """Search tickets with various filters."""
-        filters = {"page": page, "per_page": per_page, "expand": True}
+        filters = {"page": page, "per_page": per_page, "expand": "true"}
 
         # Build search query
         search_parts = []
@@ -325,7 +325,7 @@ class ZammadClient:
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
         """Search users."""
-        filters = {"page": page, "per_page": per_page, "expand": True}
+        filters = {"page": page, "per_page": per_page, "expand": "true"}
         result = self.api.user.search(query, filters=filters)
         return list(result)
 
@@ -365,7 +365,7 @@ class ZammadClient:
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
         """Search organizations."""
-        filters = {"page": page, "per_page": per_page, "expand": True}
+        filters = {"page": page, "per_page": per_page, "expand": "true"}
         result = self.api.organization.search(query, filters=filters)
         return list(result)
 
