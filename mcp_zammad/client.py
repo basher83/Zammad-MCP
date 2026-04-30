@@ -21,13 +21,19 @@ class ZammadClient:
         password: str | None = None,
         http_token: str | None = None,
         oauth2_token: str | None = None,
-    ):
+        *,
+        insecure: bool | None = None,
+    ) -> None:
         """Initialize Zammad client with environment variables or provided credentials.
 
         Supports reading secrets from files using Docker secrets pattern:
         - ZAMMAD_HTTP_TOKEN_FILE: Path to file containing HTTP token
         - ZAMMAD_OAUTH2_TOKEN_FILE: Path to file containing OAuth2 token
         - ZAMMAD_PASSWORD_FILE: Path to file containing password
+
+        Set insecure=True, or set ZAMMAD_INSECURE to 1/true/yes/on, only for
+        trusted self-signed/internal certificate chains. Defaults to secure TLS
+        verification.
         """
         self.url = url or os.getenv("ZAMMAD_URL")
         self.username = username or os.getenv("ZAMMAD_USERNAME")
@@ -40,6 +46,7 @@ class ZammadClient:
         self.oauth2_token = (
             oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
         )
+        self.insecure = insecure if insecure is not None else ZammadClient._parse_bool_env("ZAMMAD_INSECURE")
 
         if not self.url:
             raise ConfigException("Zammad URL is required. Set ZAMMAD_URL environment variable.")
@@ -66,6 +73,23 @@ class ZammadClient:
             http_token=self.http_token,
             oauth2_token=self.oauth2_token,
         )
+        if self.insecure:
+            # Allow connecting to instances with self-signed/missing CA certs.
+            session = getattr(self.api, "session", None)
+            if session is None:
+                connection = getattr(self.api, "_connection", None)
+                session = getattr(connection, "session", None) if connection is not None else None
+            if session is None:
+                msg = (
+                    "ZAMMAD_INSECURE is enabled but the installed zammad-py client does not expose a "
+                    "requests session; TLS verification cannot be disabled."
+                )
+                raise ConfigException(msg)
+            session.verify = False
+            logger.warning(
+                "TLS certificate verification is disabled (ZAMMAD_INSECURE=true). "
+                "urllib3 may emit InsecureRequestWarning on requests; fix or trust the server certificate when possible."
+            )
 
     def _validate_url(self, url: str) -> None:
         """Validate URL format to prevent SSRF attacks."""
@@ -122,6 +146,12 @@ class ZammadClient:
             logger.warning(f"Failed to read secret for environment variable '{env_var}'.")
             return None
 
+    @staticmethod
+    def _parse_bool_env(env_var: str) -> bool:
+        """Parse common truthy values from environment variables."""
+        value = os.getenv(env_var, "").strip().lower()
+        return value in {"1", "true", "yes", "on"}
+
     def search_tickets(
         self,
         query: str | None = None,
@@ -134,7 +164,7 @@ class ZammadClient:
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
         """Search tickets with various filters."""
-        filters = {"page": page, "per_page": per_page, "expand": True}
+        filters = {"page": page, "per_page": per_page, "expand": "true"}
 
         # Build search query
         search_parts = []
@@ -300,7 +330,7 @@ class ZammadClient:
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
         """Search users."""
-        filters = {"page": page, "per_page": per_page, "expand": True}
+        filters = {"page": page, "per_page": per_page, "expand": "true"}
         result = self.api.user.search(query, filters=filters)
         return list(result)
 
@@ -340,7 +370,7 @@ class ZammadClient:
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
         """Search organizations."""
-        filters = {"page": page, "per_page": per_page, "expand": True}
+        filters = {"page": page, "per_page": per_page, "expand": "true"}
         result = self.api.organization.search(query, filters=filters)
         return list(result)
 
