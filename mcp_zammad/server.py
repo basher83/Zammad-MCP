@@ -5,7 +5,6 @@ import html
 import json
 import logging
 import os
-import sys
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -21,6 +20,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .client import ZammadClient
+from .logging_config import configure_logging
 from .models import (
     Article,
     ArticleCreate,
@@ -818,41 +818,44 @@ class ZammadMCPServer:
 
         return lifespan
 
-    def get_client(self) -> ZammadClient:
-        """Get the Zammad client, ensuring it's initialized."""
-        if not self.client:
-            logger.debug("Zammad client not initialized, performing lazy initialization")
-            # Lazy initialization for cases where lifespan initialization hasn't finished
-            self.client = ZammadClient()
-        return self.client
-
-    async def initialize(self) -> None:
-        """Initialize the Zammad client on server startup."""
-        # Load environment variables from .env files
-        # First, try to load from current working directory
+    def _bootstrap_env(self) -> None:
+        """Load local environment files before client initialization."""
         cwd_env = Path.cwd() / ".env"
         if cwd_env.exists():
             load_dotenv(cwd_env)
             logger.info("Loaded environment from %s", cwd_env)
 
-        # Then, try to load from .envrc if it exists and convert to .env format
         envrc_path = Path.cwd() / ".envrc"
         if envrc_path.exists() and not os.environ.get("ZAMMAD_URL"):
-            # If .envrc exists but env vars aren't set, warn the user
             logger.warning(
                 "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
             )
 
-        # Also support loading from parent directories (for when running from subdirs)
         load_dotenv()
 
-        try:
-            self.client = ZammadClient()
-            logger.info("Zammad client initialized successfully")
+    def _create_client(self, *, verify_connection: bool) -> ZammadClient:
+        """Create a Zammad client after loading environment configuration."""
+        self._bootstrap_env()
+        client = ZammadClient()
+        logger.info("Zammad client initialized successfully")
 
-            # Test connection
-            current_user = self.client.get_current_user()
+        if verify_connection:
+            current_user = client.get_current_user()
             logger.info("Connected as user ID: %s", current_user.get("id", "unknown"))
+
+        return client
+
+    def get_client(self) -> ZammadClient:
+        """Get the Zammad client, ensuring it's initialized."""
+        if not self.client:
+            logger.debug("Zammad client not initialized, performing lazy initialization")
+            self.client = self._create_client(verify_connection=False)
+        return self.client
+
+    async def initialize(self) -> None:
+        """Initialize the Zammad client on server startup."""
+        try:
+            self.client = self._create_client(verify_connection=True)
         except Exception:
             logger.exception("Failed to initialize Zammad client")
             raise
@@ -2694,35 +2697,11 @@ async def health_check(request: Request) -> JSONResponse:  # noqa: ARG001
 
 
 def _configure_logging() -> None:
-    """Configure logging from LOG_LEVEL environment variable.
-
-    Reads LOG_LEVEL environment variable (default: INFO) and configures
-    the root logger. Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL.
-    """
-    log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
-    valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-
-    if log_level_str not in valid_levels:
-        invalid_level = log_level_str  # Store before resetting
-        log_level_str = "INFO"
-        logger.warning(
-            "Invalid LOG_LEVEL '%s', defaulting to INFO. Valid values: %s",
-            invalid_level,
-            ", ".join(valid_levels),
-        )
-
-    log_level = getattr(logging, log_level_str)
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-
-    # Add handler if none exists
-    if not root_logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        root_logger.addHandler(handler)
+    """Configure logging from LOG_LEVEL environment variable."""
+    configure_logging()
 
 
 def main() -> None:
     """Main entry point for the server."""
-    _configure_logging()
+    configure_logging()
     mcp.run()

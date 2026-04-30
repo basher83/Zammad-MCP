@@ -1,7 +1,7 @@
 """Entry point for the Zammad MCP server."""
 
 from .config import TransportConfig, TransportType
-from .server import _configure_logging, mcp
+from .logging_config import configure_logging
 
 
 def main() -> None:
@@ -12,15 +12,17 @@ def main() -> None:
     - MCP_HOST: Host for HTTP transport (default: 127.0.0.1)
     - MCP_PORT: Port for HTTP transport (required if transport=http)
     """
-    # Configure logging first to prevent output leakage
-    _configure_logging()
+    # Configure logging before importing server code to prevent stdout leakage.
+    configure_logging()
 
-    # Load transport configuration from environment
+    # Load and validate transport configuration before server module initialization.
     config = TransportConfig.from_env()
     config.validate()
 
-    # FastMCP handles its own async loop
-    # Host and port are already configured during server initialization
+    from .server import mcp  # noqa: PLC0415
+
+    # FastMCP handles its own async loop.
+    # Host and port are already configured during server initialization.
     if config.transport == TransportType.HTTP:
         mcp.run(transport="streamable-http")  # type: ignore[func-returns-value]
     else:

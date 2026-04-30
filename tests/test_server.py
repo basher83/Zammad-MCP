@@ -246,14 +246,17 @@ async def test_initialization_failure():
 
 
 def test_tool_without_client():
-    """Test that tools fail gracefully when client is not initialized."""
-    # Create server instance without initializing client
+    """Test that tools lazily initialize the client when needed."""
     server_inst = ZammadMCPServer()
     server_inst.client = None
+    mock_client = Mock()
 
-    # Should raise RuntimeError when client is not initialized
-    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
-        server_inst.get_client()
+    with patch.object(server_inst, "_create_client", return_value=mock_client) as create_client:
+        result = server_inst.get_client()
+
+    assert result is mock_client
+    assert server_inst.client is mock_client
+    create_client.assert_called_once_with(verify_connection=False)
 
 
 # ==================== PARAMETRIZED TESTS ====================
@@ -1542,13 +1545,18 @@ def test_prompt_handlers(decorator_capturer):
     assert "search_tickets" in result
 
 
-def test_get_client_error():
-    """Test get_client error when not initialized."""
+def test_get_client_lazy_initializes():
+    """Test get_client lazily initializes when client is missing."""
     server = ZammadMCPServer()
     server.client = None
+    mock_client = Mock()
 
-    with pytest.raises(RuntimeError, match="Zammad client not initialized"):
-        server.get_client()
+    with patch.object(server, "_create_client", return_value=mock_client) as create_client:
+        result = server.get_client()
+
+    assert result is mock_client
+    assert server.client is mock_client
+    create_client.assert_called_once_with(verify_connection=False)
 
 
 def test_get_client_success():
