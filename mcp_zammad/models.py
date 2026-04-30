@@ -5,8 +5,9 @@ import html
 import os
 from datetime import date, datetime
 from enum import Enum
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 
 class StrictBaseModel(BaseModel):
@@ -280,6 +281,9 @@ class TicketUpdate(StrictBaseModel):
     priority: str | None = Field(None, description="New priority name", max_length=100)
     owner: str | None = Field(None, description="New owner login/email", max_length=255)
     group: str | None = Field(None, description="New group name", max_length=100)
+    time_unit: float | None = Field(
+        None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
+    )
 
     @field_validator("title")
     @classmethod
@@ -322,19 +326,30 @@ class ArticleCreate(StrictBaseModel):
     article_type: ArticleType = Field(default=ArticleType.NOTE, alias="type", description="Article type")
     internal: bool = Field(default=False, description="Whether the article is internal")
     sender: ArticleSender = Field(default=ArticleSender.AGENT, description="Sender type")
-    subject: str | None = Field(default=None, description="Article subject (for emails)")
-    to: str | None = Field(default=None, description="Email recipient (for email type)")
-    cc: str | None = Field(default=None, description="Email CC recipients")
-    content_type: str | None = Field(default=None, description="Content type (text/plain or text/html)")
+    subject: str | None = Field(default=None, max_length=500, description="Email subject")
+    to: str | None = Field(default=None, max_length=1000, description="Email recipient")
+    cc: str | None = Field(default=None, max_length=1000, description="Email CC recipient(s)")
+    content_type: Literal["text/plain", "text/html"] = Field(default="text/plain", description="Article content type")
+    time_unit: float | None = Field(
+        default=None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
+    )
     attachments: list[AttachmentUpload] | None = Field(
         default=None, description="Optional attachments to include", max_length=10
     )
 
-    @field_validator("body")
-    @classmethod
-    def sanitize_body(cls, v: str) -> str:
-        """Escape HTML to prevent XSS attacks."""
-        return html.escape(v)
+    @model_validator(mode="after")
+    def sanitize_body(self) -> "ArticleCreate":
+        """Sanitize body content according to content type."""
+        if self.content_type == "text/plain":
+            self.body = html.escape(self.body)
+        else:
+            self.body = self._sanitize_html_body(self.body)
+        return self
+
+    @staticmethod
+    def _sanitize_html_body(value: str) -> str:
+        """Remove high-risk HTML constructs while preserving basic HTML markup."""
+        return value.replace("<script", "&lt;script").replace("</script", "&lt;/script").replace("javascript:", "")
 
 
 class GetTicketParams(StrictBaseModel):
@@ -358,6 +373,9 @@ class TicketUpdateParams(StrictBaseModel):
     priority: str | None = Field(None, description="New priority name", max_length=100)
     owner: str | None = Field(None, description="New owner login/email", max_length=255)
     group: str | None = Field(None, description="New group name", max_length=100)
+    time_unit: float | None = Field(
+        None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
+    )
 
     @field_validator("title")
     @classmethod
@@ -407,6 +425,15 @@ class TagOperationParams(StrictBaseModel):
 
     ticket_id: int = Field(gt=0, description="Ticket ID")
     tag: str = Field(min_length=1, max_length=100, description="Tag name")
+
+
+class GetTicketTagsParams(StrictBaseModel):
+    """Get ticket tags request parameters."""
+
+    ticket_id: int = Field(gt=0, description="Ticket ID")
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN, description="Output format: markdown (default) or json"
+    )
 
 
 class GetUserParams(StrictBaseModel):

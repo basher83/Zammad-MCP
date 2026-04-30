@@ -21,13 +21,19 @@ class ZammadClient:
         password: str | None = None,
         http_token: str | None = None,
         oauth2_token: str | None = None,
-    ):
+        *,
+        insecure: bool | None = None,
+    ) -> None:
         """Initialize Zammad client with environment variables or provided credentials.
 
         Supports reading secrets from files using Docker secrets pattern:
         - ZAMMAD_HTTP_TOKEN_FILE: Path to file containing HTTP token
         - ZAMMAD_OAUTH2_TOKEN_FILE: Path to file containing OAuth2 token
         - ZAMMAD_PASSWORD_FILE: Path to file containing password
+
+        Set insecure=True, or set ZAMMAD_INSECURE to 1/true/yes/on, only for
+        trusted self-signed/internal certificate chains. Defaults to secure TLS
+        verification.
         """
         self.url = url or os.getenv("ZAMMAD_URL")
         self.username = username or os.getenv("ZAMMAD_USERNAME")
@@ -40,6 +46,7 @@ class ZammadClient:
         self.oauth2_token = (
             oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
         )
+        self.insecure = insecure if insecure is not None else ZammadClient._parse_bool_env("ZAMMAD_INSECURE")
 
         if not self.url:
             raise ConfigException("Zammad URL is required. Set ZAMMAD_URL environment variable.")
@@ -66,6 +73,23 @@ class ZammadClient:
             http_token=self.http_token,
             oauth2_token=self.oauth2_token,
         )
+        if self.insecure:
+            # Allow connecting to instances with self-signed/missing CA certs.
+            session = getattr(self.api, "session", None)
+            if session is None:
+                connection = getattr(self.api, "_connection", None)
+                session = getattr(connection, "session", None) if connection is not None else None
+            if session is None:
+                msg = (
+                    "ZAMMAD_INSECURE is enabled but the installed zammad-py client does not expose a "
+                    "requests session; TLS verification cannot be disabled."
+                )
+                raise ConfigException(msg)
+            session.verify = False
+            logger.warning(
+                "TLS certificate verification is disabled (ZAMMAD_INSECURE=true). "
+                "urllib3 may emit InsecureRequestWarning on requests; fix or trust the server certificate when possible."
+            )
 
     def _validate_url(self, url: str) -> None:
         """Validate URL format to prevent SSRF attacks."""
@@ -122,6 +146,12 @@ class ZammadClient:
             logger.warning(f"Failed to read secret for environment variable '{env_var}'.")
             return None
 
+    @staticmethod
+    def _parse_bool_env(env_var: str) -> bool:
+        """Parse common truthy values from environment variables."""
+        value = os.getenv(env_var, "").strip().lower()
+        return value in {"1", "true", "yes", "on"}
+
     def search_tickets(
         self,
         query: str | None = None,
@@ -134,7 +164,7 @@ class ZammadClient:
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
         """Search tickets with various filters."""
-        filters = {"page": page, "per_page": per_page, "expand": True}
+        filters = {"page": page, "per_page": per_page, "expand": "true"}
 
         # Build search query
         search_parts = []
@@ -217,9 +247,13 @@ class ZammadClient:
         priority: str | None = None,
         owner: str | None = None,
         group: str | None = None,
+        time_unit: float | None = None,
     ) -> dict[str, Any]:
         """Update an existing ticket."""
-        update_data = {}
+        if time_unit is not None and time_unit <= 0:
+            raise ValueError("time_unit must be greater than 0")
+
+        update_data: dict[str, Any] = {}
         if title is not None:
             update_data["title"] = title
         if state is not None:
@@ -230,6 +264,8 @@ class ZammadClient:
             update_data["owner"] = owner
         if group is not None:
             update_data["group"] = group
+        if time_unit is not None:
+            update_data["time_unit"] = time_unit
 
         return dict(self.api.ticket.update(ticket_id, update_data))
 
@@ -240,6 +276,7 @@ class ZammadClient:
         article_type: str = "note",
         internal: bool = False,
         sender: str = "Agent",
+        time_unit: float | None = None,
         subject: str | None = None,
         to: str | None = None,
         cc: str | None = None,
@@ -254,9 +291,10 @@ class ZammadClient:
             article_type: Article type (note, email, phone)
             internal: Whether the article is internal
             sender: Sender type (Agent, Customer, System)
-            subject: Optional article subject (for emails)
-            to: Optional email recipient (for email type)
-            cc: Optional email CC recipients
+            time_unit: Time spent for time accounting (unit defined in Zammad admin settings)
+            subject: Optional email subject
+            to: Optional email recipient
+            cc: Optional email CC recipient(s)
             content_type: Optional content type (text/plain or text/html)
             attachments: Optional list of attachments with keys:
                 - filename: str
@@ -266,6 +304,9 @@ class ZammadClient:
         Returns:
             Created article data with attachment metadata
         """
+        if time_unit is not None and time_unit <= 0:
+            raise ValueError("time_unit must be greater than 0")
+
         article_data = {
             "ticket_id": ticket_id,
             "body": body,
@@ -274,14 +315,17 @@ class ZammadClient:
             "sender": sender,
         }
 
-        if subject:
+        if time_unit is not None:
+            article_data["time_unit"] = time_unit
+        if subject is not None:
             article_data["subject"] = subject
-        if to:
+        if to is not None:
             article_data["to"] = to
-        if cc:
+        if cc is not None:
             article_data["cc"] = cc
-        if content_type:
+        if content_type is not None:
             article_data["content_type"] = content_type
+
         if attachments:
             article_data["attachments"] = attachments
 
@@ -316,7 +360,7 @@ class ZammadClient:
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
         """Search users."""
-        filters = {"page": page, "per_page": per_page, "expand": True}
+        filters = {"page": page, "per_page": per_page, "expand": "true"}
         result = self.api.user.search(query, filters=filters)
         return list(result)
 
@@ -356,7 +400,7 @@ class ZammadClient:
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
         """Search organizations."""
-        filters = {"page": page, "per_page": per_page, "expand": True}
+        filters = {"page": page, "per_page": per_page, "expand": "true"}
         result = self.api.organization.search(query, filters=filters)
         return list(result)
 
@@ -417,3 +461,23 @@ class ZammadClient:
         article = self.api.ticket_article.find(article_id)
         attachments = article.get("attachments", [])
         return list(attachments)
+
+    def list_tags(self) -> list[dict[str, Any]]:
+        """Get all tags defined in the Zammad system.
+
+        Uses direct HTTP call via zammad_py's internal session since
+        the tag_list endpoint is not exposed by the library.
+
+        Note:
+            Requires admin.tag permission.
+
+        Returns:
+            List of tag objects with id, name, and count fields.
+
+        Raises:
+            requests.HTTPError: If the API request fails (e.g., 403 Forbidden)
+        """
+        # Use zammad_py's internal session for authentication
+        response = self.api.session.get(f"{self.url}/tag_list")
+        response.raise_for_status()
+        return list(response.json())

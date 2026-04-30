@@ -5,7 +5,6 @@ import html
 import json
 import logging
 import os
-import sys
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -21,6 +20,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .client import ZammadClient
+from .logging_config import configure_logging
 from .models import (
     Article,
     ArticleCreate,
@@ -33,6 +33,7 @@ from .models import (
     GetOrganizationParams,
     GetTicketParams,
     GetTicketStatsParams,
+    GetTicketTagsParams,
     GetUserParams,
     Group,
     ListParams,
@@ -817,41 +818,44 @@ class ZammadMCPServer:
 
         return lifespan
 
-    def get_client(self) -> ZammadClient:
-        """Get the Zammad client, ensuring it's initialized."""
-        if not self.client:
-            logger.debug("Zammad client not initialized, performing lazy initialization")
-            # Lazy initialization for cases where lifespan initialization hasn't finished
-            self.client = ZammadClient()
-        return self.client
-
-    async def initialize(self) -> None:
-        """Initialize the Zammad client on server startup."""
-        # Load environment variables from .env files
-        # First, try to load from current working directory
+    def _bootstrap_env(self) -> None:
+        """Load local environment files before client initialization."""
         cwd_env = Path.cwd() / ".env"
         if cwd_env.exists():
             load_dotenv(cwd_env)
             logger.info("Loaded environment from %s", cwd_env)
 
-        # Then, try to load from .envrc if it exists and convert to .env format
         envrc_path = Path.cwd() / ".envrc"
         if envrc_path.exists() and not os.environ.get("ZAMMAD_URL"):
-            # If .envrc exists but env vars aren't set, warn the user
             logger.warning(
                 "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
             )
 
-        # Also support loading from parent directories (for when running from subdirs)
         load_dotenv()
 
-        try:
-            self.client = ZammadClient()
-            logger.info("Zammad client initialized successfully")
+    def _create_client(self, *, verify_connection: bool) -> ZammadClient:
+        """Create a Zammad client after loading environment configuration."""
+        self._bootstrap_env()
+        client = ZammadClient()
+        logger.info("Zammad client initialized successfully")
 
-            # Test connection
-            current_user = self.client.get_current_user()
+        if verify_connection:
+            current_user = client.get_current_user()
             logger.info("Connected as user ID: %s", current_user.get("id", "unknown"))
+
+        return client
+
+    def get_client(self) -> ZammadClient:
+        """Get the Zammad client, ensuring it's initialized."""
+        if not self.client:
+            logger.debug("Zammad client not initialized, performing lazy initialization")
+            self.client = self._create_client(verify_connection=False)
+        return self.client
+
+    async def initialize(self) -> None:
+        """Initialize the Zammad client on server startup."""
+        try:
+            self.client = self._create_client(verify_connection=True)
         except Exception:
             logger.exception("Failed to initialize Zammad client")
             raise
@@ -1122,6 +1126,7 @@ class ZammadMCPServer:
                     - group (str | None): New group name
                     - owner (str | None): New owner email/login
                     - customer (str | None): New customer email/login
+                    - time_unit (float | None): Time spent for time accounting
 
             Returns:
                 Ticket: The updated ticket object with schema:
@@ -2033,7 +2038,7 @@ class ZammadMCPServer:
             avg_resolution_time=None,
         )
 
-    def _setup_system_tools(self) -> None:
+    def _setup_system_tools(self) -> None:  # noqa: PLR0915
         """Register system information tools."""
 
         @self.mcp.tool(annotations=_read_only_annotations("Get Ticket Statistics"))
@@ -2291,6 +2296,170 @@ class ZammadMCPServer:
 
             return truncate_response(result)
 
+        @self.mcp.tool(annotations=_read_only_annotations("List Tags"))
+        def zammad_list_tags(params: ListParams) -> str:
+            """Get all tags defined in the Zammad system.
+
+            Args:
+                params (ListParams): Validated parameters containing:
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+
+            Returns:
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                # Tag List
+
+                Found N tag(s)
+
+                - **urgent** (ID: 1, used 15 times)
+                - **billing** (ID: 2, used 8 times)
+                - **feature-request** (ID: 3, used 23 times)
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "items": [
+                        {"id": 1, "name": "urgent", "count": 15},
+                        {"id": 2, "name": "billing", "count": 8},
+                        {"id": 3, "name": "feature-request", "count": 23}
+                    ],
+                    "total": 3,
+                    "count": 3,
+                    "page": 1,
+                    "per_page": 3,
+                    "has_more": false
+                }
+                ```
+
+            Examples:
+                - Use when: "List all available tags" -> get tag vocabulary
+                - Use when: "What tags can I use?" -> get valid tag names
+                - Use when: "Show me tag options for categorizing tickets"
+                - Don't use when: Getting tags for a specific ticket (use zammad_get_ticket_tags)
+
+            Error Handling:
+                - Returns "Error: Permission denied" if user lacks admin.tag permission
+                - Returns "Error: Invalid authentication" on 401 status
+                - Returns empty list if no tags defined in system
+
+            Note:
+                Requires admin.tag permission (not available to regular agents).
+                The 'count' field shows how many tickets use each tag.
+                Use tag 'name' field when adding tags to tickets.
+            """
+            client = self.get_client()
+            tags = sorted(client.list_tags(), key=lambda tag: (str(tag.get("name", "")).lower(), tag.get("id", 0)))
+            total = len(tags)
+
+            # Format response
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(
+                    {
+                        "items": tags,
+                        "total": total,
+                        "count": total,
+                        "page": 1,
+                        "per_page": total,
+                        "offset": 0,
+                        "has_more": False,
+                        "next_page": None,
+                        "next_offset": None,
+                        "_meta": {},
+                    },
+                    indent=2,
+                    default=str,
+                )
+            else:
+                lines = ["# Tag List", "", f"Found {total} tag(s)", ""]
+                for tag in tags:
+                    name = tag.get("name", "Unknown")
+                    tag_id = tag.get("id", "?")
+                    count = tag.get("count", 0)
+                    lines.append(f"- **{name}** (ID: {tag_id}, used {count} times)")
+                result = "\n".join(lines)
+
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get Ticket Tags"))
+        def zammad_get_ticket_tags(params: GetTicketTagsParams) -> str:
+            """Get tags assigned to a specific ticket.
+
+            Args:
+                params (GetTicketTagsParams): Validated parameters containing:
+                    - ticket_id (int): Ticket ID to get tags for
+                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+
+            Returns:
+                str: Formatted response with the following schema:
+
+                Markdown format (default):
+                ```
+                ## Tags for Ticket #123
+
+                - urgent
+                - billing
+                - follow-up
+                ```
+
+                Or if no tags:
+                ```
+                Ticket #123 has no tags.
+                ```
+
+                JSON format:
+                ```json
+                {
+                    "ticket_id": 123,
+                    "tags": ["urgent", "billing", "follow-up"],
+                    "count": 3
+                }
+                ```
+
+            Examples:
+                - Use when: "What tags are on ticket 123?" -> ticket_id=123
+                - Use when: "Show tags for this ticket" -> ticket_id from context
+                - Use when: "Is ticket 456 tagged as urgent?" -> get tags, check list
+                - Don't use when: Listing all system tags (use zammad_list_tags)
+                - Don't use when: Adding/removing tags (use zammad_add_ticket_tag/zammad_remove_ticket_tag)
+
+            Error Handling:
+                - Returns TicketIdGuidanceError if ticket not found
+                - Returns "Error: Permission denied" if no ticket access
+                - Returns "Error: Invalid authentication" on 401 status
+
+            Note:
+                Only returns tag names, not full tag metadata.
+                Use zammad_list_tags to see all available tags with usage counts.
+            """
+            client = self.get_client()
+            try:
+                tags = client.get_ticket_tags(params.ticket_id)
+            except (requests.exceptions.RequestException, ValueError) as e:
+                _handle_ticket_not_found_error(params.ticket_id, e)
+
+            # Format response
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(
+                    {
+                        "ticket_id": params.ticket_id,
+                        "tags": tags,
+                        "count": len(tags),
+                    },
+                    indent=2,
+                )
+            elif not tags:
+                result = f"Ticket #{params.ticket_id} has no tags."
+            else:
+                lines = [f"## Tags for Ticket #{params.ticket_id}", ""]
+                for tag in tags:
+                    lines.append(f"- {tag}")
+                result = "\n".join(lines)
+
+            return truncate_response(result)
+
     def _setup_resources(self) -> None:
         """Register all resources with the MCP server."""
         self._setup_ticket_resource()
@@ -2528,35 +2697,11 @@ async def health_check(request: Request) -> JSONResponse:  # noqa: ARG001
 
 
 def _configure_logging() -> None:
-    """Configure logging from LOG_LEVEL environment variable.
-
-    Reads LOG_LEVEL environment variable (default: INFO) and configures
-    the root logger. Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL.
-    """
-    log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
-    valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-
-    if log_level_str not in valid_levels:
-        invalid_level = log_level_str  # Store before resetting
-        log_level_str = "INFO"
-        logger.warning(
-            "Invalid LOG_LEVEL '%s', defaulting to INFO. Valid values: %s",
-            invalid_level,
-            ", ".join(valid_levels),
-        )
-
-    log_level = getattr(logging, log_level_str)
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-
-    # Add handler if none exists
-    if not root_logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        root_logger.addHandler(handler)
+    """Configure logging from LOG_LEVEL environment variable."""
+    configure_logging()
 
 
 def main() -> None:
     """Main entry point for the server."""
-    _configure_logging()
+    configure_logging()
     mcp.run()
