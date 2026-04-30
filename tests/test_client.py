@@ -8,8 +8,8 @@ import pytest
 
 from mcp_zammad.client import ConfigException, ZammadClient
 
-# Non-secret placeholder for tests (avoids bandit S106 on http_token kwargs)
-_TEST_HTTP_TOKEN = "test-http-token"
+# Non-secret placeholder for tests (avoids bandit S106 on auth kwargs)
+_TEST_AUTH_VALUE = "test-auth-value"
 
 
 def test_client_requires_url() -> None:
@@ -63,9 +63,10 @@ def test_client_accepts_http_token(mock_api: MagicMock) -> None:
         mock_api.assert_called_once()
 
 
+@pytest.mark.parametrize("truthy", ["1", "true", "yes", "on"])
 @patch("mcp_zammad.client.ZammadAPI")
-def test_client_insecure_mode_from_env(mock_api: MagicMock) -> None:
-    """Test that insecure mode disables TLS verification."""
+def test_client_insecure_mode_from_env(mock_api: MagicMock, truthy: str) -> None:
+    """Test that documented truthy values disable TLS verification."""
     mock_instance = mock_api.return_value
 
     with patch.dict(
@@ -73,7 +74,7 @@ def test_client_insecure_mode_from_env(mock_api: MagicMock) -> None:
         {
             "ZAMMAD_URL": "https://test.zammad.com/api/v1",
             "ZAMMAD_HTTP_TOKEN": "test-token",
-            "ZAMMAD_INSECURE": "true",
+            "ZAMMAD_INSECURE": truthy,
         },
         clear=True,
     ):
@@ -88,9 +89,7 @@ def test_client_insecure_mode_from_param(mock_api: MagicMock, caplog: pytest.Log
     """Test that insecure constructor flag disables TLS verification."""
     mock_instance = mock_api.return_value
     with caplog.at_level(logging.WARNING):
-        client = ZammadClient(
-            url="https://test.zammad.com/api/v1", http_token=_TEST_HTTP_TOKEN, insecure=True
-        )
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token=_TEST_AUTH_VALUE, insecure=True)
 
     assert client.insecure is True
     assert mock_instance.session.verify is False
@@ -109,7 +108,7 @@ def test_client_insecure_mode_uses_connection_fallback(mock_api: MagicMock) -> N
 
     client = ZammadClient(
         url="https://test.zammad.com/api/v1",
-        http_token=_TEST_HTTP_TOKEN,
+        http_token=_TEST_AUTH_VALUE,
         insecure=True,
     )
 
@@ -127,7 +126,7 @@ def test_client_insecure_mode_raises_when_no_session(mock_api: MagicMock) -> Non
     with pytest.raises(ConfigException, match="does not expose a"):
         ZammadClient(
             url="https://test.zammad.com/api/v1",
-            http_token=_TEST_HTTP_TOKEN,
+            http_token=_TEST_AUTH_VALUE,
             insecure=True,
         )
 

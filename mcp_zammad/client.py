@@ -21,14 +21,19 @@ class ZammadClient:
         password: str | None = None,
         http_token: str | None = None,
         oauth2_token: str | None = None,
+        *,
         insecure: bool | None = None,
-    ):
+    ) -> None:
         """Initialize Zammad client with environment variables or provided credentials.
 
         Supports reading secrets from files using Docker secrets pattern:
         - ZAMMAD_HTTP_TOKEN_FILE: Path to file containing HTTP token
         - ZAMMAD_OAUTH2_TOKEN_FILE: Path to file containing OAuth2 token
         - ZAMMAD_PASSWORD_FILE: Path to file containing password
+
+        Set insecure=True, or set ZAMMAD_INSECURE to 1/true/yes/on, only for
+        trusted self-signed/internal certificate chains. Defaults to secure TLS
+        verification.
         """
         self.url = url or os.getenv("ZAMMAD_URL")
         self.username = username or os.getenv("ZAMMAD_USERNAME")
