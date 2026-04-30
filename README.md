@@ -19,6 +19,8 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_update_ticket` - Update ticket properties
   - `zammad_add_article` - Add comments/notes to tickets
   - `zammad_add_ticket_tag` / `zammad_remove_ticket_tag` - Manage ticket tags
+  - `zammad_get_ticket_tags` - Get tags assigned to a specific ticket
+  - `zammad_list_tags` - List all tags defined in the system (requires admin.tag permission)
 
 - **Attachment Support**
   - `zammad_get_article_attachments` - List attachments for a ticket article
@@ -85,6 +87,9 @@ docker run --rm -i \
   -e ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
   -e ZAMMAD_HTTP_TOKEN=your-api-token \
   ghcr.io/basher83/zammad-mcp:latest
+
+# If you must skip TLS verification (self-signed / internal CA), add:
+#   -e ZAMMAD_INSECURE=true
 
 # Using Docker secrets for better security
 docker run --rm -i \
@@ -161,6 +166,10 @@ The server requires Zammad API credentials. Use a `.env` file:
    # Option 3: Username/Password
    # ZAMMAD_USERNAME=your-username
    # ZAMMAD_PASSWORD=your-password
+
+   # Optional: Disable TLS certificate verification (NOT recommended for production)
+   # Truthy values only: 1, true, yes, on. Unset (default) keeps TLS verification enabled.
+   # ZAMMAD_INSECURE=true
 
    # Optional: Logging level (default: INFO)
    # Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -530,6 +539,7 @@ To generate an API token in Zammad:
 - Verify your Zammad URL includes the protocol (https://)
 - Check that your API token has the necessary permissions
 - Ensure your Zammad instance is accessible from your network
+- For self-signed/internal certs only: set `ZAMMAD_INSECURE=true` to bypass TLS verification
 
 ### Authentication Errors
 

@@ -6,6 +6,7 @@ from collections.abc import Generator
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 
 from mcp_zammad.client import ZammadClient
 
@@ -55,7 +56,7 @@ class TestZammadClientMethods:
         assert len(result) == EXPECTED_TWO_RESULTS
         assert result[0]["name"] == "Org 1"
         mock_instance.organization.search.assert_called_once_with(
-            "test", filters={"page": 1, "per_page": 25, "expand": True}
+            "test", filters={"page": 1, "per_page": 25, "expand": "true"}
         )
 
     def test_update_ticket(self, mock_zammad_api: Mock) -> None:
@@ -154,7 +155,7 @@ class TestZammadClientMethods:
 
         assert len(result) == 2
         assert result[0]["email"] == "user1@example.com"
-        mock_instance.user.search.assert_called_once_with("test", filters={"page": 1, "per_page": 10, "expand": True})
+        mock_instance.user.search.assert_called_once_with("test", filters={"page": 1, "per_page": 10, "expand": "true"})
 
     def test_get_current_user(self, mock_zammad_api: Mock) -> None:
         """Test get_current_user method."""
@@ -291,7 +292,7 @@ class TestZammadClientMethods:
         assert len(result) == 1
         expected_query = "test AND state.name:open AND priority.name:high AND group.name:Support AND owner.login:agent1 AND customer.email:customer@example.com"
         mock_instance.ticket.search.assert_called_once_with(
-            expected_query, filters={"page": 2, "per_page": 50, "expand": True}
+            expected_query, filters={"page": 2, "per_page": 50, "expand": "true"}
         )
 
     def test_search_tickets_no_query(self, mock_zammad_api: Mock) -> None:
@@ -305,7 +306,7 @@ class TestZammadClientMethods:
         result = client.search_tickets()
 
         assert len(result) == 1
-        mock_instance.ticket.all.assert_called_once_with(filters={"page": 1, "per_page": 25, "expand": True})
+        mock_instance.ticket.all.assert_called_once_with(filters={"page": 1, "per_page": 25, "expand": "true"})
 
     def test_get_ticket_with_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with article pagination."""
@@ -533,3 +534,57 @@ class TestZammadClientMethods:
         # This should handle the exception internally and retry
         with pytest.raises(Exception, match="Group error"):
             client.update_ticket(1, group="Support")
+
+    def test_list_tags(self, mock_zammad_api: Mock) -> None:
+        """Test list_tags method returns all system tags."""
+        mock_instance = Mock()
+        # Mock the session.get for direct HTTP call
+        mock_response = Mock()
+        mock_response.json.return_value = [
+            {"id": 1, "name": "urgent", "count": 15},
+            {"id": 2, "name": "billing", "count": 8},
+            {"id": 3, "name": "feature-request", "count": 23},
+        ]
+        mock_response.raise_for_status = Mock()
+        mock_instance.session.get.return_value = mock_response
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.list_tags()
+
+        assert len(result) == 3
+        assert result[0]["name"] == "urgent"
+        assert result[0]["count"] == 15
+        assert result[1]["name"] == "billing"
+        assert result[2]["name"] == "feature-request"
+        mock_instance.session.get.assert_called_once_with("https://test.zammad.com/api/v1/tag_list")
+
+    def test_list_tags_empty(self, mock_zammad_api: Mock) -> None:
+        """Test list_tags returns empty list when no tags defined."""
+        mock_instance = Mock()
+        mock_response = Mock()
+        mock_response.json.return_value = []
+        mock_response.raise_for_status = Mock()
+        mock_instance.session.get.return_value = mock_response
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.list_tags()
+
+        assert result == []
+        mock_instance.session.get.assert_called_once()
+
+    def test_list_tags_permission_denied(self, mock_zammad_api: Mock) -> None:
+        """Test list_tags raises error when lacking admin.tag permission."""
+        mock_instance = Mock()
+        mock_response = Mock()
+        mock_response.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
+        mock_instance.session.get.return_value = mock_response
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        with pytest.raises(requests.HTTPError, match="403"):
+            client.list_tags()
