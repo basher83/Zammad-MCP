@@ -49,8 +49,8 @@ The main server implementation using FastMCP framework.
 
 **Key Features:**
 
-- 16 tools for comprehensive Zammad operations
-- 3 resources with URI-based access pattern
+- 39 tools for comprehensive Zammad operations (including full Knowledge Base CRUD)
+- 7 resources with URI-based access pattern
 - 3 pre-configured prompts for common scenarios
 - Lifespan management for proper initialization
 
@@ -87,7 +87,31 @@ search_users(query, page, per_page)
 # Organization operations
 get_organization(org_id)
 search_organizations(query, page, per_page)
+
+# Knowledge Base operations (direct HTTP – not in zammad_py)
+list_knowledge_bases()
+get_knowledge_base(kb_id)
+get_kb_category(kb_id, category_id)
+create_kb_category(kb_id, title, kb_locale_id, ...)
+update_kb_category(kb_id, category_id, ...)
+delete_kb_category(kb_id, category_id)
+get_kb_answer(kb_id, answer_id)
+list_kb_answers(kb_id, category_id)
+create_kb_answer(kb_id, category_id, title, body, kb_locale_id)
+update_kb_answer(kb_id, answer_id, ...)
+delete_kb_answer(kb_id, answer_id)
+publish_kb_answer(kb_id, answer_id)
+internalize_kb_answer(kb_id, answer_id)
+archive_kb_answer(kb_id, answer_id)
+unarchive_kb_answer(kb_id, answer_id)
+search_kb_answers(kb_id, query, category_id)
+add_kb_answer_attachment(kb_id, answer_id, filename, data, mime_type)
+delete_kb_answer_attachment(kb_id, answer_id, attachment_id)
+download_kb_attachment(attachment_id)
 ```
+
+> **Note:** The `zammad_py` library has no Knowledge Base support. All KB methods use
+> `self.api.session` (the underlying `requests.Session`) and `self.api.url` directly.
 
 ### 3. Data Models (`models.py`)
 
@@ -111,7 +135,19 @@ BaseModel
 │   ├── type: str
 │   ├── sender: str
 │   └── internal: bool
-└── TicketStats
+├── TicketStats
+├── KnowledgeBase
+│   ├── category_ids: list[int] | None
+│   ├── answer_ids: list[int] | None
+│   └── kb_locale_ids: list[int] | None
+├── KnowledgeBaseCategory
+│   ├── parent_id: int | None
+│   ├── answer_ids: list[int] | None
+│   └── child_ids: list[int] | None
+└── KnowledgeBaseAnswer
+    ├── translation_ids: list[int] | None
+    ├── attachments: list[KnowledgeBaseAnswerAttachment] | None
+    └── tags: list[str] | None
 ```
 
 **Validation Features:**
@@ -329,9 +365,12 @@ MCP errors include:
 
 ```plaintext
 tests/
-├── test_server.py      # Main test suite
-├── conftest.py         # Shared fixtures
-└── test_*.py           # Additional test modules
+├── test_server.py          # Main test suite (tickets, users, orgs, system)
+├── test_kb.py              # Knowledge Base client methods, models, tools
+├── test_client_methods.py  # ZammadClient method unit tests
+├── test_models.py          # Pydantic model validation tests
+├── conftest.py             # Shared fixtures
+└── test_*.py               # Additional test modules
 ```
 
 ### Mock Strategy

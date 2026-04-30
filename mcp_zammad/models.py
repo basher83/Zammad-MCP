@@ -5,6 +5,7 @@ import html
 import os
 from datetime import date, datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
@@ -71,8 +72,8 @@ class AttachmentUpload(StrictBaseModel):
     @classmethod
     def sanitize_filename(cls, v: str) -> str:
         """Sanitize filename to prevent path traversal."""
-        # Remove path components, keep only basename, and remove null bytes
-        return os.path.basename(v).replace("\x00", "")
+        # Normalize Windows backslashes before extracting basename, then remove null bytes
+        return os.path.basename(v.replace("\\", "/")).replace("\x00", "")
 
     @field_validator("data")
     @classmethod
@@ -640,3 +641,349 @@ class TagOperationResult(BaseModel):
 
     success: bool = Field(description="Whether the operation was successful")
     message: str | None = Field(None, description="Optional message about the operation")
+
+
+# ---------------------------------------------------------------------------
+# Knowledge Base models
+# ---------------------------------------------------------------------------
+
+
+class KnowledgeBaseLocale(BaseModel):
+    """Locale entry associated with a knowledge base."""
+
+    id: int
+    knowledge_base_id: int
+    system_locale_id: int
+    primary: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class KnowledgeBaseTranslation(BaseModel):
+    """Translation (title / footer) for a knowledge base."""
+
+    id: int
+    title: str | None = None
+    footer_note: str | None = None
+    kb_locale_id: int
+    knowledge_base_id: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class KnowledgeBase(BaseModel):
+    """Zammad Knowledge Base top-level object."""
+
+    id: int
+    iconset: str | None = None
+    color_highlight: str | None = None
+    color_header: str | None = None
+    color_header_link: str | None = None
+    homepage_layout: str | None = None
+    category_layout: str | None = None
+    active: bool = True
+    show_feed_icon: bool = False
+    custom_address: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    translation_ids: list[int] | None = None
+    kb_locale_ids: list[int] | None = None
+    category_ids: list[int] | None = None
+    answer_ids: list[int] | None = None
+    permission_ids: list[int] | None = None
+
+
+class KnowledgeBaseCategoryTranslation(BaseModel):
+    """Translation (title) for a KB category."""
+
+    id: int
+    title: str | None = None
+    kb_locale_id: int
+    category_id: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class KnowledgeBaseCategory(BaseModel):
+    """Zammad Knowledge Base category."""
+
+    id: int
+    knowledge_base_id: int
+    parent_id: int | None = None
+    category_icon: str | None = None
+    position: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    translation_ids: list[int] | None = None
+    answer_ids: list[int] | None = None
+    child_ids: list[int] | None = None
+    permission_ids: list[int] | None = None
+    permissions_effective: list[dict[str, Any]] | None = None
+
+
+class KnowledgeBaseAnswerTranslationContent(BaseModel):
+    """Body content for a KB answer translation."""
+
+    id: int
+    body: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class KnowledgeBaseAnswerTranslation(BaseModel):
+    """Translation (title + body) for a KB answer."""
+
+    id: int
+    title: str | None = None
+    kb_locale_id: int
+    answer_id: int
+    content_id: int | None = None
+    created_by_id: int | None = None
+    updated_by_id: int | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class KnowledgeBaseAnswerAttachment(BaseModel):
+    """Attachment metadata returned inside a KB answer payload."""
+
+    id: int
+    url: str | None = None
+    preview_url: str | None = None
+    filename: str | None = None
+    size: str | None = None
+    preferences: dict[str, Any] | None = None
+
+
+class KnowledgeBaseAnswer(BaseModel):
+    """Zammad Knowledge Base answer (article)."""
+
+    id: int
+    category_id: int
+    promoted: bool = False
+    internal_note: str | None = None
+    position: int = 0
+    archived_at: datetime | None = None
+    archived_by_id: int | None = None
+    internal_at: datetime | None = None
+    internal_by_id: int | None = None
+    published_at: datetime | None = None
+    published_by_id: int | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    translation_ids: list[int] | None = None
+    attachments: list[KnowledgeBaseAnswerAttachment] | None = None
+    tags: list[str] | None = None
+
+
+# --- KB param models (StrictBaseModel so typos are caught early) ---
+
+
+class GetKnowledgeBaseParams(StrictBaseModel):
+    """Parameters for retrieving a single knowledge base."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class ListKnowledgeBasesParams(StrictBaseModel):
+    """Parameters for listing knowledge bases."""
+
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class GetKBCategoryParams(StrictBaseModel):
+    """Parameters for retrieving a KB category."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    category_id: int = Field(gt=0, description="Category ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class CreateKBCategoryParams(StrictBaseModel):
+    """Parameters for creating a KB category."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    title: str = Field(min_length=1, max_length=500, description="Category title (for the primary locale)")
+    kb_locale_id: int = Field(gt=0, description="Locale ID to associate this title with")
+    parent_id: int | None = Field(None, description="Parent category ID (omit for root category)")
+    category_icon: str | None = Field(None, max_length=100, description="FontAwesome icon code (e.g. 'f115')")
+
+    @field_validator("title")
+    @classmethod
+    def sanitize_title(cls, v: str) -> str:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v)
+
+
+class UpdateKBCategoryParams(StrictBaseModel):
+    """Parameters for updating a KB category."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    category_id: int = Field(gt=0, description="Category ID to update")
+    title: str | None = Field(None, max_length=500, description="New category title")
+    translation_id: int | None = Field(None, description="Translation ID to update (required when changing title)")
+    parent_id: int | None = Field(None, description="New parent category ID")
+    category_icon: str | None = Field(None, max_length=100, description="New FontAwesome icon code")
+
+    @field_validator("title")
+    @classmethod
+    def sanitize_title(cls, v: str | None) -> str | None:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v) if v else v
+
+
+class DeleteKBCategoryParams(StrictBaseModel):
+    """Parameters for deleting a KB category."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    category_id: int = Field(gt=0, description="Category ID to delete")
+
+
+class GetKBAnswerParams(StrictBaseModel):
+    """Parameters for retrieving a KB answer."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    answer_id: int = Field(gt=0, description="Answer ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class ListKBAnswersParams(StrictBaseModel):
+    """Parameters for listing answers within a KB category."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    category_id: int = Field(gt=0, description="Category ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class SearchKBAnswersParams(StrictBaseModel):
+    """Parameters for searching KB answers by title keyword."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    query: str = Field(min_length=1, max_length=200, description="Search string (case-insensitive substring match against answer titles)")
+    category_id: int | None = Field(default=None, gt=0, description="Limit search to this category ID (optional; searches all categories if omitted)")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class CreateKBAnswerParams(StrictBaseModel):
+    """Parameters for creating a KB answer."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    category_id: int = Field(gt=0, description="Category ID to place the answer in")
+    title: str = Field(min_length=1, max_length=500, description="Answer title")
+    body: str = Field(default="", max_length=200000, description="Answer body (HTML or plain text)")
+    kb_locale_id: int = Field(gt=0, description="Locale ID for this translation")
+
+    @field_validator("title")
+    @classmethod
+    def sanitize_title(cls, v: str) -> str:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v)
+
+
+class UpdateKBAnswerParams(StrictBaseModel):
+    """Parameters for updating a KB answer."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    answer_id: int = Field(gt=0, description="Answer ID to update")
+    title: str | None = Field(None, max_length=500, description="New answer title")
+    translation_id: int | None = Field(None, description="Translation ID to update (required when changing title/body)")
+    body: str | None = Field(None, max_length=200000, description="New answer body")
+    category_id: int | None = Field(None, description="Move answer to a different category")
+
+    @field_validator("title")
+    @classmethod
+    def sanitize_title(cls, v: str | None) -> str | None:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v) if v else v
+
+
+class DeleteKBAnswerParams(StrictBaseModel):
+    """Parameters for deleting a KB answer."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    answer_id: int = Field(gt=0, description="Answer ID to delete")
+
+
+class KBAnswerPublishParams(StrictBaseModel):
+    """Parameters for changing KB answer publication status."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    answer_id: int = Field(gt=0, description="Answer ID")
+
+
+class KBAnswerAttachmentAddParams(StrictBaseModel):
+    """Parameters for adding an attachment to a KB answer.
+
+    Provide either file_path (preferred, avoids base64 in context) or data+filename.
+    """
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    answer_id: int = Field(gt=0, description="Answer ID")
+    file_path: str | None = Field(
+        default=None,
+        description="Absolute path to the file on disk (preferred over base64 data)",
+    )
+    filename: str | None = Field(
+        default=None, min_length=1, max_length=255, description="Attachment filename (required when using data)"
+    )
+    data: str | None = Field(default=None, description="Base64-encoded file content (use file_path instead when possible)")
+    mime_type: str = Field(default="application/octet-stream", max_length=100, description="MIME type")
+
+    @field_validator("filename")
+    @classmethod
+    def sanitize_filename(cls, v: str | None) -> str | None:
+        """Sanitize filename to prevent path traversal."""
+        if v is None:
+            return v
+        # Normalize Windows backslashes before extracting basename, then remove null bytes
+        return os.path.basename(v.replace("\\", "/")).replace("\x00", "")
+
+    @field_validator("data")
+    @classmethod
+    def validate_base64(cls, v: str | None) -> str | None:
+        """Validate base64 encoding."""
+        if v is None:
+            return v
+        try:
+            base64.b64decode(v, validate=True)
+        except Exception as e:
+            raise ValueError("Invalid base64 encoding") from e
+        else:
+            return v
+
+    def model_post_init(self, __context: Any) -> None:
+        """Validate that exactly one of file_path or data is provided."""
+        if self.file_path is None and self.data is None:
+            raise ValueError("Either file_path or data must be provided")
+        if self.file_path is not None and self.data is not None:
+            raise ValueError("Provide either file_path or data, not both")
+        if self.data is not None and self.filename is None:
+            raise ValueError("filename is required when providing data")
+
+
+class KBAnswerAttachmentDeleteParams(StrictBaseModel):
+    """Parameters for deleting an attachment from a KB answer."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    answer_id: int = Field(gt=0, description="Answer ID")
+    attachment_id: int = Field(gt=0, description="Attachment ID to delete")
+
+
+class KBAnswerAttachmentDownloadParams(StrictBaseModel):
+    """Parameters for downloading an attachment from a KB answer."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    answer_id: int = Field(gt=0, description="Answer ID")
+    attachment_id: int = Field(gt=0, description="Attachment ID to download")
+    save_path: str | None = Field(
+        default=None,
+        description=(
+            "Absolute local path to save the file on the MCP server's host machine "
+            "(e.g. /Users/you/Downloads/file.pdf). "
+            "When provided, the file is written to disk and only metadata is returned — "
+            "no binary data in context. "
+            "When omitted, returns base64-encoded content in the response (suitable for "
+            "small files or when Claude needs to process the content directly)."
+        ),
+    )
