@@ -22,8 +22,8 @@ reviews:
   assess_linked_issues: true
   related_issues: true
   related_prs: true
-  suggested_labels: true
-  auto_apply_labels: true
+  suggested_labels: false
+  auto_apply_labels: false
   suggested_reviewers: true
   auto_assign_reviewers: true
   poem: false

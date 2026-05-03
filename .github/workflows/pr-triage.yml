@@ -1,0 +1,92 @@
+name: PR Triage
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to triage."
+        required: true
+        type: string
+      apply:
+        description: "Apply labels. Disable for dry-run."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  pr-triage:
+    if: github.repository == 'basher83/Zammad-MCP'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout base repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve PR context
+        id: pr
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          EVENT_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number || '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/triage
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            pr_number="$INPUT_PR_NUMBER"
+            gh pr diff "$pr_number" --repo "$GITHUB_REPOSITORY" --name-only \
+              > .tmp/triage/changed-files.txt
+            echo "is_fork=unknown" >> "$GITHUB_OUTPUT"
+          else
+            pr_number="$EVENT_PR_NUMBER"
+            head_repo="$EVENT_HEAD_REPO"
+            head_sha="$EVENT_HEAD_SHA"
+            base_sha="$EVENT_BASE_SHA"
+            git fetch --no-tags --prune --recurse-submodules=no \
+              "https://github.com/${head_repo}.git" \
+              "$head_sha"
+            diff_base="$(git merge-base "$base_sha" "$head_sha")"
+            git diff --name-only "$diff_base" "$head_sha" > .tmp/triage/changed-files.txt
+            if [ "$head_repo" = "$GITHUB_REPOSITORY" ]; then
+              echo "is_fork=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "is_fork=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      - name: Apply PR triage labels
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_APPLY: ${{ inputs.apply }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          INPUT_APPLY="${INPUT_APPLY:-true}"
+          mode="--apply"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_APPLY" != "true" ]; then
+            mode="--dry-run"
+          fi
+          python3 .codex/skills/zammad-mcp-pr-digest/scripts/triage_pr.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --pr "$PR_NUMBER" \
+            --changed-files .tmp/triage/changed-files.txt \
+            "$mode" \
+            --json

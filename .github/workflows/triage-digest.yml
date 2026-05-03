@@ -1,0 +1,73 @@
+name: Triage Digest
+
+on:
+  schedule:
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+    inputs:
+      window:
+        description: "Digest lookback window."
+        required: false
+        default: "30d"
+        type: string
+      apply:
+        description: "Post to tracking issue. Disable for dry-run."
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  triage-digest:
+    if: github.repository == 'basher83/Zammad-MCP'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Collect issue and PR digests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_WINDOW: ${{ inputs.window || '30d' }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/triage
+          window="$INPUT_WINDOW"
+          if [ "$EVENT_NAME" != "workflow_dispatch" ]; then
+            window="30d"
+          fi
+          python3 .codex/skills/zammad-mcp-issue-digest/scripts/collect_issue_digest.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --all-labels \
+            --window "$window" \
+            --limit-issues 200 \
+            > .tmp/triage/issues.json
+          python3 .codex/skills/zammad-mcp-pr-digest/scripts/collect_pr_digest.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --window "$window" \
+            --limit-prs 250 \
+            > .tmp/triage/prs.json
+
+      - name: Post tracking digest
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_APPLY: ${{ inputs.apply || true }}
+        run: |
+          set -euo pipefail
+          mode="--apply"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_APPLY" != "true" ]; then
+            mode="--dry-run"
+          fi
+          python3 .codex/skills/zammad-mcp-issue-digest/scripts/post_triage_digest.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --issue-digest .tmp/triage/issues.json \
+            --pr-digest .tmp/triage/prs.json \
+            "$mode" \
+            --json
