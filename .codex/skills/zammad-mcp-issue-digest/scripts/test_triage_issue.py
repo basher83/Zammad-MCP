@@ -26,6 +26,7 @@ def load_module(name: str, path: Path):
 
 triage_common = load_module("triage_common", SCRIPT_DIR / "triage_common.py")
 triage_issue = load_module("triage_issue", SCRIPT_DIR / "triage_issue.py")
+post_triage_digest = load_module("post_triage_digest", SCRIPT_DIR / "post_triage_digest.py")
 
 
 def check(value: bool, message: str) -> None:
@@ -127,6 +128,32 @@ def test_invalid_llm_json_falls_back_to_deterministic_labels(tmp_path: Path) -> 
     check("type:bug" in decision["labels"], "deterministic fallback should still label")
 
 
+def test_run_gh_timeout_raises_clear_error(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        raise triage_common.subprocess.TimeoutExpired(cmd=kwargs.get("args") or args[0], timeout=kwargs.get("timeout"))
+
+    monkeypatch.setattr(triage_common.subprocess, "run", fake_run)
+
+    try:
+        triage_common.run_gh(["issue", "list"], timeout=0.01)
+    except triage_common.GhCommandError as err:
+        check("timed out" in str(err), "timeout should be surfaced as GhCommandError")
+    else:
+        raise AssertionError("run_gh should raise GhCommandError on timeout")
+
+
+def test_digest_posts_when_dependency_policy_drift_rows_exist() -> None:
+    issue_digest = {"totals": {}, "digest_rows": []}
+    pr_digest = {
+        "totals": {},
+        "owner_attention": [],
+        "digest_rows": [],
+        "dependency_policy_drift": [{"number": 252}],
+    }
+
+    check(post_triage_digest.should_post(issue_digest, pr_digest), "dependency drift rows should trigger digest post")
+
+
 def test_issue_single_dry_run_uses_mocked_gh_payload(monkeypatch, capsys) -> None:
     payloads = {
         "view": issue(212, "Flatten tool `params` into `arguments`", "Pydantic validation fails.", labels=["type:bug"]),
@@ -179,6 +206,9 @@ def test_issue_triage_workflow_uses_labels_only_automation() -> None:
     workflow = (REPO_ROOT / ".github/workflows/issue-triage.yml").read_text()
 
     check("issues:" in workflow, "issue workflow should be issue-event driven")
+    check("workflow_dispatch:" in workflow, "issue workflow should support manual dry-run dispatch")
+    check("default: false" in workflow, "manual issue triage should default to dry-run")
+    check("inputs.apply || true" not in workflow, "explicit manual dry-run should not be coerced to apply")
     check("CODEX_OPENAI_API_KEY" not in workflow, "issue workflow should not expose LLM secrets in label job")
     check("openai/codex-action" not in workflow, "issue workflow should be deterministic-only in v1")
     check("triage_issue.py" in workflow, "issue workflow should call the issue triage CLI")

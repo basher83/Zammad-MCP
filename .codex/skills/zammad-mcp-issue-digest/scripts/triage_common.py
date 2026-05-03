@@ -118,7 +118,13 @@ class TriageDecision:
         return out
 
 
-def run_gh(args: list[str], *, input_text: str | None = None, check: bool = True) -> subprocess.CompletedProcess:
+def run_gh(
+    args: list[str],
+    *,
+    input_text: str | None = None,
+    check: bool = True,
+    timeout: float | None = 30.0,
+) -> subprocess.CompletedProcess:
     cmd = ["gh", *args]
     try:
         proc = subprocess.run(  # nosec B603 B607
@@ -127,9 +133,12 @@ def run_gh(args: list[str], *, input_text: str | None = None, check: bool = True
             check=check,
             capture_output=True,
             text=True,
+            timeout=timeout,
         )
     except FileNotFoundError as err:
         raise GhCommandError("`gh` command not found") from err
+    except subprocess.TimeoutExpired as err:
+        raise GhCommandError(f"GitHub CLI command timed out after {timeout}s: {' '.join(cmd)}") from err
     except subprocess.CalledProcessError as err:
         raise GhCommandError(format_gh_error(cmd, err)) from err
     return proc

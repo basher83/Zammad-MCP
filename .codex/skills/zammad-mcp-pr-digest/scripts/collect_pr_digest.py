@@ -60,8 +60,8 @@ def git_head() -> str | None:
 
 
 def fetch_prs(repo: str, since: datetime, until: datetime, limit: int) -> list[dict[str, Any]]:
-    since_date = since.date().isoformat()
-    until_date = until.date().isoformat()
+    since_timestamp = format_timestamp(since)
+    until_timestamp = format_timestamp(until)
     payload = gh_json(
         [
             "pr",
@@ -73,7 +73,7 @@ def fetch_prs(repo: str, since: datetime, until: datetime, limit: int) -> list[d
             "--limit",
             str(limit),
             "--search",
-            f"updated:{since_date}..{until_date}",
+            f"updated:{since_timestamp}..{until_timestamp}",
             "--json",
             PR_LIST_FIELDS,
         ]
@@ -88,6 +88,10 @@ def fetch_prs(repo: str, since: datetime, until: datetime, limit: int) -> list[d
         if updated_at is None or updated_at < since or updated_at > until:
             continue
         filtered.append(item)
+    if len(payload) >= limit:
+        raise GhCommandError(
+            f"PR digest query reached --limit {limit}; rerun with a higher --limit-prs to avoid truncation"
+        )
     return filtered
 
 

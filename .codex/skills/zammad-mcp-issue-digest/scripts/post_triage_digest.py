@@ -63,7 +63,9 @@ def should_post(issue_digest: dict[str, Any], pr_digest: dict[str, Any]) -> bool
         or int(issue_totals.get("new_issues") or 0) > 0
         or int(issue_totals.get("new_comments") or 0) > 0
         or int(pr_totals.get("owner_attention") or 0) > 0
+        or int(pr_totals.get("dependency_policy_drift") or 0) > 0
         or int(pr_totals.get("dependabot_policy_drift") or 0) > 0
+        or bool(pr_digest.get("dependency_policy_drift") or [])
     )
 
 

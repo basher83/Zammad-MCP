@@ -79,10 +79,11 @@ jobs:
       - name: Apply PR triage labels
         env:
           EVENT_NAME: ${{ github.event_name }}
-          INPUT_APPLY: ${{ inputs.apply || true }}
+          INPUT_APPLY: ${{ inputs.apply }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
         run: |
           set -euo pipefail
+          INPUT_APPLY="${INPUT_APPLY:-true}"
           mode="--apply"
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_APPLY" != "true" ]; then
             mode="--dry-run"

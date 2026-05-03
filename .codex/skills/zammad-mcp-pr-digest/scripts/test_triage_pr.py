@@ -206,7 +206,10 @@ def test_collect_pr_digest_filters_exact_updated_window(monkeypatch) -> None:
     ]
 
     def fake_gh_json(args):
-        check("updated:2026-05-01..2026-05-02" in args, "search should bound the broad query by dates")
+        check(
+            "updated:2026-05-01T12:00:00Z..2026-05-02T12:00:00Z" in args,
+            "search should bound the broad query by exact timestamps",
+        )
         return payloads
 
     monkeypatch.setattr(collect_pr_digest, "gh_json", fake_gh_json)
@@ -221,9 +224,28 @@ def test_collect_pr_digest_filters_exact_updated_window(monkeypatch) -> None:
     check_equal([row["number"] for row in rows], [2, 3])
 
 
+def test_collect_pr_digest_fails_when_limit_may_truncate_window(monkeypatch) -> None:
+    payloads = [{"number": 1, "updatedAt": "2026-05-01T12:00:00Z"}]
+
+    monkeypatch.setattr(collect_pr_digest, "gh_json", lambda _args: payloads)
+
+    try:
+        collect_pr_digest.fetch_prs(
+            "basher83/Zammad-MCP",
+            datetime(2026, 5, 1, 12, tzinfo=timezone.utc),
+            datetime(2026, 5, 2, 12, tzinfo=timezone.utc),
+            1,
+        )
+    except collect_pr_digest.GhCommandError as err:
+        check("reached --limit 1" in str(err), "limit truncation should fail clearly")
+    else:
+        raise AssertionError("fetch_prs should fail when gh results reach the requested limit")
+
+
 def test_pr_triage_workflow_collects_fork_diff_without_running_pr_code() -> None:
     workflow = (REPO_ROOT / ".github/workflows/pr-triage.yml").read_text()
 
+    check((REPO_ROOT / ".github/workflows/pr-triage.yml").exists(), "workflow path should resolve from repo root")
     check("pull_request_target:" in workflow, "PR workflow should use pull_request_target for label permissions")
     check("git fetch --no-tags" in workflow, "PR workflow should fetch fork heads for diff metadata")
     check("git diff --name-only" in workflow, "PR workflow should collect changed paths without running PR code")
@@ -232,4 +254,6 @@ def test_pr_triage_workflow_collects_fork_diff_without_running_pr_code() -> None
     check("CODEX_OPENAI_API_KEY" not in workflow, "PR workflow should not expose LLM secrets in label job")
     check("openai/codex-action" not in workflow, "PR workflow should be deterministic-only in v1")
     check("--llm-output" not in workflow, "PR workflow should not depend on LLM output artifacts")
+    check("inputs.apply || true" not in workflow, "explicit manual dry-run should not be coerced to apply")
+    check('INPUT_APPLY="${INPUT_APPLY:-true}"' in workflow, "PR workflow should default missing apply input in shell")
     check("gh pr comment" not in workflow, "PR workflow should not comment on source PRs")

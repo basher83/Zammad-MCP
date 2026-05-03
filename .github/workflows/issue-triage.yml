@@ -20,7 +20,7 @@ on:
       apply:
         description: "Apply labels. Disable for dry-run."
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -70,11 +70,12 @@ jobs:
       - name: Apply issue triage labels
         env:
           EVENT_NAME: ${{ github.event_name }}
-          INPUT_APPLY: ${{ inputs.apply || true }}
+          INPUT_APPLY: ${{ inputs.apply }}
           ISSUE_NUMBER: ${{ steps.target.outputs.issue_number }}
           BACKFILL: ${{ steps.target.outputs.backfill }}
         run: |
           set -euo pipefail
+          INPUT_APPLY="${INPUT_APPLY:-false}"
           mode="--apply"
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_APPLY" != "true" ]; then
             mode="--dry-run"
