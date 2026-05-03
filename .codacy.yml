@@ -49,6 +49,7 @@ exclude_paths:
   - '.git/**'
   - 'docs/**'
   - 'scripts/**'
+  - '.codex/**'
   - 'htmlcov/**'
   - '.coverage'
   - 'dist/**'
