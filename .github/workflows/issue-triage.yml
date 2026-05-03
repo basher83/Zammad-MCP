@@ -47,7 +47,6 @@ jobs:
           INPUT_BACKFILL: ${{ inputs.backfill || false }}
         run: |
           set -euo pipefail
-          mkdir -p .tmp/triage
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_BACKFILL" = "true" ]; then
             echo "backfill=true" >> "$GITHUB_OUTPUT"
             echo "issue_number=" >> "$GITHUB_OUTPUT"
@@ -61,9 +60,6 @@ jobs:
             echo "Issue number is required unless backfill is true."
             exit 1
           fi
-          gh issue view "$issue_number" --repo "$GITHUB_REPOSITORY" \
-            --json number,title,body,author,labels,state,comments \
-            > .tmp/triage/issue-context.json
           echo "backfill=false" >> "$GITHUB_OUTPUT"
           echo "issue_number=$issue_number" >> "$GITHUB_OUTPUT"
 

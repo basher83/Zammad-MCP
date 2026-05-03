@@ -254,6 +254,8 @@ def test_pr_triage_workflow_collects_fork_diff_without_running_pr_code() -> None
     check("CODEX_OPENAI_API_KEY" not in workflow, "PR workflow should not expose LLM secrets in label job")
     check("openai/codex-action" not in workflow, "PR workflow should be deterministic-only in v1")
     check("--llm-output" not in workflow, "PR workflow should not depend on LLM output artifacts")
+    check("default: false" in workflow, "manual PR triage should default to dry-run")
     check("inputs.apply || true" not in workflow, "explicit manual dry-run should not be coerced to apply")
     check('INPUT_APPLY="${INPUT_APPLY:-true}"' in workflow, "PR workflow should default missing apply input in shell")
+    check("pr-context.json" not in workflow, "PR workflow should not fetch unused context artifacts")
     check("gh pr comment" not in workflow, "PR workflow should not comment on source PRs")

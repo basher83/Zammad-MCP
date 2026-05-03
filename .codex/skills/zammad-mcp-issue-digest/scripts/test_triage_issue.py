@@ -209,6 +209,7 @@ def test_issue_triage_workflow_uses_labels_only_automation() -> None:
     check("workflow_dispatch:" in workflow, "issue workflow should support manual dry-run dispatch")
     check("default: false" in workflow, "manual issue triage should default to dry-run")
     check("inputs.apply || true" not in workflow, "explicit manual dry-run should not be coerced to apply")
+    check("issue-context.json" not in workflow, "issue workflow should not fetch unused context artifacts")
     check("CODEX_OPENAI_API_KEY" not in workflow, "issue workflow should not expose LLM secrets in label job")
     check("openai/codex-action" not in workflow, "issue workflow should be deterministic-only in v1")
     check("triage_issue.py" in workflow, "issue workflow should call the issue triage CLI")

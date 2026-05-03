@@ -16,7 +16,7 @@ on:
       apply:
         description: "Apply labels. Disable for dry-run."
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -51,8 +51,6 @@ jobs:
           mkdir -p .tmp/triage
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             pr_number="$INPUT_PR_NUMBER"
-            gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json title,body \
-              > .tmp/triage/pr-context.json
             gh pr diff "$pr_number" --repo "$GITHUB_REPOSITORY" --name-only \
               > .tmp/triage/changed-files.txt
             echo "is_fork=unknown" >> "$GITHUB_OUTPUT"
@@ -61,8 +59,6 @@ jobs:
             head_repo="$EVENT_HEAD_REPO"
             head_sha="$EVENT_HEAD_SHA"
             base_sha="$EVENT_BASE_SHA"
-            gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json title,body \
-              > .tmp/triage/pr-context.json
             git fetch --no-tags --prune --recurse-submodules=no \
               "https://github.com/${head_repo}.git" \
               "$head_sha"
