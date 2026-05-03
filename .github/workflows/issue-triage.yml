@@ -1,0 +1,135 @@
+name: Issue Triage
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+      - reopened
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to triage. Leave empty when backfill is true."
+        required: false
+        type: string
+      backfill:
+        description: "Backfill labels across open issues."
+        required: false
+        default: false
+        type: boolean
+      apply:
+        description: "Apply labels. Disable for dry-run."
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  issue-triage:
+    if: github.repository == 'basher83/Zammad-MCP'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CODEX_OPENAI_API_KEY: ${{ secrets.CODEX_OPENAI_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Resolve issue target
+        id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
+          INPUT_ISSUE_NUMBER: ${{ inputs.issue_number || '' }}
+          INPUT_BACKFILL: ${{ inputs.backfill || false }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/triage
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_BACKFILL" = "true" ]; then
+            echo "backfill=true" >> "$GITHUB_OUTPUT"
+            echo "issue_number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          issue_number="$EVENT_ISSUE_NUMBER"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            issue_number="$INPUT_ISSUE_NUMBER"
+          fi
+          if [ -z "$issue_number" ]; then
+            echo "Issue number is required unless backfill is true."
+            exit 1
+          fi
+          gh issue view "$issue_number" --repo "$GITHUB_REPOSITORY" \
+            --json number,title,body,author,labels,state,comments \
+            > .tmp/triage/issue-context.json
+          echo "backfill=false" >> "$GITHUB_OUTPUT"
+          echo "issue_number=$issue_number" >> "$GITHUB_OUTPUT"
+
+      - name: Codex label suggestion
+        id: codex
+        if: env.CODEX_OPENAI_API_KEY != '' && steps.target.outputs.backfill != 'true'
+        uses: openai/codex-action@5c3f4ccdb2b8790f73d6b21751ac00e602aa0c02 # v1.7
+        with:
+          openai-api-key: ${{ env.CODEX_OPENAI_API_KEY }}
+          allow-users: "*"
+          prompt: |
+            You are triaging one GitHub issue for basher83/Zammad-MCP.
+
+            Read .tmp/triage/issue-context.json and return only labels from this list:
+            type:bug, type:feature, type:docs, type:security, type:performance, type:chore,
+            dependencies, area:python, area:web, area:docs, area:ci-cd, area:security,
+            area:infra, area:mcp-tools, area:zammad-api, area:transport, needs:owner-review,
+            needs:repro, needs:info, needs:duplicate-review, bot:renovate, bot:dependabot,
+            renovate, docker, github-actions, python:uv, security.
+
+            Prefer false negatives over broad labels. Do not suggest closing or commenting.
+          output-schema: |
+            {
+              "type": "object",
+              "properties": {
+                "labels": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              },
+              "required": ["labels"],
+              "additionalProperties": false
+            }
+
+      - name: Save Codex output
+        if: steps.codex.outputs['final-message'] != ''
+        env:
+          CODEX_OUTPUT: ${{ steps.codex.outputs['final-message'] }}
+        run: |
+          printf '%s\n' "$CODEX_OUTPUT" > .tmp/triage/issue-llm.json
+
+      - name: Apply issue triage labels
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_APPLY: ${{ inputs.apply || true }}
+          ISSUE_NUMBER: ${{ steps.target.outputs.issue_number }}
+          BACKFILL: ${{ steps.target.outputs.backfill }}
+        run: |
+          set -euo pipefail
+          mode="--apply"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_APPLY" != "true" ]; then
+            mode="--dry-run"
+          fi
+          if [ "$BACKFILL" = "true" ]; then
+            python3 .codex/skills/zammad-mcp-issue-digest/scripts/triage_issue.py \
+              --repo "$GITHUB_REPOSITORY" \
+              --backfill \
+              --state open \
+              "$mode" \
+              --json
+          else
+            python3 .codex/skills/zammad-mcp-issue-digest/scripts/triage_issue.py \
+              --repo "$GITHUB_REPOSITORY" \
+              --issue "$ISSUE_NUMBER" \
+              --llm-output .tmp/triage/issue-llm.json \
+              "$mode" \
+              --json
+          fi

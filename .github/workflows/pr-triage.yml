@@ -1,0 +1,143 @@
+name: PR Triage
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to triage."
+        required: true
+        type: string
+      apply:
+        description: "Apply labels. Disable for dry-run."
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  pr-triage:
+    if: github.repository == 'basher83/Zammad-MCP'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CODEX_OPENAI_API_KEY: ${{ secrets.CODEX_OPENAI_API_KEY }}
+
+    steps:
+      - name: Checkout base repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve PR context
+        id: pr
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          EVENT_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number || '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/triage
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            pr_number="$INPUT_PR_NUMBER"
+            gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json title,body \
+              > .tmp/triage/pr-context.json
+            gh pr diff "$pr_number" --repo "$GITHUB_REPOSITORY" --name-only \
+              > .tmp/triage/changed-files.txt
+            gh pr diff "$pr_number" --repo "$GITHUB_REPOSITORY" \
+              > .tmp/triage/changes.diff
+            echo "is_fork=unknown" >> "$GITHUB_OUTPUT"
+          else
+            pr_number="$EVENT_PR_NUMBER"
+            head_repo="$EVENT_HEAD_REPO"
+            head_sha="$EVENT_HEAD_SHA"
+            base_sha="$EVENT_BASE_SHA"
+            gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json title,body \
+              > .tmp/triage/pr-context.json
+            git fetch --no-tags --prune --recurse-submodules=no \
+              "https://github.com/${head_repo}.git" \
+              "$head_sha"
+            diff_base="$(git merge-base "$base_sha" "$head_sha")"
+            git diff --name-only "$diff_base" "$head_sha" > .tmp/triage/changed-files.txt
+            git diff "$diff_base" "$head_sha" > .tmp/triage/changes.diff
+            if [ "$head_repo" = "$GITHUB_REPOSITORY" ]; then
+              echo "is_fork=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "is_fork=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      - name: Codex label suggestion
+        id: codex
+        if: env.CODEX_OPENAI_API_KEY != '' && steps.pr.outputs.is_fork != 'true'
+        uses: openai/codex-action@5c3f4ccdb2b8790f73d6b21751ac00e602aa0c02 # v1.7
+        with:
+          openai-api-key: ${{ env.CODEX_OPENAI_API_KEY }}
+          allow-users: "*"
+          prompt: |
+            You are triaging one pull request for basher83/Zammad-MCP.
+
+            Inputs:
+            - .tmp/triage/pr-context.json
+            - .tmp/triage/changed-files.txt
+            - .tmp/triage/changes.diff
+
+            Return only labels from this list:
+            type:bug, type:feature, type:docs, type:security, type:performance, type:chore,
+            dependencies, area:python, area:web, area:docs, area:ci-cd, area:security,
+            area:infra, area:mcp-tools, area:zammad-api, area:transport, needs:owner-review,
+            needs:repro, needs:info, needs:duplicate-review, bot:renovate, bot:dependabot,
+            renovate, docker, github-actions, python:uv, security.
+
+            Prefer the smallest accurate set. Do not suggest closing, merging, or commenting.
+          output-schema: |
+            {
+              "type": "object",
+              "properties": {
+                "labels": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              },
+              "required": ["labels"],
+              "additionalProperties": false
+            }
+
+      - name: Save Codex output
+        if: steps.codex.outputs['final-message'] != ''
+        env:
+          CODEX_OUTPUT: ${{ steps.codex.outputs['final-message'] }}
+        run: |
+          printf '%s\n' "$CODEX_OUTPUT" > .tmp/triage/pr-llm.json
+
+      - name: Apply PR triage labels
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_APPLY: ${{ inputs.apply || true }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          mode="--apply"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_APPLY" != "true" ]; then
+            mode="--dry-run"
+          fi
+          python3 .codex/skills/zammad-mcp-pr-digest/scripts/triage_pr.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --pr "$PR_NUMBER" \
+            --changed-files .tmp/triage/changed-files.txt \
+            --llm-output .tmp/triage/pr-llm.json \
+            "$mode" \
+            --json
