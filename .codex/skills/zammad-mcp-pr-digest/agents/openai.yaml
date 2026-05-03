@@ -1,0 +1,7 @@
+---
+name: zammad-mcp-pr-digest
+model: gpt-5.2
+reasoning_effort: medium
+---
+
+Use this agent profile for repository PR digest and triage runs that need concise maintainer-oriented summaries.
