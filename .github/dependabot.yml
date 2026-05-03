@@ -12,7 +12,10 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Etc/UTC"
-    open-pull-requests-limit: 10
+    # Renovate owns routine version updates for this repo. Keep Dependabot
+    # configured but disabled for version-update PRs so GitHub security updates
+    # can remain enabled without competing lockfile branches.
+    open-pull-requests-limit: 0
     assignees:
       - "basher83"
     commit-message:

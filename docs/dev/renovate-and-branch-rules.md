@@ -1,21 +1,32 @@
 # Dependency & Branch Protection Strategy for `Zammad-MCP`
 
-This document describes how dependency updates and branch protection are configured for the [`basher83/Zammad-MCP`](https://github.com/basher83/Zammad-MCP) repository.
+This document describes how dependency updates, branch protection, and dependency-bot CI are configured for the [`basher83/Zammad-MCP`](https://github.com/basher83/Zammad-MCP) repository.
 
 It covers:
 
-- How Renovate is configured for this repo
+- How Renovate and Dependabot responsibilities are split
+- How dependency-bot PRs interact with secret-dependent integrations
 - Which updates auto‑merge to `main` (“no visible PR”)
 - Which updates always require human attention
 - How branch protection and required checks interact with Renovate
 
 ---
 
-## 1. Renovate Overview
+## 1. Dependency Bot Ownership
+
+Renovate owns routine version-update PRs for this repository. Dependabot remains available for GitHub's security-alert and security-update workflows, but Dependabot version updates are intentionally disabled in `.github/dependabot.yml` with `open-pull-requests-limit: 0`.
+
+This avoids two bots opening competing `uv.lock`, GitHub Actions, or Docker update branches for the same dependency surface. In practice, normal dependency maintenance should come from Renovate, while Dependabot is treated as the security-alert backstop.
+
+Dependency-bot PRs must still run the required validation jobs. Secret-dependent reporting and publishing integrations are optional for PR validation and must skip cleanly when secrets are unavailable.
+
+GitHub treats Dependabot-triggered `pull_request` workflows like forked PRs: they receive a read-only token and do not receive normal Actions secrets. If the repository needs secret-backed behavior on Dependabot PRs, configure matching Dependabot secrets in GitHub and keep the workflow guarded so the absence of those secrets does not fail validation.
+
+## 2. Renovate Overview
 
 `Zammad-MCP` uses [Renovate](https://docs.renovatebot.com/) with a centralized configuration stored in [`basher83/renovate-config`](https://github.com/basher83/renovate-config).
 
-### 1.1 Repo-level Renovate config
+### 2.1 Repo-level Renovate config
 
 `renovate.json` in this repo:
 
@@ -62,11 +73,11 @@ Key points:
   - Are assigned to `@basher83`.
   - Use `chore(deps):` as the commit message prefix.
 - Extra repo‑specific rule:
-  - **`zammad-py` major updates require explicit approval** in the Dependency Dashboard.
+  - Major updates to `zammad-py` require explicit approval in the Dependency Dashboard.
 
 ---
 
-## 2. What Auto‑Merges vs. What Requires Review
+## 3. What Auto‑Merges vs. What Requires Review
 
 The overall philosophy:
 
@@ -75,7 +86,7 @@ The overall philosophy:
 
 Below is how this breaks down by dependency type.
 
-### 2.1 Python dependencies (`presets/python.json` & `python-mcp.json`)
+### 3.1 Python dependencies (`presets/python.json` & `python-mcp.json`)
 
 **Auto‑merge (PR merges & disappears, once checks pass):**
 
@@ -112,7 +123,7 @@ These groups are configured with `automerge: true` (no `automergeType` override)
 - `zammad-py` (Zammad API client) **major updates**:
   - `dependencyDashboardApproval: true` → PR will not auto‑merge; requires explicit approval.
 
-### 2.2 GitHub Actions (`presets/github-actions-security.json`)
+### 3.2 GitHub Actions (`presets/github-actions-security.json`)
 
 Goals:
 
@@ -143,7 +154,7 @@ Goals:
 - For these, `matchUpdateTypes: ["minor","major"]` + `dependencyDashboardApproval: true`.
 - Result: PRs open and won’t auto‑merge until you explicitly approve via the Dependency Dashboard.
 
-### 2.3 Docker (`presets/docker.json`)
+### 3.3 Docker (`presets/docker.json`)
 
 Goals:
 
@@ -170,11 +181,11 @@ Goals:
 
 ---
 
-## 3. Branch Protection for `main`
+## 4. Branch Protection for `main`
 
 Branch protection is configured via a ruleset named **“Protection Rules”** and applies to `~DEFAULT_BRANCH` (i.e. `main`).
 
-### 3.1 Ruleset summary
+### 4.1 Ruleset summary
 
 ```jsonc
 {
@@ -240,23 +251,27 @@ Branch protection is configured via a ruleset named **“Protection Rules”** a
 
 ---
 
-## 4. How Renovate and Branch Rules Work Together
+## 5. Secret-Dependent CI Policy
+
+Required PR validation must not depend on repository, Codacy, Docker Hub, or publishing credentials. The repo follows this split:
+
+`test-and-coverage` is required. It runs tests, enforces the coverage threshold, and uploads coverage artifacts on every PR. The Codacy coverage upload runs only when `CODACY_PROJECT_TOKEN` is available.
+
+`security-scan` is required. It runs Bandit and dependency scanning without requiring external credentials. Uploads that rely on the built-in `GITHUB_TOKEN` remain part of the job.
+
+`Codacy Security Scan` is a reporting workflow. Docker Hub login runs only when both `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are available. The Codacy project token is passed through when present and omitted otherwise.
+
+`Build and Publish Docker Image` validates the Docker build on PRs but only pushes images and creates attestations on non-PR events. Transient BuildKit or registry errors should be retried; they are not normally fixed by changing dependency-update PR branches.
+
+## 6. How Renovate and Branch Rules Work Together
 
 Putting it all together:
 
 1. Renovate detects an update that matches an **automerge** rule.
 2. Renovate opens a PR against `main`.
-3. GitHub runs the required checks:
-   - `Tests and Coverage` → `test-and-coverage`
-   - `Security Scan` → `security-scan`
-4. If both required checks succeed:
-   - Branch rules allow merging (no required approvals).
-   - Renovate merges the PR into `main`.
-   - PR is closed (often quickly), giving the “no visible PR” experience.
-5. If checks fail **or** the update requires approval (e.g. `zammad-py` major, MCP major, sensitive Actions, critical Docker images):
-   - Renovate **does not** merge.
-   - PR remains open.
-   - For rules using `dependencyDashboardApproval: true`, Renovate waits for explicit approval from the Dependency Dashboard.
+3. GitHub runs the required checks: `Tests and Coverage` as `test-and-coverage`, and `Security Scan` as `security-scan`.
+4. If both required checks succeed, branch rules allow merging without required approvals, Renovate merges the PR into `main`, and the PR closes. This is the “no visible PR” experience when updates move quickly.
+5. If checks fail or the update requires approval, such as a `zammad-py` major, MCP major, sensitive Actions update, or critical Docker image update, Renovate does not merge. The PR remains open, and rules using `dependencyDashboardApproval: true` wait for explicit approval from the Dependency Dashboard.
 
 This gives a clear separation between:
 
@@ -265,7 +280,7 @@ This gives a clear separation between:
 
 ---
 
-## 5. Quick Reference
+## 7. Quick Reference
 
 ### Auto‑merged (once tests & security checks pass)
 
@@ -303,7 +318,7 @@ This gives a clear separation between:
 
 ---
 
-## 6. How to Adjust This in Future
+## 8. How to Adjust This in Future
 
 - To make more things **auto‑merge**:
   - Add/adjust `packageRules` with `automerge: true` in `basher83/renovate-config`.

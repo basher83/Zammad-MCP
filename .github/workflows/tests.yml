@@ -11,6 +11,8 @@ jobs:
   test-and-coverage:
     runs-on: ubuntu-latest
     if: github.repository == 'basher83/Zammad-MCP'
+    env:
+      CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
     permissions:
       contents: read
       
@@ -54,15 +56,15 @@ jobs:
               sys.exit(f"Coverage {cov:.1f}% below required 65%")
           PY
       - name: Upload coverage to Codacy
-        # Only upload on push to main or same-repository PRs where repository
-        # secrets are available. Fork PRs still run tests and publish artifacts.
+        # Coverage upload is reporting, not validation. Dependabot and fork PRs
+        # may not have repository secrets, so skip cleanly when the token is not
+        # present and keep the required test job focused on tests/coverage.
         if: >-
           github.event_name != 'workflow_dispatch' &&
-          (github.event_name != 'pull_request' ||
-          github.event.pull_request.head.repo.full_name == github.repository)
+          env.CODACY_PROJECT_TOKEN != ''
         uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699  # v1.3.0
         with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          project-token: ${{ env.CODACY_PROJECT_TOKEN }}
           coverage-reports: coverage.xml
           language: python
 
