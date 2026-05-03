@@ -12,7 +12,7 @@ show_env = false
 truncate = true
 
 [tools]
-python = "3.13"
+python = "3.14.4"
 eza = "0.23.0"
 fd = "10.4.2"
 rg = "15.1.0"
