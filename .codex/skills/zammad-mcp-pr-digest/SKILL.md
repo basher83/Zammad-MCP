@@ -11,7 +11,7 @@ Produce a maintainer-focused pull request digest for `basher83/Zammad-MCP`. This
 
 Default to summary-only output. Include compact details when the user asks for a table, full digest, or specific PR status.
 
-For triage automation, classify PRs from metadata plus changed files. Apply labels only. Do not run PR code, merge PRs, close PRs, or comment on source PRs in v1. `pull_request_target` workflows must fetch the diff safely from the fork or branch and pass only file names and metadata into the classifier.
+For triage automation, classify PRs from metadata plus changed files. The CLI accepts optional LLM JSON as an additive signal for local or future isolated generator runs, but the repository Actions run deterministic-only in v1. Apply labels only. Do not run PR code, merge PRs, close PRs, or comment on source PRs in v1. `pull_request_target` workflows must fetch file names safely from the fork or branch and pass only file names and metadata into the classifier.
 
 ## Inputs
 

@@ -33,7 +33,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      CODEX_OPENAI_API_KEY: ${{ secrets.CODEX_OPENAI_API_KEY }}
 
     steps:
       - name: Checkout repository
@@ -68,44 +67,6 @@ jobs:
           echo "backfill=false" >> "$GITHUB_OUTPUT"
           echo "issue_number=$issue_number" >> "$GITHUB_OUTPUT"
 
-      - name: Codex label suggestion
-        id: codex
-        if: env.CODEX_OPENAI_API_KEY != '' && steps.target.outputs.backfill != 'true'
-        uses: openai/codex-action@5c3f4ccdb2b8790f73d6b21751ac00e602aa0c02 # v1.7
-        with:
-          openai-api-key: ${{ env.CODEX_OPENAI_API_KEY }}
-          allow-users: "*"
-          prompt: |
-            You are triaging one GitHub issue for basher83/Zammad-MCP.
-
-            Read .tmp/triage/issue-context.json and return only labels from this list:
-            type:bug, type:feature, type:docs, type:security, type:performance, type:chore,
-            dependencies, area:python, area:web, area:docs, area:ci-cd, area:security,
-            area:infra, area:mcp-tools, area:zammad-api, area:transport, needs:owner-review,
-            needs:repro, needs:info, needs:duplicate-review, bot:renovate, bot:dependabot,
-            renovate, docker, github-actions, python:uv, security.
-
-            Prefer false negatives over broad labels. Do not suggest closing or commenting.
-          output-schema: |
-            {
-              "type": "object",
-              "properties": {
-                "labels": {
-                  "type": "array",
-                  "items": { "type": "string" }
-                }
-              },
-              "required": ["labels"],
-              "additionalProperties": false
-            }
-
-      - name: Save Codex output
-        if: steps.codex.outputs['final-message'] != ''
-        env:
-          CODEX_OUTPUT: ${{ steps.codex.outputs['final-message'] }}
-        run: |
-          printf '%s\n' "$CODEX_OUTPUT" > .tmp/triage/issue-llm.json
-
       - name: Apply issue triage labels
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -129,7 +90,6 @@ jobs:
             python3 .codex/skills/zammad-mcp-issue-digest/scripts/triage_issue.py \
               --repo "$GITHUB_REPOSITORY" \
               --issue "$ISSUE_NUMBER" \
-              --llm-output .tmp/triage/issue-llm.json \
               "$mode" \
               --json
           fi

@@ -220,9 +220,10 @@ def main() -> int:
         pr_digest = load_json_file(args.pr_digest)
         body = build_body(issue_digest, pr_digest)
         post = should_post(issue_digest, pr_digest)
-        issue_number = find_tracking_issue(args.repo, args.title)
+        issue_number = None
         created = False
         if args.apply and post:
+            issue_number = find_tracking_issue(args.repo, args.title)
             if issue_number is None:
                 issue_number = create_tracking_issue(args.repo, args.title)
                 created = True

@@ -7,6 +7,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
@@ -29,6 +30,7 @@ def load_module(name: str, path: Path):
 
 triage_common = load_module("triage_common", COMMON_DIR / "triage_common.py")
 triage_pr = load_module("triage_pr", SCRIPT_DIR / "triage_pr.py")
+collect_pr_digest = load_module("collect_pr_digest", SCRIPT_DIR / "collect_pr_digest.py")
 
 
 def check(value: bool, message: str) -> None:
@@ -119,6 +121,16 @@ def test_dependabot_pr_gets_policy_drift_signal() -> None:
     check_equal(decision["attention"], "owner")
 
 
+def test_review_required_pr_state_maps_to_needed_attention() -> None:
+    current = pr(300, "Improve ticket search", "snizzleorg", "Add better ticket search.")
+    current["reviewDecision"] = "REVIEW_REQUIRED"
+
+    decision = triage_common.classify_pr_payload(current).to_json()
+
+    check_equal(decision["state_summary"]["review"], "needed")
+    check_equal(decision["attention"], "owner")
+
+
 def test_pr_single_dry_run_uses_mocked_gh_payload(monkeypatch, capsys, tmp_path: Path) -> None:
     changed_files = tmp_path / "changed-files.txt"
     changed_files.write_text("mcp_zammad/server.py\n")
@@ -167,11 +179,57 @@ def test_pr_backfill_uses_mocked_open_pr_payloads(monkeypatch, capsys) -> None:
     check(captured["applied"] is False, "backfill dry-run should not apply")
 
 
+def test_pr_backfill_rejects_single_pr_context_inputs(monkeypatch, capsys, tmp_path: Path) -> None:
+    changed_files = tmp_path / "changed-files.txt"
+    changed_files.write_text("mcp_zammad/server.py\n")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["triage_pr.py", "--backfill", "--changed-files", str(changed_files), "--dry-run", "--json"],
+    )
+
+    code = triage_pr.main()
+    captured = capsys.readouterr()
+
+    check_equal(code, 1)
+    check("--backfill does not support --llm-output or --changed-files" in captured.err, "should fail clearly")
+
+
+def test_collect_pr_digest_filters_exact_updated_window(monkeypatch) -> None:
+    payloads = [
+        {"number": 1, "updatedAt": "2026-05-01T11:59:59Z"},
+        {"number": 2, "updatedAt": "2026-05-01T12:00:00Z"},
+        {"number": 3, "updatedAt": "2026-05-02T12:00:00Z"},
+        {"number": 4, "updatedAt": "2026-05-02T12:00:01Z"},
+        "not-a-dict",
+    ]
+
+    def fake_gh_json(args):
+        check("updated:2026-05-01..2026-05-02" in args, "search should bound the broad query by dates")
+        return payloads
+
+    monkeypatch.setattr(collect_pr_digest, "gh_json", fake_gh_json)
+
+    rows = collect_pr_digest.fetch_prs(
+        "basher83/Zammad-MCP",
+        datetime(2026, 5, 1, 12, tzinfo=timezone.utc),
+        datetime(2026, 5, 2, 12, tzinfo=timezone.utc),
+        50,
+    )
+
+    check_equal([row["number"] for row in rows], [2, 3])
+
+
 def test_pr_triage_workflow_collects_fork_diff_without_running_pr_code() -> None:
     workflow = (REPO_ROOT / ".github/workflows/pr-triage.yml").read_text()
 
     check("pull_request_target:" in workflow, "PR workflow should use pull_request_target for label permissions")
     check("git fetch --no-tags" in workflow, "PR workflow should fetch fork heads for diff metadata")
     check("git diff --name-only" in workflow, "PR workflow should collect changed paths without running PR code")
-    check("steps.pr.outputs.is_fork != 'true'" in workflow, "Codex Action should not run on fork PRs")
+    check('git diff "$diff_base" "$head_sha"' not in workflow, "PR workflow should not export full patches")
+    check("changes.diff" not in workflow, "PR workflow should not pass full diffs to triage")
+    check("CODEX_OPENAI_API_KEY" not in workflow, "PR workflow should not expose LLM secrets in label job")
+    check("openai/codex-action" not in workflow, "PR workflow should be deterministic-only in v1")
+    check("--llm-output" not in workflow, "PR workflow should not depend on LLM output artifacts")
     check("gh pr comment" not in workflow, "PR workflow should not comment on source PRs")

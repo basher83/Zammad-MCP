@@ -612,7 +612,7 @@ def pr_state_summary(pr: dict[str, Any]) -> dict[str, Any]:
     review = "needed"
     if review_decision == "APPROVED":
         review = "approved"
-    elif review_decision in {"CHANGES_REQUESTED", "REVIEW_REQUIRED"}:
+    elif review_decision == "CHANGES_REQUESTED":
         review = "blocked"
     elif str(pr.get("state") or "").upper() != "OPEN":
         review = "closed"

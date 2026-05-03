@@ -394,7 +394,10 @@ def extract_login(user_obj):
 
 
 def is_bot_login(login):
-    return bool(login) and login.lower().endswith("[bot]")
+    normalized = str(login or "").casefold()
+    return bool(normalized) and (
+        normalized.endswith("[bot]") or normalized.startswith(("app/", "dependabot", "renovate"))
+    )
 
 
 def is_human_user(user_obj):

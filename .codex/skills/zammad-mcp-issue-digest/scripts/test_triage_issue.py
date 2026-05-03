@@ -179,6 +179,8 @@ def test_issue_triage_workflow_uses_labels_only_automation() -> None:
     workflow = (REPO_ROOT / ".github/workflows/issue-triage.yml").read_text()
 
     check("issues:" in workflow, "issue workflow should be issue-event driven")
-    check("CODEX_OPENAI_API_KEY" in workflow, "issue workflow should gate optional Codex labeling on a secret")
+    check("CODEX_OPENAI_API_KEY" not in workflow, "issue workflow should not expose LLM secrets in label job")
+    check("openai/codex-action" not in workflow, "issue workflow should be deterministic-only in v1")
     check("triage_issue.py" in workflow, "issue workflow should call the issue triage CLI")
+    check("--llm-output" not in workflow, "issue workflow should not depend on LLM output artifacts")
     check("gh issue comment" not in workflow, "issue workflow should not comment on source issues")

@@ -94,6 +94,13 @@ def test_area_labels_keeps_repo_owner_labels_and_excludes_kind_or_legacy_labels(
     check_equal(collector.area_labels(labels), ["area:python", "bot:renovate"])
 
 
+def test_bot_login_detection_includes_github_apps_and_known_automation() -> None:
+    for login in ["app/renovate", "app/dependabot", "dependabot", "renovate[bot]", "coderabbitai[bot]"]:
+        check(collector.is_bot_login(login), f"{login} should be treated as bot-authored")
+
+    check(not collector.is_bot_login("human-maintainer"), "normal users should not be treated as bots")
+
+
 def test_title_cleaning_matches_repo_dependency_and_prefix_conventions() -> None:
     check_equal(
         collector.clean_title_for_description("chore(deps): bump protobuf from 4.25.9 to 5.29.6"),

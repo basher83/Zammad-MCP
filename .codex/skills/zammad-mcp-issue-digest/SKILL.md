@@ -9,7 +9,7 @@ description: Run issue digest and issue triage workflows for basher83/Zammad-MCP
 
 Produce a headline-first, repo-owner digest of `basher83/Zammad-MCP` issues for requested labels over the previous 24 hours by default. Honor a different duration when the user asks for one, for example `past week`, `48 hours`, or `30d`.
 
-For triage automation, classify issues with deterministic rules first and optional LLM JSON as an additive signal. Apply labels only. Do not comment on source issues, close issues, or close duplicates in v1. Duplicate candidates belong in JSON output and the maintainer tracking digest.
+For triage automation, classify issues with deterministic rules first. The CLI accepts optional LLM JSON as an additive signal for local or future isolated generator runs, but the repository Actions run deterministic-only in v1. Apply labels only. Do not comment on source issues, close issues, or close duplicates in v1. Duplicate candidates belong in JSON output and the maintainer tracking digest.
 
 Default to a summary-only response. Include a details table only when the user asks for details, a full digest, a table, or similar.
 

@@ -24,6 +24,7 @@ from triage_common import (  # noqa: E402
     days_since,
     format_timestamp,
     gh_json,
+    parse_timestamp,
     resolve_window,
 )
 
@@ -58,8 +59,9 @@ def git_head() -> str | None:
     return git_proc.stdout.strip() or None
 
 
-def fetch_prs(repo: str, since: datetime, limit: int) -> list[dict[str, Any]]:
+def fetch_prs(repo: str, since: datetime, until: datetime, limit: int) -> list[dict[str, Any]]:
     since_date = since.date().isoformat()
+    until_date = until.date().isoformat()
     payload = gh_json(
         [
             "pr",
@@ -71,14 +73,22 @@ def fetch_prs(repo: str, since: datetime, limit: int) -> list[dict[str, Any]]:
             "--limit",
             str(limit),
             "--search",
-            f"updated:>={since_date}",
+            f"updated:{since_date}..{until_date}",
             "--json",
             PR_LIST_FIELDS,
         ]
     )
     if not isinstance(payload, list):
         raise GhCommandError("Unexpected PR list payload")
-    return [item for item in payload if isinstance(item, dict)]
+    filtered = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        updated_at = parse_timestamp(str(item.get("updatedAt") or ""))
+        if updated_at is None or updated_at < since or updated_at > until:
+            continue
+        filtered.append(item)
+    return filtered
 
 
 def pr_state(pr: dict[str, Any]) -> str:
@@ -109,7 +119,7 @@ def digest_row(pr: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
 
 def collect_digest(args: argparse.Namespace) -> dict[str, Any]:
     since, until = resolve_window(args.window, args.window_hours, args.since, args.until)
-    prs = fetch_prs(args.repo, since, args.limit_prs)
+    prs = fetch_prs(args.repo, since, until, args.limit_prs)
     decisions = []
     rows = []
     for pr in prs:

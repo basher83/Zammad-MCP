@@ -29,7 +29,7 @@ PR_FIELDS = (
     "isDraft,reviewDecision,headRefName,baseRefName,url,mergeable,statusCheckRollup,files"
 )
 PR_LIST_FIELDS = (
-    "number,title,state,author,labels,comments,createdAt,updatedAt,closedAt,mergedAt,"
+    "number,title,body,state,author,labels,comments,createdAt,updatedAt,closedAt,mergedAt,"
     "isDraft,reviewDecision,headRefName,baseRefName,url,mergeable,statusCheckRollup,files"
 )
 
@@ -120,6 +120,9 @@ def output_payload(payload: dict[str, Any], *, json_only: bool) -> None:
 def main() -> int:
     args = parse_args()
     apply = bool(args.apply)
+    if args.backfill and (args.llm_output or args.changed_files):
+        sys.stderr.write("triage_pr.py error: --backfill does not support --llm-output or --changed-files\n")
+        return 1
     llm_payload = load_optional_json(args.llm_output)
     changed_files = read_changed_files(args.changed_files)
     try:
