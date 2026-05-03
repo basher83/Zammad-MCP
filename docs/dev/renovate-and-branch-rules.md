@@ -259,7 +259,7 @@ Required PR validation must not depend on repository, Codacy, Docker Hub, or pub
 
 `security-scan` is required. It runs Bandit and dependency scanning without requiring external credentials. Uploads that rely on the built-in `GITHUB_TOKEN` remain part of the job.
 
-`Codacy Security Scan` is a reporting workflow. Docker Hub login runs only when both `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are available. The Codacy project token is passed through when present and omitted otherwise.
+`Codacy Security Scan` is a reporting workflow. Docker Hub login runs only when both `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are available. The Codacy `project-token` input is sourced from repository secrets and may be empty in contexts where secrets are not provided.
 
 `Build and Publish Docker Image` validates the Docker build on PRs but only pushes images and creates attestations on non-PR events. Transient BuildKit or registry errors should be retried; they are not normally fixed by changing dependency-update PR branches.
 
