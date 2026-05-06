@@ -1,0 +1,44 @@
+{
+  "name": "zammad-mcp",
+  "version": "0.1.0",
+  "description": "Repo-local Codex plugin for maintaining the Zammad MCP server.",
+  "author": {
+    "name": "basher83",
+    "email": "crashoverride6545@gmail.com",
+    "url": "https://github.com/basher83"
+  },
+  "homepage": "https://github.com/basher83/Zammad-MCP",
+  "repository": "https://github.com/basher83/Zammad-MCP",
+  "license": "AGPL-3.0-or-later",
+  "keywords": [
+    "mcp",
+    "zammad",
+    "triage",
+    "codacy",
+    "maintenance"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Zammad-MCP",
+    "shortDescription": "Maintainer workflows for the Zammad MCP server.",
+    "longDescription": "Repo-local Codex plugin that packages Zammad-MCP issue and PR digest skills, project quality guidance, curated maintainer references, and Codacy MCP integration for code quality review.",
+    "developerName": "basher83",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Repo maintenance",
+      "Issue triage",
+      "PR triage",
+      "Code quality review"
+    ],
+    "websiteURL": "https://github.com/basher83/Zammad-MCP",
+    "privacyPolicyURL": "https://github.com/basher83/Zammad-MCP",
+    "termsOfServiceURL": "https://github.com/basher83/Zammad-MCP",
+    "defaultPrompt": [
+      "Summarize recent Zammad-MCP PRs.",
+      "Run a Zammad-MCP issue digest.",
+      "Review this change against project quality rules."
+    ],
+    "brandColor": "#2563EB"
+  }
+}
