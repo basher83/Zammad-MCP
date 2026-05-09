@@ -34,7 +34,7 @@ else
 fi
 
 echo "🔍 Security scanning with semgrep..."
-uv run semgrep --config=auto --error mcp_zammad/ || echo "⚠️ Semgrep found issues"
+uv run pre-commit run semgrep --all-files || echo "⚠️ Semgrep found issues"
 
 echo "🔐 Dependency audit with pip-audit..."
 uv run pip-audit --format=json --output=pip-audit-report.json || echo "⚠️ pip-audit found vulnerabilities - check pip-audit-report.json"
