@@ -18,23 +18,23 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        exclude: ^(scripts/|plugins/|\.claude/skills/)
+        exclude: ^(scripts/|plugins/[^/]+/references/|\.claude/skills/)
       - id: ruff-format
-        exclude: ^(scripts/|plugins/|\.claude/skills/)
+        exclude: ^(scripts/|plugins/[^/]+/references/|\.claude/skills/)
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: "9db9854e3041219b1eb619872a2dfaf58adfb20b"  # v1.9.0
     hooks:
       - id: mypy
         additional_dependencies: [types-python-dateutil, types-requests]
-        exclude: ^(scripts/|plugins/|\.claude/skills/)
+        exclude: ^(scripts/|plugins/[^/]+/references/|\.codex/skills/|\.claude/skills/)
 
   - repo: https://github.com/PyCQA/bandit
     rev: "f3a18ab30bc444e62d02505419ab7059cead0853"  # 1.7.6
     hooks:
       - id: bandit
         args: ["-f", "json"]
-        exclude: ^(tests/|scripts/|plugins/|\.claude/skills/)
+        exclude: ^(tests/|scripts/|plugins/[^/]+/references/|\.claude/skills/)
         # Note: Removed pass_filenames: false to only scan changed files
         # This improves commit speed while still maintaining security checks
         # Full tree scan still happens in CI/CD via 'bandit -r mcp_zammad/'
@@ -45,7 +45,7 @@ repos:
     hooks:
       - id: semgrep
         args: ["--config=auto", "--error", "--no-rewrite-rule-ids"]
-        exclude: ^(scripts/|plugins/|\.claude/skills/)
+        exclude: ^(scripts/|plugins/[^/]+/references/|\.claude/skills/)
 
   - repo: https://github.com/rvben/rumdl-pre-commit
     rev: "v0.0.99"

@@ -10,7 +10,7 @@ This document provides Python-specific best practices and examples for implement
 
 ### Key Imports
 ```python
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List, Dict, Any
 from enum import Enum
@@ -71,7 +71,7 @@ Tools are defined using the `@mcp.tool` decorator with Pydantic models for input
 
 ```python
 from pydantic import BaseModel, Field, ConfigDict
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 # Initialize the MCP server
 mcp = FastMCP("example_mcp")
@@ -344,7 +344,7 @@ from typing import Optional, List, Dict, Any
 from enum import Enum
 import httpx
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 # Initialize the MCP server
 mcp = FastMCP("example_mcp")
@@ -480,7 +480,7 @@ if __name__ == "__main__":
 FastMCP can automatically inject a `Context` parameter into tools for advanced capabilities like logging, progress reporting, resource reading, and user interaction:
 
 ```python
-from mcp.server.fastmcp import FastMCP, Context
+from fastmcp import Context, FastMCP
 
 mcp = FastMCP("example_mcp")
 
@@ -625,14 +625,14 @@ FastMCP supports two main transport mechanisms:
 if __name__ == "__main__":
     mcp.run()
 
-# Streamable HTTP transport (for remote servers)
+# HTTP transport (for remote servers)
 if __name__ == "__main__":
-    mcp.run(transport="streamable_http", port=8000)
+    mcp.run(transport="http", port=8000)
 ```
 
 **Transport selection:**
 - **stdio**: Command-line tools, local integrations, subprocess execution
-- **Streamable HTTP**: Web services, remote access, multiple clients
+- **HTTP**: Web services, remote access, multiple clients
 
 ---
 

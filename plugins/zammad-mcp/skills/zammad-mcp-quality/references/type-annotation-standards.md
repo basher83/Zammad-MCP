@@ -17,6 +17,8 @@ The Zammad MCP project uses **Python 3.10+** type syntax with strict MyPy checki
 ### ✅ DO: Python 3.10+ Syntax
 
 ```python
+from typing import TypeAlias
+
 # Collection types
 items: list[str]                  # NOT List[str]
 mapping: dict[str, int]           # NOT Dict[str, int]

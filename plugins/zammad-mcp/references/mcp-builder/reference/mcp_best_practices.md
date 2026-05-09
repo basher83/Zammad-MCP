@@ -794,7 +794,7 @@ Here's how to define tools with annotations for different scenarios:
   <Tab title="Python">
 
     ```python
-    from mcp.server.fastmcp import FastMCP
+    from fastmcp import FastMCP
 
     mcp = FastMCP("example-server")
 

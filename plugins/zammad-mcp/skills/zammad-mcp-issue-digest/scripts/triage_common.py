@@ -243,12 +243,8 @@ def author_is_bot(author: Any) -> bool:
 
 
 def label_names(item: dict[str, Any]) -> list[str]:
-    out = []
-    for label in item.get("labels") or []:
-        name = label.get("name") if isinstance(label, dict) else label
-        if name:
-            out.append(str(name))
-    return sorted(set(out), key=str.casefold)
+    names = [label.get("name") if isinstance(label, dict) else label for label in item.get("labels") or []]
+    return sorted({str(name) for name in names if name}, key=str.casefold)
 
 
 def comments_text(item: dict[str, Any]) -> str:

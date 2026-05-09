@@ -27,10 +27,6 @@ PR_FIELDS = (
     "number,title,body,state,author,labels,comments,createdAt,updatedAt,closedAt,mergedAt,"
     "isDraft,reviewDecision,headRefName,baseRefName,url,mergeable,statusCheckRollup,files"
 )
-PR_LIST_FIELDS = (
-    "number,title,body,state,author,labels,comments,createdAt,updatedAt,closedAt,mergedAt,"
-    "isDraft,reviewDecision,headRefName,baseRefName,url,mergeable,statusCheckRollup,files"
-)
 
 
 def parse_args() -> argparse.Namespace:
@@ -78,7 +74,7 @@ def fetch_pr_list(repo: str, state: str, limit: int) -> list[dict[str, Any]]:
             "--limit",
             str(limit),
             "--json",
-            PR_LIST_FIELDS,
+            PR_FIELDS,
         ]
     )
     if not isinstance(payload, list):

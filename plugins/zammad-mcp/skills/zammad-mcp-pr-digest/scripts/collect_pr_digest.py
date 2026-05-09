@@ -134,7 +134,7 @@ def collect_digest(args: argparse.Namespace) -> dict[str, Any]:
         key=lambda row: (
             row["attention"],
             row["state"] == "open",
-            row["updated_days_ago"] is not None and -row["updated_days_ago"],
+            -(row["updated_days_ago"] if row["updated_days_ago"] is not None else float("inf")),
             int(row["number"] or 0),
         ),
         reverse=True,

@@ -120,10 +120,10 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
         try:
             obj = json.loads(content)
             original_size = len(content)
+            items = obj.get("items", [])
 
             # Binary search to shrink items array
-            if "items" in obj and isinstance(obj["items"], list):
-                items = obj["items"]
+            if isinstance(items, list):
                 left, right = 0, len(items)
 
                 while left < right:
@@ -141,7 +141,7 @@ def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
             meta.update({
                 "truncated": True,
                 "original_size": original_size,
-                "original_count": len(items),
+                "original_count": len(items) if isinstance(items, list) else 0,
                 "limit": limit,
                 "note": "Response truncated; use pagination or filters"
             })

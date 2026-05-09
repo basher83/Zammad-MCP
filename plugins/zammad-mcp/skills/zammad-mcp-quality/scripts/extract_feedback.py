@@ -14,6 +14,7 @@ Status: Stub for future implementation
 
 import argparse
 import sys
+from pathlib import Path
 
 
 def extract_coderabbit_comments(pr_number: int) -> list[dict]:
@@ -92,17 +93,18 @@ def update_learnings_file(_categories: dict[str, list[dict]], output_path: str) 
     print(f"[TODO] Update learnings file: {output_path}")
 
 
-def main():
+def main() -> int:
     """Main entry point for feedback extraction."""
     parser = argparse.ArgumentParser(description="Extract CodeRabbit feedback and update learnings")
-    parser.add_argument("--prs", type=int, default=10, help="Number of recent PRs to analyze (default: 10)")
-    parser.add_argument("--pr-number", type=int, help="Specific PR number to analyze")
-    parser.add_argument("--since", type=str, help="Extract PRs since date (YYYY-MM-DD)")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--prs", type=int, default=10, help="Number of recent PRs to analyze (default: 10)")
+    mode.add_argument("--pr-number", type=int, help="Specific PR number to analyze")
+    mode.add_argument("--since", type=str, help="Extract PRs since date (YYYY-MM-DD)")
     parser.add_argument(
         "--output",
         type=str,
-        default="../references/coderabbit-learnings.md",
-        help="Output file path (default: ../references/coderabbit-learnings.md)",
+        default=str(Path(__file__).resolve().parent.parent / "references" / "coderabbit-learnings.md"),
+        help="Output file path (default: skill references/coderabbit-learnings.md)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Show what would be extracted without updating files")
 

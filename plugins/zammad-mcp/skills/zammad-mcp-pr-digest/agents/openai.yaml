@@ -1,6 +1,6 @@
 ---
 name: zammad-mcp-pr-digest
-model: gpt-5.2
+model: gpt-5.5
 reasoning_effort: medium
 ---
 
