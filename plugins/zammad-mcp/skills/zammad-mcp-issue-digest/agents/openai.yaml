@@ -1,0 +1,7 @@
+interface:
+  display_name: "Zammad-MCP Issue Digest"
+  short_description: "Summarize Zammad-MCP issue activity"
+  default_prompt: "Use $zammad-mcp-issue-digest to summarize recent Zammad-MCP issue activity."
+
+policy:
+  allow_implicit_invocation: true

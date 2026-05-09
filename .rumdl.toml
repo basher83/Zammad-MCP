@@ -30,6 +30,7 @@ exclude = [
     "docs/ai-docs",
     "docs/dev",
     "docs/plans/**",
+    "plugins/**",
     ".git",
     "**/__pycache__",
     "**/.pytest_cache",

@@ -1,0 +1,20 @@
+{
+  "name": "zammad-mcp-local",
+  "interface": {
+    "displayName": "Zammad-MCP Local"
+  },
+  "plugins": [
+    {
+      "name": "zammad-mcp",
+      "source": {
+        "source": "local",
+        "path": "./plugins/zammad-mcp"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
