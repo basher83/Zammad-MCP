@@ -19,7 +19,7 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from .client import ZammadAPIError, ZammadClient
+from .client import ZammadClient
 from .logging_config import configure_logging
 from .models import (
     Article,

@@ -12,17 +12,22 @@ from zammad_py.exceptions import ConfigException
 
 logger = logging.getLogger(__name__)
 
+# HTTP status codes used by the KB compatibility paths.
+_HTTP_NO_CONTENT = 204
+_HTTP_NOT_FOUND = 404
+
 
 class ZammadAPIError(Exception):
-    """Raised when the Zammad API returns a non-2xx response.
 
-    Attributes:
-        status_code: HTTP status code returned by Zammad
-        url: Full request URL that produced the error
-        body: Decoded JSON body (or text) of the error response
+    """
+    Raised when the Zammad API returns a non-2xx response.
+
+    Exposes ``status_code``, ``url`` and ``body`` of the failing response so
+    callers can react to specific error classes (e.g. 401/403/404/5xx).
     """
 
     def __init__(self, status_code: int, url: str, body: object) -> None:
+        """Initialize a Zammad API error from response context."""
         self.status_code = status_code
         self.url = url
         self.body = body
@@ -501,7 +506,7 @@ class ZammadClient:
         return list(response.json())
 
     # ------------------------------------------------------------------
-    # Knowledge Base methods (direct HTTP – not covered by zammad_py)
+    # Knowledge Base methods (direct HTTP - not covered by zammad_py).
     # Read-only operations only; writes/attachments land in follow-up PRs.
     # ------------------------------------------------------------------
 
@@ -511,18 +516,14 @@ class ZammadClient:
         return f"{self.api.url}knowledge_bases/{path}"
 
     def _kb_raise_or_return(self, response: Any) -> dict[str, Any] | list[Any]:
-        """Raise ZammadAPIError on HTTP error; return parsed JSON body otherwise.
-
-        Raises:
-            ZammadAPIError: if HTTP status is 4xx/5xx, with Zammad's error body included
-        """
+        """Raise ZammadAPIError on HTTP error or return the parsed JSON body otherwise."""
         if not response.ok:
             try:
                 body = response.json()
             except ValueError:
                 body = response.text
             raise ZammadAPIError(response.status_code, response.url, body)
-        if response.status_code == 204 or not response.content:
+        if response.status_code == _HTTP_NO_CONTENT or not response.content:
             return {}
         data = response.json()
         if isinstance(data, list):
@@ -530,7 +531,8 @@ class ZammadClient:
         return dict(data)
 
     def _probe_kb_ids(self) -> list[dict[str, Any]]:
-        """Probe KB IDs 1-10 individually as a fallback for the 404-listing case.
+        """
+        Probe KB IDs 1-10 individually as a fallback for the 404-listing case.
 
         Some Zammad versions return 404 on GET /knowledge_bases even when KBs
         exist. As a known compatibility path we probe a small ID range.
@@ -541,7 +543,7 @@ class ZammadClient:
         results: list[dict[str, Any]] = []
         for kb_id in range(1, 11):
             response = self.api.session.get(self._kb_url(kb_id))
-            if response.status_code == 404:
+            if response.status_code == _HTTP_NOT_FOUND:
                 continue
             data = self._kb_raise_or_return(response)
             if isinstance(data, dict) and data:
@@ -549,7 +551,8 @@ class ZammadClient:
         return results
 
     def list_knowledge_bases(self) -> list[dict[str, Any]]:
-        """List all knowledge bases.
+        """
+        List all knowledge bases.
 
         Zammad's GET /knowledge_bases endpoint is unreliable on some versions
         and returns 404 even when KBs exist. The only documented fallback is
@@ -557,7 +560,7 @@ class ZammadClient:
         are propagated as :class:`ZammadAPIError`.
         """
         response = self.api.session.get(self.api.url + "knowledge_bases")
-        if response.status_code == 404:
+        if response.status_code == _HTTP_NOT_FOUND:
             return self._probe_kb_ids()
         if not response.ok:
             try:
@@ -607,7 +610,8 @@ class ZammadClient:
         return result
 
     def get_kb_answer(self, kb_id: int, answer_id: int) -> dict[str, Any]:
-        """Get a single KB answer including translation/body content.
+        """
+        Get a single KB answer including translation/body content.
 
         Fetches the answer and re-fetches with ?include_contents={translation_id}
         so KnowledgeBaseAnswerTranslationContent (body) is included.
@@ -713,10 +717,11 @@ class ZammadClient:
         return payload if payload else None
 
     def get_kb_answer_with_content(self, kb_id: int, answer_id: int) -> dict[str, Any]:
-        """Get a KB answer with extracted title and body as a single processed dict.
+        """
+        Get a KB answer with extracted title and body as a single processed dict.
 
-        Returns:
-            Dict with keys 'answer' (flat answer dict), 'title' (str), 'body' (str)
+        The returned dict has the keys ``answer`` (flat answer dict),
+        ``title`` (str) and ``body`` (str, plain text with HTML stripped).
         """
         payload = self.get_kb_answer(kb_id, answer_id)
         answer = self._extract_kb_answer_from_payload(payload, answer_id) or payload
@@ -727,7 +732,8 @@ class ZammadClient:
         }
 
     def list_kb_answers(self, kb_id: int, category_id: int) -> list[dict[str, Any]]:
-        """List answers within a KB category by expanding the category's answer_ids.
+        """
+        List answers within a KB category by expanding the category's answer_ids.
 
         Each returned answer has '_title' and '_body' injected from translation
         assets. Per-answer 404s are tolerated as a documented compatibility
@@ -741,7 +747,7 @@ class ZammadClient:
             try:
                 answer_data = self.get_kb_answer(kb_id, aid)
             except ZammadAPIError as exc:
-                if exc.status_code == 404:
+                if exc.status_code == _HTTP_NOT_FOUND:
                     logger.warning("KB answer %d not found in category %d", aid, category_id)
                     continue
                 raise
@@ -763,7 +769,8 @@ class ZammadClient:
     def _collect_category_answers(
         self, kb_id: int, cid: int, query_lower: str
     ) -> list[dict[str, Any]]:
-        """Return matching answers from a single category.
+        """
+        Return matching answers from a single category.
 
         Tolerates 404 on the category lookup (documented compatibility path);
         all other errors are surfaced as :class:`ZammadAPIError`.
@@ -772,7 +779,7 @@ class ZammadClient:
         try:
             answers = self.list_kb_answers(kb_id, cid)
         except ZammadAPIError as exc:
-            if exc.status_code == 404:
+            if exc.status_code == _HTTP_NOT_FOUND:
                 logger.warning("KB category %d not found during search", cid)
                 return matches
             raise
@@ -805,7 +812,7 @@ class ZammadClient:
             try:
                 category = self.get_kb_category(kb_id, cid)
             except ZammadAPIError as exc:
-                if exc.status_code == 404:
+                if exc.status_code == _HTTP_NOT_FOUND:
                     logger.warning("KB category %d not found while expanding tree", cid)
                     continue
                 raise
@@ -817,7 +824,8 @@ class ZammadClient:
     def search_kb_answers(
         self, kb_id: int, query: str, category_id: int | None = None
     ) -> list[dict[str, Any]]:
-        """Case-insensitive substring search of KB answers across categories.
+        """
+        Case-insensitive substring search of KB answers across categories.
 
         If ``category_id`` is provided, search is limited to that category and
         its descendants. Otherwise all root categories of the KB are scanned.

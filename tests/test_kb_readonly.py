@@ -1,4 +1,5 @@
-"""Tests for the read-only Knowledge Base feature (PR1).
+"""
+Tests for the read-only Knowledge Base feature (PR1).
 
 Scope:
 - ZammadClient KB read-only methods (mocked HTTP).
@@ -15,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mcp_zammad import server as srv
 from mcp_zammad.client import ZammadAPIError, ZammadClient
 from mcp_zammad.server import (
     _format_kb_answer_markdown,
@@ -22,7 +24,6 @@ from mcp_zammad.server import (
     _format_kb_markdown,
     _kb_answer_status,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -67,11 +68,6 @@ def kb_client() -> ZammadClient:
     return client
 
 
-# ---------------------------------------------------------------------------
-# ZammadAPIError + _kb_raise_or_return
-# ---------------------------------------------------------------------------
-
-
 class TestZammadAPIErrorAndRaise:
     def test_raise_on_4xx_with_json_body(self, kb_client: ZammadClient) -> None:
         resp = _make_response(403, {"error": "Forbidden"})
@@ -92,11 +88,6 @@ class TestZammadAPIErrorAndRaise:
     def test_204_returns_empty_dict(self, kb_client: ZammadClient) -> None:
         resp = _make_response(204)
         assert kb_client._kb_raise_or_return(resp) == {}
-
-
-# ---------------------------------------------------------------------------
-# list_knowledge_bases
-# ---------------------------------------------------------------------------
 
 
 class TestListKnowledgeBases:
@@ -150,11 +141,6 @@ class TestListKnowledgeBases:
         with pytest.raises(ZammadAPIError) as exc:
             kb_client.list_knowledge_bases()
         assert exc.value.status_code == 401
-
-
-# ---------------------------------------------------------------------------
-# get_knowledge_base / get_kb_category / get_kb_answer
-# ---------------------------------------------------------------------------
 
 
 class TestSimpleGetters:
@@ -219,11 +205,6 @@ class TestSimpleGetters:
         assert kb_client.api.session.get.call_count == 2
 
 
-# ---------------------------------------------------------------------------
-# Extraction helpers
-# ---------------------------------------------------------------------------
-
-
 class TestExtraction:
     def test_extract_title_and_body(self, kb_client: ZammadClient) -> None:
         payload = {
@@ -254,11 +235,6 @@ class TestExtraction:
         # Flat dict (no assets) is returned as-is.
         flat = {"id": 7}
         assert kb_client._extract_kb_answer_from_payload(flat, 7) == flat
-
-
-# ---------------------------------------------------------------------------
-# list_kb_answers / search_kb_answers
-# ---------------------------------------------------------------------------
 
 
 def _category_response(answer_ids: list[int], child_ids: list[int] | None = None) -> MagicMock:
@@ -351,11 +327,6 @@ class TestListAndSearch:
         assert result[0]["_category_id"] == 5
 
 
-# ---------------------------------------------------------------------------
-# Server formatters + tool failure semantics
-# ---------------------------------------------------------------------------
-
-
 class TestFormatters:
     def test_format_kb_markdown(self) -> None:
         out = _format_kb_markdown({"id": 1, "active": True, "category_ids": [10]})
@@ -385,7 +356,9 @@ class TestFormatters:
 
 
 class TestToolFailureSemantics:
-    """Maintainer requirement: tool failures must be real errors, not strings.
+
+    """
+    Maintainer requirement: tool failures must be real errors, not strings.
 
     We exercise the registered tools through the FastMCP get_tool() API and
     assert that ZammadAPIError raised by the client is propagated rather than
@@ -396,8 +369,6 @@ class TestToolFailureSemantics:
     async def test_list_knowledge_bases_propagates_zammad_api_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from mcp_zammad import server as srv
-
         # Build a server with a stubbed client.
         instance = srv.ZammadMCPServer()
         fake_client = MagicMock()
@@ -414,8 +385,6 @@ class TestToolFailureSemantics:
     async def test_get_kb_answer_propagates_zammad_api_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from mcp_zammad import server as srv
-
         instance = srv.ZammadMCPServer()
         fake_client = MagicMock()
         fake_client.get_kb_answer_with_content.side_effect = ZammadAPIError(
