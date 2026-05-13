@@ -1,5 +1,4 @@
-"""
-Tests for the read-only Knowledge Base feature (PR1).
+"""Tests for the read-only Knowledge Base feature (PR1).
 
 Scope:
 - ZammadClient KB read-only methods (mocked HTTP).
@@ -369,9 +368,7 @@ class TestFormatters:
 
 
 class TestToolFailureSemantics:
-
-    """
-    Maintainer requirement: tool failures must be real errors, not strings.
+    """Maintainer requirement: tool failures must be real errors, not strings.
 
     We exercise the registered tools through the FastMCP get_tool() API and
     assert that ZammadAPIError raised by the client is propagated rather than

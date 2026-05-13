@@ -29,9 +29,7 @@ def _is_2xx(status_code: int) -> bool:
 
 
 class ZammadAPIError(Exception):
-
-    """
-    Raised when the Zammad API returns a non-2xx response.
+    """Raised when the Zammad API returns a non-2xx response.
 
     Exposes ``status_code``, ``url`` and ``body`` of the failing response so
     callers can react to specific error classes (e.g. 401/403/404/5xx).
@@ -527,7 +525,8 @@ class ZammadClient:
         return f"{self.api.url}knowledge_bases/{path}"
 
     def _kb_raise_or_return(self, response: Any) -> dict[str, Any] | list[Any]:
-        """Raise ZammadAPIError on HTTP error, otherwise return the parsed JSON body.
+        """
+        Raise ZammadAPIError on HTTP error, otherwise return the parsed JSON body.
 
         Empty bodies (204 / no content) on KB read endpoints are also raised
         as ZammadAPIError instead of being returned as ``{}`` so unexpected
