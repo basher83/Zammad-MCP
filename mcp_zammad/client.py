@@ -13,8 +13,19 @@ from zammad_py.exceptions import ConfigException
 logger = logging.getLogger(__name__)
 
 # HTTP status codes used by the KB compatibility paths.
+_HTTP_OK = 200
+_HTTP_MULTIPLE_CHOICES = 300
 _HTTP_NO_CONTENT = 204
 _HTTP_NOT_FOUND = 404
+
+# KB ID-probe fallback (used only when GET /knowledge_bases returns 404).
+_KB_PROBE_MAX_ID = 200
+_KB_PROBE_MAX_CONSECUTIVE_MISSES = 50
+
+
+def _is_2xx(status_code: int) -> bool:
+    """Return True iff the HTTP status code is a 2xx success."""
+    return _HTTP_OK <= status_code < _HTTP_MULTIPLE_CHOICES
 
 
 class ZammadAPIError(Exception):
@@ -516,15 +527,24 @@ class ZammadClient:
         return f"{self.api.url}knowledge_bases/{path}"
 
     def _kb_raise_or_return(self, response: Any) -> dict[str, Any] | list[Any]:
-        """Raise ZammadAPIError on HTTP error or return the parsed JSON body otherwise."""
-        if not response.ok:
+        """Raise ZammadAPIError on HTTP error or return the parsed JSON body otherwise.
+
+        Empty bodies (204 / no content) on KB read endpoints are also raised
+        as ZammadAPIError instead of being returned as ``{}`` so unexpected
+        API states are not silently masked.
+        """
+        if not _is_2xx(response.status_code):
             try:
                 body = response.json()
             except ValueError:
                 body = response.text
             raise ZammadAPIError(response.status_code, response.url, body)
         if response.status_code == _HTTP_NO_CONTENT or not response.content:
-            return {}
+            raise ZammadAPIError(
+                response.status_code,
+                response.url,
+                "Empty response body from KB endpoint",
+            )
         data = response.json()
         if isinstance(data, list):
             return data
@@ -532,19 +552,27 @@ class ZammadClient:
 
     def _probe_kb_ids(self) -> list[dict[str, Any]]:
         """
-        Probe KB IDs 1-10 individually as a fallback for the 404-listing case.
+        Probe KB IDs as a fallback for the 404-listing compatibility path.
 
         Some Zammad versions return 404 on GET /knowledge_bases even when KBs
-        exist. As a known compatibility path we probe a small ID range.
+        exist, so we probe individual IDs. Iteration starts at 1 and stops
+        once either ``_KB_PROBE_MAX_ID`` is reached or after
+        ``_KB_PROBE_MAX_CONSECUTIVE_MISSES`` consecutive 404 responses, which
+        bounds the work even on instances with sparse / high IDs.
 
-        Skips 404 (ID not found), but raises ZammadAPIError on any non-404
-        error so authentication or server problems are not silently hidden.
+        404 (ID not found) is tolerated; any other non-2xx response raises
+        :class:`ZammadAPIError` so authentication / server failures surface.
         """
         results: list[dict[str, Any]] = []
-        for kb_id in range(1, 11):
+        consecutive_misses = 0
+        for kb_id in range(1, _KB_PROBE_MAX_ID + 1):
             response = self.api.session.get(self._kb_url(kb_id))
             if response.status_code == _HTTP_NOT_FOUND:
+                consecutive_misses += 1
+                if consecutive_misses >= _KB_PROBE_MAX_CONSECUTIVE_MISSES:
+                    break
                 continue
+            consecutive_misses = 0
             data = self._kb_raise_or_return(response)
             if isinstance(data, dict) and data:
                 results.append(data)
@@ -562,7 +590,7 @@ class ZammadClient:
         response = self.api.session.get(self.api.url + "knowledge_bases")
         if response.status_code == _HTTP_NOT_FOUND:
             return self._probe_kb_ids()
-        if not response.ok:
+        if not _is_2xx(response.status_code):
             try:
                 body = response.json()
             except ValueError:

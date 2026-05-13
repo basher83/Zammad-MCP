@@ -11,7 +11,6 @@ Scope:
 from __future__ import annotations
 
 import json
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -32,7 +31,7 @@ from mcp_zammad.server import (
 
 def _make_response(
     status_code: int = 200,
-    json_body: Any = None,
+    json_body: object | None = None,
     *,
     content: bytes | None = None,
     url: str = "https://zammad.example/api/v1/knowledge_bases",
@@ -85,9 +84,11 @@ class TestZammadAPIErrorAndRaise:
         assert exc.value.status_code == 500
         assert exc.value.body == "server boom"
 
-    def test_204_returns_empty_dict(self, kb_client: ZammadClient) -> None:
+    def test_204_or_empty_body_raises(self, kb_client: ZammadClient) -> None:
         resp = _make_response(204)
-        assert kb_client._kb_raise_or_return(resp) == {}
+        with pytest.raises(ZammadAPIError) as exc:
+            kb_client._kb_raise_or_return(resp)
+        assert exc.value.status_code == 204
 
 
 class TestListKnowledgeBases:
@@ -102,11 +103,23 @@ class TestListKnowledgeBases:
         assert kb_client.list_knowledge_bases() == [{"id": 1}]
 
     def test_404_falls_back_to_id_probing(self, kb_client: ZammadClient) -> None:
+        # Initial GET /knowledge_bases -> 404, then probe ID 1 -> hit, then
+        # enough 404s to trip the consecutive-miss break threshold (50).
         responses = [_make_response(404)]
         responses += [_make_response(200, {"id": 1})]
-        responses += [_make_response(404)] * 9  # IDs 2-10 not found
+        responses += [_make_response(404)] * 60
         kb_client.api.session.get.side_effect = responses
         assert kb_client.list_knowledge_bases() == [{"id": 1}]
+
+    def test_probe_stops_after_consecutive_misses(self, kb_client: ZammadClient) -> None:
+        # No KB found anywhere; probe must stop after 50 consecutive 404s and
+        # not exhaustively scan up to _KB_PROBE_MAX_ID (200).
+        responses = [_make_response(404)]  # initial listing
+        responses += [_make_response(404)] * 60  # plenty for the probe loop
+        kb_client.api.session.get.side_effect = responses
+        assert kb_client.list_knowledge_bases() == []
+        # 1 initial listing + 50 probe attempts (the 50th triggers break) = 51
+        assert kb_client.api.session.get.call_count == 51
 
     def test_401_raises_typed_error(self, kb_client: ZammadClient) -> None:
         kb_client.api.session.get.return_value = _make_response(
