@@ -19,7 +19,7 @@ rg = "15.1.0"
 git-cliff = "2.13.1"
 shellcheck = "0.11.0"
 markdownlint-cli2 = "0.22.1"
-uv = "0.11.15"
+uv = "0.11.16"
 prek = "0.4.1"
 
 [env]
