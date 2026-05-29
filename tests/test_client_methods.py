@@ -3,6 +3,7 @@
 import os
 import pathlib
 from collections.abc import Generator
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
@@ -97,6 +98,33 @@ class TestZammadClientMethods:
 
         call_args = mock_instance.ticket.update.call_args[0][1]
         assert "time_unit" not in call_args
+
+    def test_update_ticket_serializes_pending_time(self, mock_zammad_api: Mock) -> None:
+        """Test that a datetime pending_time is serialized to an ISO 8601 string."""
+        mock_instance = Mock()
+        mock_instance.ticket.update.return_value = {"id": 1}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        client.update_ticket(1, state="pending reminder", pending_time=datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc))
+
+        call_args = mock_instance.ticket.update.call_args[0][1]
+        assert call_args["pending_time"] == "2026-07-01T08:00:00+00:00"
+        assert call_args["state"] == "pending reminder"
+
+    def test_update_ticket_passes_pending_time_string_through(self, mock_zammad_api: Mock) -> None:
+        """Test that a string pending_time is forwarded unchanged."""
+        mock_instance = Mock()
+        mock_instance.ticket.update.return_value = {"id": 1}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        client.update_ticket(1, state="pending reminder", pending_time="2026-07-01T08:00:00Z")
+
+        call_args = mock_instance.ticket.update.call_args[0][1]
+        assert call_args["pending_time"] == "2026-07-01T08:00:00Z"
 
     @pytest.mark.parametrize("time_unit", [0, -5])
     def test_update_ticket_rejects_invalid_time_unit(self, mock_zammad_api: Mock, time_unit: float) -> None:

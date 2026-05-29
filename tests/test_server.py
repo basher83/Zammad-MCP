@@ -1042,6 +1042,43 @@ def test_update_ticket_valid_time_unit():
     assert params_none.time_unit is None
 
 
+def test_update_ticket_pending_state_requires_pending_time():
+    """Moving to a pending state without pending_time is rejected up front."""
+    with pytest.raises(ValidationError, match="pending_time"):
+        TicketUpdateParams(ticket_id=1, state="pending reminder")
+
+    with pytest.raises(ValidationError, match="pending_time"):
+        TicketUpdateParams(ticket_id=1, state="pending close")
+
+
+def test_update_ticket_pending_state_with_pending_time():
+    """pending_time is accepted (and parsed) alongside a pending state."""
+    params = TicketUpdateParams(ticket_id=1, state="pending reminder", pending_time="2026-07-01T08:00:00Z")
+    assert params.pending_time == datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
+
+
+def test_update_ticket_forwards_pending_time_as_iso(mock_zammad_client, sample_ticket_data, decorator_capturer):
+    """The tool forwards pending_time to the client as an ISO 8601 string."""
+    mock_instance, _ = mock_zammad_client
+    mock_instance.update_ticket.return_value = sample_ticket_data
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = TicketUpdateParams(ticket_id=1, state="pending reminder", pending_time="2026-07-01T08:00:00Z")
+    test_tools["zammad_update_ticket"](params)
+
+    _, kwargs = mock_instance.update_ticket.call_args
+    assert kwargs["ticket_id"] == 1
+    assert kwargs["state"] == "pending reminder"
+    assert kwargs["pending_time"] == datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
+
+
 def test_get_organization_tool(mock_zammad_client, sample_organization_data):
     """Test get organization tool."""
     mock_instance, _ = mock_zammad_client

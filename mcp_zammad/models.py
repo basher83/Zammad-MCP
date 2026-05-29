@@ -373,6 +373,13 @@ class TicketUpdateParams(StrictBaseModel):
     priority: str | None = Field(None, description="New priority name", max_length=100)
     owner: str | None = Field(None, description="New owner login/email", max_length=255)
     group: str | None = Field(None, description="New group name", max_length=100)
+    pending_time: datetime | None = Field(
+        None,
+        description=(
+            "Pending-until timestamp (ISO 8601, e.g. '2026-07-01T08:00:00Z'). "
+            "Required by Zammad when state is 'pending reminder' or 'pending close'."
+        ),
+    )
     time_unit: float | None = Field(
         None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
     )
@@ -382,6 +389,13 @@ class TicketUpdateParams(StrictBaseModel):
     def sanitize_title(cls, v: str | None) -> str | None:
         """Escape HTML to prevent XSS attacks."""
         return html.escape(v) if v else v
+
+    @model_validator(mode="after")
+    def require_pending_time_for_pending_states(self) -> "TicketUpdateParams":
+        """Fail fast when moving to a pending state without a pending_time."""
+        if self.state is not None and "pending" in self.state.lower() and self.pending_time is None:
+            raise ValueError(f"state '{self.state}' requires 'pending_time' (the pending-until timestamp, ISO 8601).")
+        return self
 
 
 class GetArticleAttachmentsParams(StrictBaseModel):

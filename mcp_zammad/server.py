@@ -1129,6 +1129,8 @@ class ZammadMCPServer:
                     - group (str | None): New group name
                     - owner (str | None): New owner email/login
                     - customer (str | None): New customer email/login
+                    - pending_time (datetime | None): Pending-until timestamp (ISO 8601),
+                      required when state is "pending reminder" or "pending close"
                     - time_unit (float | None): Time spent for time accounting
 
             Returns:
@@ -1148,6 +1150,8 @@ class ZammadMCPServer:
             Examples:
                 - Use when: "Change ticket 123 to high priority" -> ticket_id=123, priority="high"
                 - Use when: "Close ticket 123" -> ticket_id=123, state="closed"
+                - Use when: "Set ticket 123 to pending until 2026-07-01" ->
+                  ticket_id=123, state="pending reminder", pending_time="2026-07-01T08:00:00Z"
                 - Use when: "Reassign ticket to Alice" -> ticket_id=123, owner="alice@company.com"
                 - Don't use when: Adding comments (use zammad_add_article)
                 - Don't use when: Adding tags (use zammad_add_ticket_tag)
