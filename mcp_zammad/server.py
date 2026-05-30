@@ -205,6 +205,24 @@ def _escape_article_body(article: Article) -> str:
     return html.escape(article.body) if "html" in ct else article.body
 
 
+def _sanitize_inline_text(value: object) -> str:
+    """Neutralize control characters and HTML in a value rendered inline in markdown.
+
+    Attachment filenames originate from user uploads, so they may contain
+    newlines, control characters, or HTML/Markdown metacharacters that could
+    break out of the list item or inject markup. Strip non-printable characters
+    and HTML-escape the rest.
+
+    Args:
+        value: The value to sanitize (coerced to str)
+
+    Returns:
+        A single-line, HTML-escaped representation safe for inline rendering
+    """
+    text = "".join(ch for ch in str(value) if ch.isprintable())
+    return html.escape(text, quote=False)
+
+
 def _serialize_json(obj: dict[str, Any], *, use_compact: bool) -> str:
     """Serialize JSON object with appropriate formatting.
 
@@ -635,8 +653,10 @@ def _format_article_attachments(attachments: list[Attachment] | list[dict] | Non
         att_id = att.get("id") if isinstance(att, dict) else att.id
         filename = att.get("filename") if isinstance(att, dict) else att.filename
         size = att.get("size") if isinstance(att, dict) else att.size
-        size_str = f", {size} bytes" if size is not None else ""
-        lines.append(f"  - id={att_id}: {filename}{size_str}")
+        safe_id = _sanitize_inline_text(att_id)
+        safe_filename = _sanitize_inline_text(filename) if filename is not None else "(unnamed)"
+        size_str = f", {size} bytes" if isinstance(size, int) and not isinstance(size, bool) and size >= 0 else ""
+        lines.append(f"  - id={safe_id}: {safe_filename}{size_str}")
     return lines
 
 
