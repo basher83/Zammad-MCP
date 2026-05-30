@@ -639,6 +639,27 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
     return "\n".join(lines)
 
 
+def _attachment_field(att: Attachment | dict, name: str) -> object:
+    """Read a field from an attachment in either dict or model form."""
+    return att.get(name) if isinstance(att, dict) else getattr(att, name, None)
+
+
+def _format_attachment_size(size: object) -> str:
+    """Render a trailing size suffix for genuine non-negative byte counts."""
+    if isinstance(size, int) and not isinstance(size, bool) and size >= 0:
+        return f", {size} bytes"
+    return ""
+
+
+def _format_attachment_line(att: Attachment | dict) -> str:
+    """Format a single attachment as a sanitized markdown bullet line."""
+    filename = _attachment_field(att, "filename")
+    safe_id = _sanitize_inline_text(_attachment_field(att, "id"))
+    safe_filename = _sanitize_inline_text(filename) if filename is not None else "(unnamed)"
+    size_str = _format_attachment_size(_attachment_field(att, "size"))
+    return f"  - id={safe_id}: {safe_filename}{size_str}"
+
+
 def _format_article_attachments(attachments: list[Attachment] | list[dict] | None, article_id: int) -> list[str]:
     """Render an article's attachment list as markdown lines.
 
@@ -650,14 +671,7 @@ def _format_article_attachments(attachments: list[Attachment] | list[dict] | Non
 
     safe_article_id = _sanitize_inline_text(article_id)
     lines = [f"- **Attachments** (download via zammad_download_attachment, article_id={safe_article_id}):"]
-    for att in attachments:
-        att_id = att.get("id") if isinstance(att, dict) else att.id
-        filename = att.get("filename") if isinstance(att, dict) else att.filename
-        size = att.get("size") if isinstance(att, dict) else att.size
-        safe_id = _sanitize_inline_text(att_id)
-        safe_filename = _sanitize_inline_text(filename) if filename is not None else "(unnamed)"
-        size_str = f", {size} bytes" if isinstance(size, int) and not isinstance(size, bool) and size >= 0 else ""
-        lines.append(f"  - id={safe_id}: {safe_filename}{size_str}")
+    lines.extend(_format_attachment_line(att) for att in attachments)
     return lines
 
 
