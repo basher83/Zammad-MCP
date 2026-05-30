@@ -648,7 +648,8 @@ def _format_article_attachments(attachments: list[Attachment] | list[dict] | Non
     if not attachments:
         return []
 
-    lines = [f"- **Attachments** (download via zammad_download_attachment, article_id={article_id}):"]
+    safe_article_id = _sanitize_inline_text(article_id)
+    lines = [f"- **Attachments** (download via zammad_download_attachment, article_id={safe_article_id}):"]
     for att in attachments:
         att_id = att.get("id") if isinstance(att, dict) else att.id
         filename = att.get("filename") if isinstance(att, dict) else att.filename
