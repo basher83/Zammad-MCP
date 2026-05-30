@@ -3024,6 +3024,37 @@ def test_format_ticket_detail_markdown_with_articles(sample_ticket_data, sample_
     assert "Second article" in result
 
 
+def test_format_ticket_detail_markdown_with_attachments(sample_ticket_data, sample_article_data):
+    """Attachments are surfaced with id/filename so they can be downloaded."""
+    article = Article(
+        **{
+            **sample_article_data,
+            "attachments": [
+                {"id": 1, "filename": "kaufanfrage.pdf", "size": 20480},
+                {"id": 2, "filename": "logo.png", "size": 2048},
+            ],
+        }
+    )
+    ticket_with_attachments = Ticket(**sample_ticket_data, articles=[article])
+
+    result = _format_ticket_detail_markdown(ticket_with_attachments)
+
+    assert "**Attachments**" in result
+    assert "zammad_download_attachment" in result
+    assert f"article_id={article.id}" in result
+    assert "id=1: kaufanfrage.pdf, 20480 bytes" in result
+    assert "id=2: logo.png, 2048 bytes" in result
+
+
+def test_format_ticket_detail_markdown_without_attachments(sample_ticket_data, sample_article_data):
+    """Articles without attachments do not render an attachment section."""
+    ticket = Ticket(**sample_ticket_data, articles=[Article(**sample_article_data)])
+
+    result = _format_ticket_detail_markdown(ticket)
+
+    assert "**Attachments**" not in result
+
+
 def test_format_ticket_detail_markdown_with_tags(sample_ticket_data):
     """Test formatting ticket with tags included."""
     # Create a ticket with tags

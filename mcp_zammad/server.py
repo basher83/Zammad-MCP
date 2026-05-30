@@ -597,16 +597,20 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
                 type_field = article.get("type", "Unknown")
                 created_at = article.get("created_at", "Unknown")
                 body = article.get("body", "")
+                attachments = article.get("attachments")
             else:
                 # Article object - use attribute access
                 from_field = article.from_ or "Unknown"
                 type_field = article.type
                 created_at = article.created_at
                 body = article.body
+                attachments = article.attachments
 
             lines.append(f"- **From**: {from_field}")
             lines.append(f"- **Type**: {type_field}")
             lines.append(f"- **Created**: {created_at}")
+            article_id = article.get("id") if isinstance(article, dict) else article.id
+            lines.extend(_format_article_attachments(attachments, article_id))
             lines.append("")
             # Truncate very long bodies
             if len(body) > ARTICLE_BODY_TRUNCATE_LENGTH:
@@ -615,6 +619,25 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
             lines.append("")
 
     return "\n".join(lines)
+
+
+def _format_article_attachments(attachments: list[Attachment] | list[dict] | None, article_id: int) -> list[str]:
+    """Render an article's attachment list as markdown lines.
+
+    Surfaces attachment id/filename/size so the LLM knows files exist and can
+    fetch their content via zammad_download_attachment.
+    """
+    if not attachments:
+        return []
+
+    lines = [f"- **Attachments** (download via zammad_download_attachment, article_id={article_id}):"]
+    for att in attachments:
+        att_id = att.get("id") if isinstance(att, dict) else att.id
+        filename = att.get("filename") if isinstance(att, dict) else att.filename
+        size = att.get("size") if isinstance(att, dict) else att.size
+        size_str = f", {size} bytes" if size is not None else ""
+        lines.append(f"  - id={att_id}: {filename}{size_str}")
+    return lines
 
 
 def _format_user_contact_section(user: User) -> list[str]:
@@ -2512,6 +2535,7 @@ class ZammadMCPServer:
                             [
                                 f"--- {article.created_at.isoformat()} by {created_by_email} ---",
                                 _escape_article_body(article),
+                                *_format_article_attachments(article.attachments, article.id),
                                 "",
                             ]
                         )

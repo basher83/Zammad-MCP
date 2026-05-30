@@ -181,6 +181,16 @@ class PriorityBrief(BaseModel):
     active: bool = True
 
 
+class Attachment(BaseModel):
+    """Ticket article attachment information."""
+
+    id: int
+    filename: str
+    size: int | None = None
+    content_type: str | None = None
+    created_at: datetime | None = None
+
+
 class Article(BaseModel):
     """Ticket article (comment/note)."""
 
@@ -201,6 +211,9 @@ class Article(BaseModel):
     updated_at: datetime
     created_by: UserBrief | str | None = None
     updated_by: UserBrief | str | None = None
+    attachments: list[Attachment] | None = Field(
+        None, description="Files attached to this article; download via zammad_download_attachment using their id"
+    )
 
 
 class Ticket(BaseModel):
@@ -304,16 +317,6 @@ class TicketSearchParams(StrictBaseModel):
     page: int = Field(default=1, ge=1, description="Page number (must be >= 1)")
     per_page: int = Field(default=25, ge=1, le=100, description="Results per page (1-100)")
     response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
-
-
-class Attachment(BaseModel):
-    """Ticket article attachment information."""
-
-    id: int
-    filename: str
-    size: int | None = None
-    content_type: str | None = None
-    created_at: datetime | None = None
 
 
 class ArticleCreate(StrictBaseModel):
