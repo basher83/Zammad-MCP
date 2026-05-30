@@ -15,6 +15,9 @@ The Zammad MCP Server is built on the Model Context Protocol (MCP) to provide AI
 └─────────────────┘     └────────┬────────┘
                                  │ MCP Protocol
                         ┌────────▼────────┐
+                        │  OAuth Proxy    │ (optional: Zammad Doorkeeper)
+                        │  (FastMCP)      │
+                        ├─────────────────┤
                         │   MCP Server    │
                         │  (FastMCP)      │
                         ├─────────────────┤
@@ -27,7 +30,7 @@ The Zammad MCP Server is built on the Model Context Protocol (MCP) to provide AI
                         │  Zammad Client  │
                         │    Wrapper      │
                         └────────┬────────┘
-                                 │ HTTP/REST
+                                 │ HTTP/REST (user's token forwarded)
                         ┌────────▼────────┐
                         │  Zammad API     │
                         │   Instance      │
@@ -58,6 +61,7 @@ The main server implementation using FastMCP framework.
 
 - **Instance-local state**: Each `ZammadMCPServer` owns its client
 - **Lifespan management**: Startup initializes the client and shutdown clears it
+- **Per-request client**: When OAuth is enabled, a new `ZammadClient` is created per request using the authenticated user's Zammad bearer token
 
 ### 2. Zammad Client (`client.py`)
 
@@ -165,10 +169,33 @@ One row per module in `mcp_zammad/`. Each responsibility is the first line of th
 
 ## Upstream Zammad Authentication
 
-These credentials authenticate the server to Zammad. HTTP transport currently provides no inbound MCP client
-authentication; remote deployments need an authenticated proxy or another trusted-network control.
+These credentials authenticate the server to Zammad. Unless OAuth mode (below) is enabled, HTTP transport provides no
+inbound MCP client authentication; remote deployments then need an authenticated proxy or another trusted-network control.
 
-Supports three authentication methods with precedence:
+The server supports two authentication modes:
+
+### Mode 1: OAuth via Zammad Doorkeeper (multi-user)
+
+When `MCP_AUTH_*` env vars are configured, the server uses FastMCP's `OAuthProxy`
+to proxy the OAuth flow to Zammad's built-in Doorkeeper authorization server.
+Users authenticate through Zammad's login page (which may offer Google, GitHub,
+etc. depending on the instance's config). The resulting Zammad bearer token is
+forwarded to the API — each user acts under their own identity.
+
+```bash
+MCP_AUTH_CLIENT_ID=...                          # Zammad OAuth app client ID
+MCP_AUTH_CLIENT_SECRET=...                      # Zammad OAuth app client secret
+MCP_AUTH_BASE_URL=http://localhost:8000          # This MCP server's URL
+# OAuth endpoints (/oauth/authorize, /oauth/token) derived from ZAMMAD_URL
+```
+
+Configuration is handled by `AuthConfig` in `config.py`, which creates an
+`OAuthProxy` pointing at Zammad's endpoints and passes it to `FastMCP(auth=...)`.
+
+### Mode 2: Static Credentials (single-user / service account)
+
+When no OAuth env vars are configured, the server uses static credentials with
+the following precedence:
 
 1. **API Token** (Recommended)
 
@@ -196,6 +223,9 @@ Supports three authentication methods with precedence:
 Each `ZammadMCPServer` stores its client on `self.client`. Tool handlers obtain the initialized instance through
 `self.get_client()`. If startup has not created the client yet, `get_client()` creates it on first use, without the
 startup connection check.
+
+In OAuth mode, `get_client()` instead retrieves the authenticated user's Zammad bearer token via FastMCP's
+`get_access_token()` and creates a per-request `ZammadClient` with that token; no client is created at startup.
 
 ### Initialization Lifecycle
 
@@ -382,7 +412,7 @@ Consider splitting into:
 
 Enable extensions for:
 
-- Custom authentication providers
+- ~~Custom authentication providers~~ (implemented via Zammad Doorkeeper OAuth proxy)
 - Additional ticket sources
 - Workflow automation
 - Custom prompts/tools

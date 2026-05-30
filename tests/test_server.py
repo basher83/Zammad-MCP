@@ -1805,6 +1805,59 @@ def test_get_client_success():
     assert result is mock_client
 
 
+def test_get_client_auth_enabled_forwards_token(monkeypatch):
+    """Test get_client creates per-request client with upstream token when auth is enabled."""
+    monkeypatch.setenv("ZAMMAD_URL", "https://zammad.example.com/api/v1")
+
+    server = ZammadMCPServer()
+    server.auth_config = Mock()
+    server.auth_config.enabled = True
+
+    mock_access_token = Mock()
+    mock_access_token.token = "upstream-zammad-token-123"
+
+    with (
+        patch("mcp_zammad.server.get_access_token", return_value=mock_access_token),
+        patch("mcp_zammad.server.ZammadClient") as mock_client_class,
+    ):
+        mock_client_instance = Mock()
+        mock_client_class.return_value = mock_client_instance
+
+        result = server.get_client()
+
+        assert result is mock_client_instance
+        mock_client_class.assert_called_once_with(oauth2_token="upstream-zammad-token-123")
+
+
+def test_get_client_auth_enabled_no_token_raises():
+    """Test get_client raises when auth enabled but no access token in context."""
+    server = ZammadMCPServer()
+    server.auth_config = Mock()
+    server.auth_config.enabled = True
+
+    with (
+        patch("mcp_zammad.server.get_access_token", return_value=None),
+        pytest.raises(RuntimeError, match="No access token in request context"),
+    ):
+        server.get_client()
+
+
+@pytest.mark.asyncio
+async def test_initialize_auth_enabled_skips_static_client(monkeypatch):
+    """Test initialize returns early when auth is enabled."""
+    monkeypatch.setenv("ZAMMAD_URL", "https://your-instance.zammad.com/api/v1")
+    monkeypatch.setenv("MCP_AUTH_CLIENT_ID", "test-id")
+    monkeypatch.setenv("MCP_AUTH_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("MCP_AUTH_BASE_URL", "http://localhost:8000")
+
+    with patch("mcp_zammad.config.OAuthProxy"):
+        server = ZammadMCPServer()
+        await server.initialize()
+
+        # No static client should be created
+        assert server.client is None
+
+
 @pytest.mark.asyncio
 async def test_initialize_with_dotenv():
     """Test initialize with .env file."""
@@ -1837,39 +1890,38 @@ async def test_initialize_with_dotenv():
 
 @pytest.mark.asyncio
 async def test_initialize_with_envrc_warning():
-    """Test initialize with .envrc file but no env vars."""
-    server = ZammadMCPServer()
-
+    """Test _load_env warns when .envrc exists but env vars aren't loaded."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".envrc", delete=False) as f:
         f.write("export ZAMMAD_URL=https://test.zammad.com/api/v1\n")
         temp_envrc_path = f.name
 
     try:
-        with patch("mcp_zammad.server.Path.cwd") as mock_cwd:
-            # Create the .envrc file in temp directory
-            temp_dir = pathlib.Path(temp_envrc_path).parent
-            envrc_file = temp_dir / ".envrc"
-            envrc_file.write_text("export ZAMMAD_URL=https://test.zammad.com/api/v1\n")
+        temp_dir = pathlib.Path(temp_envrc_path).parent
+        envrc_file = temp_dir / ".envrc"
+        envrc_file.write_text("export ZAMMAD_URL=https://test.zammad.com/api/v1\n")
 
-            mock_cwd.return_value = temp_dir
+        with (
+            patch("mcp_zammad.server.Path.cwd", return_value=temp_dir),
+            patch.dict(os.environ, {}, clear=True),
+            patch("mcp_zammad.server.logger") as mock_logger,
+        ):
+            # _load_env() runs in __init__, which triggers the .envrc warning
+            server = ZammadMCPServer()
 
+            # Check that warning was logged during __init__
+            mock_logger.warning.assert_called_with(
+                "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
+            )
+
+            # initialize() should fail because no auth method is available
             with (
-                patch.dict(os.environ, {}, clear=True),
-                patch("mcp_zammad.server.logger") as mock_logger,
-                patch("mcp_zammad.server.ZammadClient") as mock_client_class,
+                patch("mcp_zammad.server.ZammadClient", side_effect=RuntimeError("No authentication method provided")),
+                pytest.raises(RuntimeError, match="No authentication method provided"),
             ):
-                # Patch ZammadClient to avoid the ConfigException
-                mock_client_class.side_effect = RuntimeError("No authentication method provided")
-                with pytest.raises(RuntimeError, match="No authentication method provided"):
-                    await server.initialize()
+                await server.initialize()
 
-                # Check that warning was logged
-                mock_logger.warning.assert_called_with(
-                    "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
-                )
-
-            # Clean up
-            envrc_file.unlink()
+        # Clean up
+        envrc_file.unlink()
     finally:
         os.unlink(temp_envrc_path)
 

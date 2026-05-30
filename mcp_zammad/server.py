@@ -18,6 +18,7 @@ from typing import Any, NoReturn, Protocol, TextIO, TypeVar
 import requests  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_access_token
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 from starlette.requests import Request
@@ -26,6 +27,7 @@ from starlette.responses import JSONResponse
 from .audit import AuditConfig, AuditLogger, error_details
 from .audit_middleware import AuditMiddleware
 from .client import ZammadClient
+from .config import AuthConfig
 from .events import EventStore, ListEventsParams, ListEventsResult
 from .logging_config import configure_logging
 from .models import (
@@ -1476,18 +1478,38 @@ class ZammadMCPServer:
             logger.warning("ZammadMCPServer(host=..., port=...) is deprecated; pass host/port to mcp.run(...) instead.")
         self.client: ZammadClient | None = None
         self._connected_user_id: int | str | None = None
-        # Load .env before reading audit settings so .env-sourced audit config takes effect.
+        # Load .env early so audit settings and AuthConfig.from_env() see .env-sourced variables.
         self._bootstrap_env()
         self.audit = audit_logger or AuditLogger(AuditConfig.from_env(os.environ))
         self.event_store = event_store if event_store is not None else EventStore()
-        # Create FastMCP with lifespan configured
-        self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
+
+        # Configure authentication from environment
+        self.auth_config = AuthConfig.from_env()
+        auth_provider = self.auth_config.create_auth_provider()
+
+        # Create FastMCP with lifespan and optional auth configured
+        self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan(), auth=auth_provider)
         if self.audit.enabled:
             self.mcp.add_middleware(AuditMiddleware(self.audit))
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
         self._setup_webhooks()
+
+    def _bootstrap_env(self) -> None:
+        """Load local environment files before client initialization."""
+        cwd_env = Path.cwd() / ".env"
+        if cwd_env.exists():
+            load_dotenv(cwd_env)
+            logger.info("Loaded environment from %s", cwd_env)
+
+        envrc_path = Path.cwd() / ".envrc"
+        if envrc_path.exists() and not os.environ.get("ZAMMAD_URL"):
+            logger.warning(
+                "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
+            )
+
+        load_dotenv()
 
     def _create_lifespan(self) -> Any:
         """Create the lifespan context manager for the server."""
@@ -1505,21 +1527,6 @@ class ZammadMCPServer:
 
         return lifespan
 
-    def _bootstrap_env(self) -> None:
-        """Load local environment files before client initialization."""
-        cwd_env = Path.cwd() / ".env"
-        if cwd_env.exists():
-            load_dotenv(cwd_env)
-            logger.info("Loaded environment from %s", cwd_env)
-
-        envrc_path = Path.cwd() / ".envrc"
-        if envrc_path.exists() and not os.environ.get("ZAMMAD_URL"):
-            logger.warning(
-                "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
-            )
-
-        load_dotenv()
-
     def _create_client(self, *, verify_connection: bool) -> ZammadClient:
         """Create a Zammad client after loading environment configuration."""
         self._bootstrap_env()
@@ -1534,14 +1541,36 @@ class ZammadMCPServer:
         return client
 
     def get_client(self) -> ZammadClient:
-        """Get the Zammad client, ensuring it's initialized."""
+        """Get the Zammad client, ensuring it's initialized.
+
+        When auth is enabled, creates a per-request client using the
+        authenticated user's upstream access token.  When auth is disabled,
+        returns the shared static client with lazy initialization.
+        """
+        if self.auth_config.enabled:
+            return self._get_authenticated_client()
         if not self.client:
             logger.debug("Zammad client not initialized, performing lazy initialization")
             self.client = self._create_client(verify_connection=False)
         return self.client
 
+    def _get_authenticated_client(self) -> ZammadClient:
+        """Create a ZammadClient using the current request's upstream token."""
+        access_token = get_access_token()
+        if access_token is None:
+            raise RuntimeError(
+                "No access token in request context. "
+                "Ensure the MCP client authenticates via the configured auth provider."
+            )
+
+        return ZammadClient(oauth2_token=access_token.token)
+
     async def initialize(self) -> None:
         """Initialize the Zammad client on server startup."""
+        if self.auth_config.enabled:
+            logger.info("OAuth auth enabled (%s) — clients created per-request", self.auth_config.zammad_base_url)
+            return
+
         try:
             self.client = self._create_client(verify_connection=True)
         except Exception as exc:
@@ -3859,11 +3888,6 @@ async def health_check(request: Request) -> JSONResponse:  # noqa: ARG001
         JSONResponse with health status.
     """
     return JSONResponse({"status": "healthy", "transport": "http"})
-
-
-def _configure_logging() -> None:
-    """Configure logging from LOG_LEVEL environment variable."""
-    configure_logging()
 
 
 def main() -> None:

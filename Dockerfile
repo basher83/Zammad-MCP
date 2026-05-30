@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 FROM python:3.13-slim@sha256:bb2988715db2cf7ace7b53f38f3cffbef7c7046a656bee66245eb0ed386e2e81 AS production
 
 # Create non-root user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 
 WORKDIR /app
 
