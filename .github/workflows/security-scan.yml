@@ -51,7 +51,7 @@ jobs:
           uv run bandit -r mcp_zammad/ -f sarif -o bandit-sarif.json
 
       - name: Upload Bandit results to GitHub Security
-        uses: github/codeql-action/upload-sarif@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4
         if: always()
         with:
           sarif_file: bandit-sarif.json
