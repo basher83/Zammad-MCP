@@ -19,8 +19,8 @@ rg = "15.1.0"
 git-cliff = "2.13.1"
 shellcheck = "0.11.0"
 markdownlint-cli2 = "0.22.1"
-uv = "0.11.21"
-prek = "0.4.4"
+uv = "0.11.23"
+prek = "0.4.5"
 
 [env]
 _.python.venv = { path = ".venv", create = true } # create the venv if it doesn't exist
