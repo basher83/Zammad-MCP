@@ -205,6 +205,24 @@ def _escape_article_body(article: Article) -> str:
     return html.escape(article.body) if "html" in ct else article.body
 
 
+def _sanitize_inline_text(value: object) -> str:
+    """Neutralize control characters and HTML in a value rendered inline in markdown.
+
+    Attachment filenames originate from user uploads, so they may contain
+    newlines, control characters, or HTML/Markdown metacharacters that could
+    break out of the list item or inject markup. Strip non-printable characters
+    and HTML-escape the rest.
+
+    Args:
+        value: The value to sanitize (coerced to str)
+
+    Returns:
+        A single-line, HTML-escaped representation safe for inline rendering
+    """
+    text = "".join(ch for ch in str(value) if ch.isprintable())
+    return html.escape(text, quote=False)
+
+
 def _serialize_json(obj: dict[str, Any], *, use_compact: bool) -> str:
     """Serialize JSON object with appropriate formatting.
 
@@ -597,16 +615,20 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
                 type_field = article.get("type", "Unknown")
                 created_at = article.get("created_at", "Unknown")
                 body = article.get("body", "")
+                attachments = article.get("attachments")
             else:
                 # Article object - use attribute access
                 from_field = article.from_ or "Unknown"
                 type_field = article.type
                 created_at = article.created_at
                 body = article.body
+                attachments = article.attachments
 
             lines.append(f"- **From**: {from_field}")
             lines.append(f"- **Type**: {type_field}")
             lines.append(f"- **Created**: {created_at}")
+            article_id = article.get("id") if isinstance(article, dict) else article.id
+            lines.extend(_format_article_attachments(attachments, article_id))
             lines.append("")
             # Truncate very long bodies
             if len(body) > ARTICLE_BODY_TRUNCATE_LENGTH:
@@ -615,6 +637,42 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
             lines.append("")
 
     return "\n".join(lines)
+
+
+def _attachment_field(att: Attachment | dict, name: str) -> object:
+    """Read a field from an attachment in either dict or model form."""
+    return att.get(name) if isinstance(att, dict) else getattr(att, name, None)
+
+
+def _format_attachment_size(size: object) -> str:
+    """Render a trailing size suffix for genuine non-negative byte counts."""
+    if isinstance(size, int) and not isinstance(size, bool) and size >= 0:
+        return f", {size} bytes"
+    return ""
+
+
+def _format_attachment_line(att: Attachment | dict) -> str:
+    """Format a single attachment as a sanitized markdown bullet line."""
+    filename = _attachment_field(att, "filename")
+    safe_id = _sanitize_inline_text(_attachment_field(att, "id"))
+    safe_filename = _sanitize_inline_text(filename) if filename is not None else "(unnamed)"
+    size_str = _format_attachment_size(_attachment_field(att, "size"))
+    return f"  - id={safe_id}: {safe_filename}{size_str}"
+
+
+def _format_article_attachments(attachments: list[Attachment] | list[dict] | None, article_id: int) -> list[str]:
+    """Render an article's attachment list as markdown lines.
+
+    Surfaces attachment id/filename/size so the LLM knows files exist and can
+    fetch their content via zammad_download_attachment.
+    """
+    if not attachments:
+        return []
+
+    safe_article_id = _sanitize_inline_text(article_id)
+    lines = [f"- **Attachments** (download via zammad_download_attachment, article_id={safe_article_id}):"]
+    lines.extend(_format_attachment_line(att) for att in attachments)
+    return lines
 
 
 def _format_user_contact_section(user: User) -> list[str]:
@@ -1129,6 +1187,8 @@ class ZammadMCPServer:
                     - group (str | None): New group name
                     - owner (str | None): New owner email/login
                     - customer (str | None): New customer email/login
+                    - pending_time (datetime | None): Pending-until timestamp (ISO 8601),
+                      required when state is "pending reminder" or "pending close"
                     - time_unit (float | None): Time spent for time accounting
 
             Returns:
@@ -1148,6 +1208,8 @@ class ZammadMCPServer:
             Examples:
                 - Use when: "Change ticket 123 to high priority" -> ticket_id=123, priority="high"
                 - Use when: "Close ticket 123" -> ticket_id=123, state="closed"
+                - Use when: "Set ticket 123 to pending until 2026-07-01" ->
+                  ticket_id=123, state="pending reminder", pending_time="2026-07-01T08:00:00Z"
                 - Use when: "Reassign ticket to Alice" -> ticket_id=123, owner="alice@company.com"
                 - Don't use when: Adding comments (use zammad_add_article)
                 - Don't use when: Adding tags (use zammad_add_ticket_tag)
@@ -2508,6 +2570,7 @@ class ZammadMCPServer:
                             [
                                 f"--- {article.created_at.isoformat()} by {created_by_email} ---",
                                 _escape_article_body(article),
+                                *_format_article_attachments(article.attachments, article.id),
                                 "",
                             ]
                         )
