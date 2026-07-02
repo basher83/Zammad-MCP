@@ -37,7 +37,7 @@ jobs:
     steps:
       # Checkout the repository to the GitHub Actions runner
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Check Docker Hub credential availability
         id: dockerhub_credentials
@@ -53,7 +53,7 @@ jobs:
 
       # Login to Docker Hub to avoid rate limits
       - name: Login to Docker Hub
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         if: steps.dockerhub_credentials.outputs.available == 'true'
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -92,7 +92,7 @@ jobs:
 
       # Upload the SARIF file generated in the previous step
       - name: Upload SARIF results file
-        uses: github/codeql-action/upload-sarif@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4
+        uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4
         if: always() && steps.check_sarif.outputs.sarif_exists == 'true'
         with:
           sarif_file: results.sarif
