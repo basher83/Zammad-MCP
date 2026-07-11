@@ -148,12 +148,20 @@ show_missing = true
 directory = "htmlcov"
 
 [tool.uv]
-# Force secure versions to fix vulnerabilities
-# authlib: GHSA-9ggr-2464-2j32, GHSA-pq5p-34cr-23v9, GHSA-g7f3-828f-7h7m
-# urllib3: GHSA-gm62-xv2j-4w53 (CVE-2025-66418), GHSA-2xpw-w6gg-jr37 (CVE-2025-66471)
+# Force transitive dependencies above known-vulnerable ranges.
 override-dependencies = [
-    "authlib>=1.6.5",
-    "urllib3>=2.6.0",
+    "authlib>=1.7.1",
+    "cryptography>=48.0.1",
+    "idna>=3.15",
+    "joserfc>=1.6.8",
+    "msgpack>=1.2.1",
+    "nltk>=3.10.0",
+    "pip>=26.1.2",
+    "pydantic-settings>=2.14.2",
+    "pyjwt>=2.13.0",
+    "python-multipart>=0.0.31",
+    "starlette>=1.3.1",
+    "urllib3>=2.7.0",
 ]
 
 [tool.pytest.ini_options]

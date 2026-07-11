@@ -41,10 +41,18 @@ repos:
         # Output streams to stdout for pre-commit to capture
 
   - repo: https://github.com/semgrep/semgrep
-    rev: "5abdc505a8fe8e663e50beb10b92edb9d990ffa5"  # v1.35.0
+    rev: "09c90f40de48bac000f6d49f978a65ee8a09a3f4"  # v1.169.0
     hooks:
       - id: semgrep
-        args: ["--config=auto", "--error", "--no-rewrite-rule-ids"]
+        args:
+          - "--config=auto"
+          - "--error"
+          - "--no-rewrite-rule-ids"
+          # Version PRs are disabled in Dependabot; Renovate inherits central policy.
+          - "--exclude-rule=package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown"
+          - "--exclude-rule=package_managers.renovate.renovate-missing-minimum-release-age.renovate-missing-minimum-release-age"
+          # A global uv cooldown can delay newly released vulnerability fixes.
+          - "--exclude-rule=package_managers.uv.uv-missing-dependency-cooldown.uv-missing-dependency-cooldown"
         exclude: ^(scripts/|plugins/[^/]+/references/|\.claude/skills/)
 
   - repo: https://github.com/rvben/rumdl-pre-commit
