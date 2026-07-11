@@ -45,20 +45,19 @@ The main server implementation using FastMCP framework.
 - MCP protocol implementation
 - Tool, resource, and prompt registration
 - Request routing and response handling
-- Global client lifecycle management
+- Per-server client lifecycle management
 
 **Key Features:**
 
-- 16 tools for comprehensive Zammad operations
-- 3 resources with URI-based access pattern
+- 22 tools for comprehensive Zammad operations
+- 4 resources with URI-based access pattern
 - 3 pre-configured prompts for common scenarios
 - Lifespan management for proper initialization
 
 **Design Patterns:**
 
-- **Singleton Pattern**: Single Zammad client instance
-- **Sentinel Pattern**: `_UNINITIALIZED` for type-safe state management
-- **Dependency Injection**: Shared client instance across all tools
+- **Instance-local state**: Each `ZammadMCPServer` owns its client
+- **Lifespan management**: Startup initializes the client and shutdown clears it
 
 ### 2. Zammad Client (`client.py`)
 
@@ -69,7 +68,7 @@ A wrapper around the `zammad_py` library providing a clean interface.
 - API authentication (token, OAuth2, username/password)
 - HTTP request handling
 - Response transformation
-- Error handling and retries
+- Error handling
 
 **Key Methods:**
 
@@ -140,7 +139,10 @@ BaseModel
 1. **Model Transform**: Convert to appropriate Pydantic model
 1. **Content Generation**: Format for MCP resource response
 
-## Authentication
+## Upstream Zammad Authentication
+
+These credentials authenticate the server to Zammad. HTTP transport currently provides no inbound MCP client
+authentication; remote deployments need an authenticated proxy or another trusted-network control.
 
 Supports three authentication methods with precedence:
 
@@ -165,28 +167,21 @@ Supports three authentication methods with precedence:
 
 ## State Management
 
-### Global Client State
+### Server Client State
 
-```python
-_UNINITIALIZED: Final = object()
-zammad_client: ZammadClient | object = _UNINITIALIZED
-
-def get_zammad_client() -> ZammadClient:
-    """Type-safe client accessor."""
-    if zammad_client is _UNINITIALIZED:
-        raise RuntimeError("Zammad client not initialized")
-    return cast(ZammadClient, zammad_client)
-```
+Each `ZammadMCPServer` stores its client on `self.client`. Tool handlers obtain the initialized instance through
+`self.get_client()`, which raises if startup has not completed.
 
 ### Initialization Lifecycle
 
 ```python
 @asynccontextmanager
-async def lifespan(app: FastMCP):
-    """Initialize resources on startup."""
-    await initialize()  # Sets up global client
-    yield
-    # Cleanup if needed
+async def lifespan(_app: FastMCP):
+    await self.initialize()
+    try:
+        yield
+    finally:
+        self.client = None
 
 # Note: FastMCP handles its own async event loop
 # Do not wrap mcp.run() in asyncio.run()
@@ -196,7 +191,7 @@ async def lifespan(app: FastMCP):
 
 ### Zammad API Behaviors
 
-1. **Expand Parameter**: When `expand=True` is used:
+1. **Expand Parameter**: The client sends `expand="true"` as a lowercase string:
    - Returns string representations for related objects (e.g., `"group": "Users"`)
    - Does not return full nested objects as might be expected
    - All models use union types to handle both formats:
@@ -343,7 +338,7 @@ tests/
 
 ### Coverage Goals
 
-- Target: 80%+ overall coverage (Achieved: 91.7%!)
+- Enforced target: 86% overall coverage
 - 100% for critical paths
 - Focus on edge cases and errors
 
@@ -373,44 +368,3 @@ Enable extensions for:
 - Distributed caching with Redis
 - Message queue for async operations
 - Database for audit logs
-
-## Legacy Code Deprecation
-
-### Current State
-
-The codebase contains 19 legacy wrapper functions (`server.py:763-1098`) created during the FastMCP migration to maintain backward compatibility with the test suite. These functions duplicate functionality from the `ZammadMCPServer` class and are slated for removal.
-
-### Deprecation Strategy
-
-**Phase 1 (Completed)**: Fix correctness issues and add performance optimizations
-- ✅ Issue #12: Optimized `get_ticket_stats` with pagination
-- ✅ Added performance metrics and logging
-- ✅ Updated documentation
-
-**Phase 2 (v0.2.0)**: Add deprecation warnings
-- Add `DeprecationWarning` to all 19 legacy wrapper functions
-- Create comprehensive migration guide
-- Update documentation with deprecation notices
-- Suppress warnings in existing tests
-
-**Phase 3 (v1.0.0)**: Remove legacy wrappers
-- Migrate all tests to `ZammadMCPServer` class
-- Remove legacy functions (~335 lines)
-- Update documentation
-- Major version bump for breaking change
-
-### Benefits of Removal
-
-- **Reduced Code Duplication**: Eliminates ~335 lines of duplicated code
-- **Simpler Architecture**: Single, consistent pattern (class-based)
-- **Easier Maintenance**: Changes only need to be made once
-- **Better Type Safety**: No mixing of module-level and instance patterns
-
-### Detailed Plan
-
-See [`docs/LEGACY_WRAPPER_DEPRECATION.md`](docs/LEGACY_WRAPPER_DEPRECATION.md) for:
-- Complete function inventory
-- Detailed timeline and milestones
-- Migration examples
-- Risk assessment
-- Action items for each phase

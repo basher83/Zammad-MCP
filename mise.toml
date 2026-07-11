@@ -1,4 +1,4 @@
-# Mise configuration for terraform-homelab
+# Mise configuration for Zammad MCP
 min_version = "2024.9.5"
 
 [settings]
@@ -12,13 +12,12 @@ show_env = false
 truncate = true
 
 [tools]
-python = "3.14.6"
+python = "3.13.14"
 eza = "0.23.5"
 fd = "10.4.2"
 rg = "15.1.0"
 git-cliff = "2.13.1"
 shellcheck = "0.11.0"
-markdownlint-cli2 = "0.23.0"
 uv = "0.11.28"
 prek = "0.4.8"
 
@@ -120,11 +119,11 @@ run = "infisical scan"
 
 [tasks.markdown-lint]
 description = "Lint Markdown files"
-run = "markdownlint-cli2 '**/*.md'"
+run = "prek run rumdl --all-files"
 
 [tasks.markdown-fix]
 description = "Fix Markdown files"
-run = "markdownlint-cli2 '**/*.md' --fix"
+run = "prek run rumdl-fmt --all-files --hook-stage manual"
 
 [tasks.validate-renovate]
 description = "Validate Renovate configuration"

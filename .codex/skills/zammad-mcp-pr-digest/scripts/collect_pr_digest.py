@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # mypy: ignore-errors
-# ruff: noqa: PLR2004
 """Collect recent Zammad-MCP pull request activity for maintainer digests."""
 
 from __future__ import annotations

@@ -55,11 +55,9 @@ LABEL org.opencontainers.image.source="https://github.com/basher83/Zammad-MCP"
 LABEL org.opencontainers.image.description="Model Context Protocol server for Zammad ticket system integration"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
-# IMPORTANT: MCP servers communicate via stdio (stdin/stdout), NOT network ports
-# The EXPOSE directive below is ONLY for Docker metadata/documentation
-# This server does NOT listen on any network ports - it reads from stdin and writes to stdout
-# If you need network access, you would need to wrap the MCP server with an HTTP proxy
-# EXPOSE 8080
+# The default transport is stdio. Setting MCP_TRANSPORT=http starts the built-in
+# HTTP transport on MCP_HOST:MCP_PORT; publish that port only behind trusted
+# network controls and inbound client authentication.
 
 # Run the MCP server
 CMD ["mcp-zammad"]

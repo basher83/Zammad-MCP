@@ -34,10 +34,10 @@ else
 fi
 
 echo "🔍 Security scanning with semgrep..."
-uv run pre-commit run semgrep --all-files || echo "⚠️ Semgrep found issues"
+uv run pre-commit run semgrep --all-files
 
 echo "🔐 Dependency audit with pip-audit..."
-uv run pip-audit --format=json --output=pip-audit-report.json || echo "⚠️ pip-audit found vulnerabilities - check pip-audit-report.json"
+uv run pip-audit --format=json --output=pip-audit-report.json
 
 # Tests
 echo "✅ Running tests..."
@@ -46,7 +46,6 @@ uv run pytest tests/ \
   --cov-report=term-missing \
   --cov-report=xml:coverage.xml \
   --cov-report=html:htmlcov \
-  --cov-fail-under=86 \
   --no-cov-on-fail
 
 echo "🎉 Quality checks complete!"

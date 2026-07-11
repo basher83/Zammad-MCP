@@ -25,12 +25,12 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          version: "latest"
+          version: "0.11.28"
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: '3.14'
+          python-version-file: ".python-version"
 
       - name: Install dependencies
         run: |
@@ -64,7 +64,6 @@ jobs:
           api-key: ${{ github.repository == 'basher83/Zammad-MCP' && secrets.SAFETY_API_KEY || '' }}
 
       - name: Run pip-audit
-        continue-on-error: true
         run: |
           echo "Running pip-audit dependency scan..."
           # Will exit non-zero if vulnerabilities are found
@@ -73,10 +72,10 @@ jobs:
             echo "⚠️  pip-audit found vulnerabilities (exit code: $EXIT_CODE)"
             # Generate a summary of vulnerabilities
             if [ -f pip-audit-report.json ]; then
-              VULN_COUNT=$(jq '.vulnerabilities | length' pip-audit-report.json)
+              VULN_COUNT=$(jq '[.dependencies[]?.vulns[]?] | length' pip-audit-report.json)
               echo "Found $VULN_COUNT vulnerability(ies) in dependencies"
               echo ""
-              jq -r '.vulnerabilities[] | "Package: \(.name) \(.version)\nVulnerability: \(.id)\nDescription: \(.description)\nFix: \(if .fix_versions | length > 0 then "Upgrade to " + (.fix_versions | join(", ")) else "Check advisory" end)\n"' pip-audit-report.json
+              jq -r '.dependencies[] | . as $dep | .vulns[]? | "Package: \($dep.name) \($dep.version)\nVulnerability: \(.id)\nDescription: \(.description)\nFix: \(if .fix_versions | length > 0 then "Upgrade to " + (.fix_versions | join(", ")) else "Check advisory" end)\n"' pip-audit-report.json
             fi
             exit $EXIT_CODE
           }
@@ -118,7 +117,7 @@ jobs:
           
           # Check pip-audit results
           if [ -f pip-audit-report.json ]; then
-            AUDIT_VULNS=$(jq '.vulnerabilities | length' pip-audit-report.json)
+            AUDIT_VULNS=$(jq '[.dependencies[]?.vulns[]?] | length' pip-audit-report.json)
             if [ "$AUDIT_VULNS" -gt 0 ]; then
               echo "❌ **pip-audit**: Found $AUDIT_VULNS vulnerabilities" >> $GITHUB_STEP_SUMMARY
             else

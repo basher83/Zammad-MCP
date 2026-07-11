@@ -131,6 +131,7 @@ source = ["mcp_zammad"]
 omit = ["*/tests/*"]
 
 [tool.coverage.report]
+fail_under = 86
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

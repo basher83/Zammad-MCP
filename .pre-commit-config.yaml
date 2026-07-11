@@ -9,12 +9,12 @@ default_install_hook_types:
 repos:
   - repo: https://github.com/astral-sh/uv-pre-commit
     # uv version.
-    rev: 0.9.2
+    rev: "d9fca3320346514799461a80b0753eb45d707d46"  # 0.11.28
     hooks:
       - id: uv-sync
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "f8a3f8c471fb698229face5ed7640a64900b781e"  # v0.4.4
+    rev: "6fec9b7edb08fd9989088709d864a7826dc74e80"  # v0.15.12
     hooks:
       - id: ruff
         args: [--fix]
@@ -23,14 +23,15 @@ repos:
         exclude: ^(scripts/|plugins/[^/]+/references/|\.claude/skills/)
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: "9db9854e3041219b1eb619872a2dfaf58adfb20b"  # v1.9.0
+    rev: "fc0f09a29bb495f4a91f00266155d6282d52485d"  # v1.20.2
     hooks:
       - id: mypy
         additional_dependencies: [types-python-dateutil, types-requests]
+        files: ^mcp_zammad/
         exclude: ^(scripts/|plugins/[^/]+/references/|\.codex/skills/|\.claude/skills/)
 
   - repo: https://github.com/PyCQA/bandit
-    rev: "f3a18ab30bc444e62d02505419ab7059cead0853"  # 1.7.6
+    rev: "92ae8b82fb422a639f0ed8d99e96cea769594e08"  # 1.9.4
     hooks:
       - id: bandit
         args: ["-f", "json"]
@@ -56,7 +57,7 @@ repos:
         exclude: ^(scripts/|plugins/[^/]+/references/|\.claude/skills/)
 
   - repo: https://github.com/rvben/rumdl-pre-commit
-    rev: "v0.0.99"
+    rev: "8f5dd7416d031646aa5607fc56092723650fd873"  # v0.2.30
     hooks:
       - id: rumdl
         name: rumdl
@@ -64,6 +65,11 @@ repos:
         exclude: ^plugins/
         # Configuration in .rumdl.toml
         # Exclusions handled in .rumdl.toml via exclude patterns
+      - id: rumdl-fmt
+        name: rumdl format
+        description: "Format Markdown files with rumdl"
+        stages: [manual]
+        exclude: ^plugins/
 
   - repo: local
     hooks:
@@ -76,11 +82,7 @@ repos:
           "python",
           "-m",
           "pip_audit",
-          "--format=json",
-          # Ignore pip path traversal vuln - will be fixed in pip 25.3 (not yet released)
-          "--ignore-vuln=GHSA-4xh5-x5gv-qwph",
-          # Ignore starlette Range header DoS - indirect dependency via fastmcp
-          "--ignore-vuln=GHSA-7f5h-v6xp-fcq8"
+          "--format=json"
         ]
         pass_filenames: false
         # Output streams to stdout for pre-commit to capture

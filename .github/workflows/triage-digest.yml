@@ -32,6 +32,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.28"
+
       - name: Collect issue and PR digests
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -43,13 +48,15 @@ jobs:
           if [ "$EVENT_NAME" != "workflow_dispatch" ]; then
             window="30d"
           fi
-          python3 .codex/skills/zammad-mcp-issue-digest/scripts/collect_issue_digest.py \
+          uv run --no-project --python "$(cat .python-version)" python \
+            .codex/skills/zammad-mcp-issue-digest/scripts/collect_issue_digest.py \
             --repo "$GITHUB_REPOSITORY" \
             --all-labels \
             --window "$window" \
             --limit-issues 200 \
             > .tmp/triage/issues.json
-          python3 .codex/skills/zammad-mcp-pr-digest/scripts/collect_pr_digest.py \
+          uv run --no-project --python "$(cat .python-version)" python \
+            .codex/skills/zammad-mcp-pr-digest/scripts/collect_pr_digest.py \
             --repo "$GITHUB_REPOSITORY" \
             --window "$window" \
             --limit-prs 250 \
@@ -65,7 +72,8 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$INPUT_APPLY" != "true" ]; then
             mode="--dry-run"
           fi
-          python3 .codex/skills/zammad-mcp-issue-digest/scripts/post_triage_digest.py \
+          uv run --no-project --python "$(cat .python-version)" python \
+            .codex/skills/zammad-mcp-issue-digest/scripts/post_triage_digest.py \
             --repo "$GITHUB_REPOSITORY" \
             --issue-digest .tmp/triage/issues.json \
             --pr-digest .tmp/triage/prs.json \

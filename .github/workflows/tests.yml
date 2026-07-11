@@ -11,6 +11,10 @@ jobs:
   test-and-coverage:
     runs-on: ubuntu-latest
     if: github.repository == 'basher83/Zammad-MCP'
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     permissions:
       contents: read
       
@@ -21,16 +25,16 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          version: "latest"
+          version: "0.11.28"
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: '3.14'
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
-          uv sync --dev --frozen
+          uv sync --dev --frozen --python "${{ matrix.python-version }}"
 
       - name: Run tests with coverage
         run: |
@@ -41,18 +45,6 @@ jobs:
             --cov-report=term-missing \
             --cov-report=html:htmlcov
 
-      - name: Enforce 65% coverage threshold
-        if: always()            # still runs if tests failed
-        run: |
-          python - <<'PY'
-          import sys, xml.etree.ElementTree as ET
-          try:
-              cov = float(ET.parse("coverage.xml").getroot().get("line-rate")) * 100
-          except Exception:
-              sys.exit("coverage.xml missing or unreadable")
-          if cov < 65:
-              sys.exit(f"Coverage {cov:.1f}% below required 65%")
-          PY
       - name: Check Codacy token availability
         id: codacy_token
         env:
@@ -70,6 +62,7 @@ jobs:
         # present and keep the required test job focused on tests/coverage.
         if: >-
           github.event_name != 'workflow_dispatch' &&
+          matrix.python-version == '3.13' &&
           steps.codacy_token.outputs.available == 'true'
         uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699  # v1.3.0
         with:
@@ -81,7 +74,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
-          name: coverage-reports
+          name: coverage-reports-python-${{ matrix.python-version }}
           path: |
             coverage.xml
             htmlcov/
@@ -94,13 +87,13 @@ jobs:
           
           if [ -f coverage.xml ]; then
             # Parse coverage.xml to extract percentage
-            COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); coverage = float(root.get('line-rate', 0)) * 100; print(f'{coverage:.1f}')" | tr -d '\n')
+            COVERAGE=$(uv run python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); coverage = float(root.get('line-rate', 0)) * 100; print(f'{coverage:.1f}')" | tr -d '\n')
             
             echo "### Overall Coverage: ${COVERAGE}%" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
             # Coverage badge
-            COVERAGE=$COVERAGE python -c "import os; cov = float(os.environ['COVERAGE']); print('✅ **Status**: Good coverage (target: 65%)' if cov >= 90 else '⚠️ **Status**: Below target (target: 65%)' if cov >= 80 else '❌ **Status**: Low coverage (target: 65%)')" >> $GITHUB_STEP_SUMMARY
+            COVERAGE=$COVERAGE uv run python -c "import os; cov = float(os.environ['COVERAGE']); print('✅ **Status**: Meets coverage target (86%)' if cov >= 86 else '❌ **Status**: Below coverage target (86%)')" >> $GITHUB_STEP_SUMMARY
             
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "📈 Coverage details available in [Codacy](https://app.codacy.com/gh/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
