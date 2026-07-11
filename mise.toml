@@ -45,18 +45,31 @@ echo "✅ Development environment ready!"
 [tasks.changelog]
 description = "Update unreleased section of CHANGELOG.md"
 run = """
+set -euo pipefail
+
 echo "📝 Updating CHANGELOG.md with unreleased changes..."
-# Extract existing content after the first release heading
-sed -n '/^## \\[0\\.1\\.3\\]/,$p' CHANGELOG.md > /tmp/changelog_releases.txt
-# Generate new unreleased section
-git-cliff --unreleased --strip header > /tmp/changelog_unreleased.txt
-# Combine: header + unreleased + existing releases
-head -7 CHANGELOG.md > CHANGELOG.md.new
-cat /tmp/changelog_unreleased.txt >> CHANGELOG.md.new
-echo "" >> CHANGELOG.md.new
-cat /tmp/changelog_releases.txt >> CHANGELOG.md.new
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir" CHANGELOG.md.new' EXIT
+
+# Preserve released history beginning at the first semantic-version heading.
+awk '
+  /^## \\[v?[0-9]+\\.[0-9]+\\.[0-9]+[^]]*\\]/ { found = 1 }
+  found { print }
+' CHANGELOG.md > "$tmp_dir/releases.md"
+
+if [ ! -s "$tmp_dir/releases.md" ]; then
+  echo "❌ No released-version heading found in CHANGELOG.md"
+  exit 1
+fi
+
+# Replace the existing unreleased section with git-cliff output.
+git-cliff --unreleased --strip header > "$tmp_dir/unreleased.md"
+cat "$tmp_dir/unreleased.md" > CHANGELOG.md.new
+printf '\n' >> CHANGELOG.md.new
+cat "$tmp_dir/releases.md" >> CHANGELOG.md.new
 mv CHANGELOG.md.new CHANGELOG.md
-rm /tmp/changelog_unreleased.txt /tmp/changelog_releases.txt
+
 echo "✅ CHANGELOG.md updated!"
 """
 
