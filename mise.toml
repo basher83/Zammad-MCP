@@ -12,14 +12,14 @@ show_env = false
 truncate = true
 
 [tools]
-python = "3.13.14"
+python = "3.14.6"
 eza = "0.23.5"
 fd = "10.4.2"
-rg = "15.1.0"
+rg = "15.2.0"
 git-cliff = "2.13.1"
 shellcheck = "0.11.0"
-uv = "0.11.28"
-prek = "0.4.8"
+uv = "0.11.32"
+prek = "0.4.11"
 
 [env]
 _.python.venv = { path = ".venv", create = true } # create the venv if it doesn't exist
