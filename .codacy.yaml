@@ -1,3 +1,12 @@
 ---
+# NOTE: Codacy reads this `.codacy.yaml` and ignores the sibling `.codacy.yml`
+# (when both exist, `.yaml` wins). The exclusions below must therefore mirror the
+# intent expressed in `.codacy.yml`, which is otherwise inert. Test files are
+# excluded from static analysis here as well - without this, Codacy applies its
+# default pydocstyle profile to tests and flags D203 (blank line before class
+# docstring), which conflicts with the D211 convention Ruff enforces project-wide.
 exclude_paths:
     - "plugins/**"
+    - "tests/**"
+    - "**/test_*.py"
+    - "**/*_test.py"
