@@ -2623,7 +2623,7 @@ class ZammadMCPServer:
         """Register all prompts with the MCP server."""
 
         @self.mcp.prompt()
-        def analyze_ticket(ticket_id: int) -> str:
+        def analyze_ticket(ticket_id: str) -> str:
             """Generate a prompt to analyze a ticket.
 
             Note: ticket_id must be the internal database ID (NOT the display number).
@@ -2642,7 +2642,7 @@ After retrieving the ticket, provide:
 Use appropriate tools to gather any additional context about the customer or organization if needed."""
 
         @self.mcp.prompt()
-        def draft_response(ticket_id: int, tone: str = "professional") -> str:
+        def draft_response(ticket_id: str, tone: str = "professional") -> str:
             """Generate a prompt to draft a response to a ticket.
 
             Note: ticket_id must be the internal database ID (NOT the display number).
