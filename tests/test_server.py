@@ -234,7 +234,7 @@ async def test_prompts():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "name,arguments",
+    ("name", "arguments"),
     [
         ("analyze_ticket", {"ticket_id": "$1"}),
         ("draft_response", {"ticket_id": "$1", "tone": "$2"}),
