@@ -1313,6 +1313,9 @@ def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
     """
     mock_instance, _ = mock_zammad_client
 
+    # Force the legacy paginated path: GraphQL fast path is unavailable
+    mock_instance.graphql.side_effect = Exception("GraphQL not available")
+
     # Create mock tickets with various states - split across pages
     page1_tickets = [
         {"id": 1, "state": "new", "title": "New ticket"},
@@ -1395,7 +1398,70 @@ def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
         assert stats.total_count == 6
         assert mock_instance.search_tickets.call_count == 2
         mock_instance.search_tickets.assert_any_call(group=None, page=1, per_page=100)
-        mock_logger.warning.assert_called_with("Date filtering not yet implemented - ignoring date parameters")
+        mock_logger.warning.assert_any_call("Date filtering not yet implemented - ignoring date parameters")
+
+
+def test_get_ticket_stats_graphql_fast_path(mock_zammad_client, decorator_capturer):
+    """Test that ticket stats use the GraphQL ticketOverviews fast path when available."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.graphql.return_value = {
+        "ticketOverviews": [
+            {"link": "all_tickets", "ticketCount": 100},
+            {"link": "all_open", "ticketCount": 16},
+            {"link": "all_pending_reached", "ticketCount": 4},
+            {"link": "all_escalated", "ticketCount": 2},
+            {"link": "my_assigned", "ticketCount": 5},
+        ]
+    }
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_system_tools()
+
+    stats = test_tools["zammad_get_ticket_stats"](GetTicketStatsParams())
+
+    assert stats.total_count == 100
+    assert stats.open_count == 16
+    assert stats.pending_count == 4
+    assert stats.escalated_count == 2
+    assert stats.closed_count == 100 - 16 - 4  # derived estimate
+
+    # No paginated scan should have happened
+    mock_instance.search_tickets.assert_not_called()
+
+
+def test_get_ticket_stats_graphql_fallback_on_bad_payload(mock_zammad_client, decorator_capturer):
+    """Test that an unexpected GraphQL payload falls back to the paginated scan."""
+    mock_instance, _ = mock_zammad_client
+
+    # Payload without the expected 'all_open' overview link
+    mock_instance.graphql.return_value = {"ticketOverviews": [{"link": "custom", "ticketCount": 1}]}
+    mock_instance.search_tickets.side_effect = [
+        [{"id": 1, "state": "open", "title": "Open ticket"}],
+        [],
+    ]
+    mock_instance.get_ticket_states.return_value = [
+        {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+    ]
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_system_tools()
+
+    stats = test_tools["zammad_get_ticket_stats"](GetTicketStatsParams())
+
+    assert stats.total_count == 1
+    assert stats.open_count == 1
+    assert mock_instance.search_tickets.call_count == 2
 
 
 def test_resource_handlers(decorator_capturer):
@@ -1873,7 +1939,7 @@ def test_get_ticket_stats_with_date_warning(decorator_capturer):
         stats = test_tools["zammad_get_ticket_stats"](params)
 
         assert stats.total_count == 0
-        mock_logger.warning.assert_called_with("Date filtering not yet implemented - ignoring date parameters")
+        mock_logger.warning.assert_any_call("Date filtering not yet implemented - ignoring date parameters")
 
 
 class TestCachingMethods:

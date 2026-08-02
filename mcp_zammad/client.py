@@ -5,6 +5,7 @@ import os
 from typing import Any
 from urllib.parse import urlparse
 
+import requests  # type: ignore[import-untyped]
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
@@ -151,6 +152,52 @@ class ZammadClient:
         """Parse common truthy values from environment variables."""
         value = os.getenv(env_var, "").strip().lower()
         return value in {"1", "true", "yes", "on"}
+
+    def _graphql_auth(self) -> tuple[dict[str, str], tuple[str, str] | None]:
+        """Build authentication headers or a basic-auth tuple for GraphQL requests."""
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self.http_token:
+            headers["Authorization"] = f"Token token={self.http_token}"
+            return headers, None
+        if self.oauth2_token:
+            headers["Authorization"] = f"Bearer {self.oauth2_token}"
+            return headers, None
+        if self.username and self.password:
+            return headers, (self.username, self.password)
+        raise ConfigException("No credentials available for GraphQL request")
+
+    def graphql(self, query: str, variables: dict[str, Any] | None = None, timeout: float = 30.0) -> dict[str, Any]:
+        """Execute a GraphQL query against the Zammad /graphql endpoint."""
+        # The modern Zammad web UI uses GraphQL instead of legacy REST endpoints
+        # (some of which, like /overviews and /tickets/selector, may reject
+        # personal access tokens). GraphQL is backed by database queries, so
+        # counts returned here are real-time and do not depend on the search
+        # index (unlike /tickets/search, which can be stale when Elasticsearch
+        # reindexing lags).
+        #
+        # Raises ConfigException (no usable credentials), requests.RequestException
+        # (HTTP errors), ValueError (GraphQL errors in the payload) or TypeError
+        # (unexpected payload shape).
+        parsed = urlparse(self.url or "")
+        graphql_url = f"{parsed.scheme}://{parsed.netloc}/graphql"
+        headers, auth = self._graphql_auth()
+
+        response = requests.post(
+            graphql_url,
+            json={"query": query, "variables": variables or {}},
+            headers=headers,
+            auth=auth,
+            timeout=timeout,
+            verify=not self.insecure,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("errors"):
+            raise ValueError(f"GraphQL query failed: {payload['errors']}")
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise TypeError(f"Unexpected GraphQL response shape: {payload!r}")
+        return data
 
     def search_tickets(
         self,
