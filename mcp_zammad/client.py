@@ -152,18 +152,15 @@ class ZammadClient:
         return value in {"1", "true", "yes", "on"}
 
     def _api_session(self) -> requests.Session:
-        """
-        Return zammad_py's internal requests session.
-
-        The session already carries the configured authentication
-        (Authorization header for tokens, basic-auth tuple for
-        username/password) and TLS configuration (verify=False when
-        ZAMMAD_INSECURE is enabled), so direct HTTP calls through it
-        behave exactly like the library's own REST calls.
-
-        Raises ConfigException if the installed zammad-py version does not
-        expose a session.
-        """
+        """Return zammad_py's internal requests session (auth and TLS config included)."""
+        # The session already carries the configured authentication
+        # (Authorization header for tokens, basic-auth tuple for
+        # username/password) and TLS configuration (verify=False when
+        # ZAMMAD_INSECURE is enabled), so direct HTTP calls through it
+        # behave exactly like the library's own REST calls.
+        #
+        # Raises ConfigException if the installed zammad-py version does not
+        # expose a session.
         session = getattr(self.api, "session", None)
         if session is None:
             connection = getattr(self.api, "_connection", None)
