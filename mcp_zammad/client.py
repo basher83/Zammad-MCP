@@ -286,15 +286,19 @@ class ZammadClient:
         # Exactly one of target_ticket_number / target_ticket_id must be provided.
         # When only the target's internal ID is known, its display number is looked up first.
         #
-        # Raises ValueError if both or neither target identifier is provided, or if the
-        # API reports the merge as failed (the ticket_merge endpoint answers failures
-        # with HTTP 200 and {"result": "failed", "message": ...}); requests.HTTPError
-        # if the API request itself fails.
+        # Raises ValueError if both or neither target identifier is provided, if the
+        # target ticket number lookup fails (the error identifies the TARGET ticket), or
+        # if the API reports the merge as failed (the ticket_merge endpoint answers
+        # failures with HTTP 200 and {"result": "failed", "message": ...});
+        # requests.HTTPError if the API request itself fails.
         if (target_ticket_number is None) == (target_ticket_id is None):
             raise ValueError("Provide exactly one of target_ticket_number or target_ticket_id")
 
         if target_ticket_number is None:
-            target = self.api.ticket.find(target_ticket_id)
+            try:
+                target = self.api.ticket.find(target_ticket_id)
+            except Exception as e:
+                raise ValueError(f"Target ticket lookup failed for target_ticket_id={target_ticket_id}: {e}") from e
             target_ticket_number = str(target["number"])
 
         response = self.api.session.put(f"{self.url}/ticket_merge/{source_ticket_id}/{target_ticket_number}")

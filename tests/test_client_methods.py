@@ -742,3 +742,14 @@ class TestMergeTickets:
 
         with pytest.raises(ValueError, match="source ticket could not be found"):
             client.merge_tickets(source_ticket_id=99999999, target_ticket_number="65004")
+
+    def test_merge_target_lookup_failure_is_distinguishable(self, mock_zammad_api: Mock) -> None:
+        """A failing target-number lookup raises an error identifying the TARGET ticket."""
+        client, mock_instance = self._make_client(mock_zammad_api)
+        mock_instance.ticket.find.side_effect = Exception("Couldn't find Ticket with 'id'=99999")
+
+        with pytest.raises(ValueError, match=r"[Tt]arget") as exc_info:
+            client.merge_tickets(source_ticket_id=123, target_ticket_id=99999)
+
+        assert "99999" in str(exc_info.value)
+        mock_instance.session.put.assert_not_called()

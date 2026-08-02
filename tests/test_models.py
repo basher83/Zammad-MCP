@@ -96,6 +96,12 @@ class TestTicketMergeParams:
         with pytest.raises(ValidationError):
             TicketMergeParams(source_ticket_id=123, target_ticket_number="  ")  # type: ignore[call-arg]
 
+    @pytest.mark.parametrize("bad_number", ["65004/../tickets", "..", "abc", "12a34", "65 004"])
+    def test_rejects_non_digit_target_number(self, bad_number: str):
+        """Target number must be digits only (it is interpolated into a URL path)."""
+        with pytest.raises(ValidationError):
+            TicketMergeParams(source_ticket_id=123, target_ticket_number=bad_number)  # type: ignore[call-arg]
+
     def test_none_title_not_sanitized(self):
         """Test that None title is not processed."""
         update = TicketUpdate(state="closed")  # type: ignore[call-arg]

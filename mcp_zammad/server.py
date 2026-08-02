@@ -1212,7 +1212,9 @@ class ZammadMCPServer:
                 - Don't use when: Adding a comment (use zammad_add_article)
 
             Error Handling:
-                - Returns TicketIdGuidanceError if source ticket not found (suggests using search)
+                - Returns TicketIdGuidanceError if the source ticket is not found, or if the
+                  target ticket ID lookup fails (reported against the failing identifier;
+                  suggests using search)
                 - Returns "Error: Validation failed" if both or neither target identifier is given
                 - Returns "Ticket merge failed: ..." if Zammad rejects the merge (the API
                   answers failures with HTTP 200 and result='failed'; surfaced as an error)
@@ -1229,6 +1231,8 @@ class ZammadMCPServer:
                 result = client.merge_tickets(**params.model_dump(exclude_none=True))
                 return TicketMergeResult(**result)
             except Exception as e:
+                if "target ticket lookup failed" in str(e).lower() and params.target_ticket_id is not None:
+                    _handle_ticket_not_found_error(params.target_ticket_id, e)
                 _handle_ticket_not_found_error(params.source_ticket_id, e)
 
         @self.mcp.tool(annotations=_write_annotations("Add Ticket Article"))

@@ -395,6 +395,7 @@ class TicketMergeParams(StrictBaseModel):
         None,
         min_length=1,
         max_length=50,
+        pattern=r"^\d+$",
         description="Display number of the ticket to merge into (e.g. '65003')",
     )
     target_ticket_id: int | None = Field(
