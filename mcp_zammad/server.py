@@ -48,6 +48,8 @@ from .models import (
     Ticket,
     TicketCreate,
     TicketIdGuidanceError,
+    TicketMergeParams,
+    TicketMergeResult,
     TicketPriority,
     TicketSearchParams,
     TicketState,
@@ -1172,6 +1174,66 @@ class ZammadMCPServer:
                 return Ticket(**ticket_data)
             except Exception as e:
                 _handle_ticket_not_found_error(params.ticket_id, e)
+
+        @self.mcp.tool(annotations=_write_annotations("Merge Tickets"))
+        def zammad_merge_tickets(params: TicketMergeParams) -> TicketMergeResult:
+            """Merge a duplicate ticket into another ticket (irreversible).
+
+            The source ticket's articles are moved into the target ticket and the
+            source ticket receives the state 'merged'. The target ticket keeps its
+            owner, state, and conversation.
+
+            Args:
+                params (TicketMergeParams): Validated merge parameters containing:
+                    - source_ticket_id (int): Internal database ID of the DUPLICATE ticket
+                      (required, NOT display number - it is merged away)
+                    - target_ticket_number (str | None): Display number of the surviving
+                      ticket (e.g. "65003")
+                    - target_ticket_id (int | None): Internal database ID of the surviving
+                      ticket (its number is looked up automatically)
+
+                Exactly one of target_ticket_number / target_ticket_id must be provided.
+
+            Returns:
+                TicketMergeResult: The merge result with schema:
+
+                ```json
+                {
+                    "result": "success",
+                    "target_ticket": {"id": 124, "number": "65004", "state_id": 2, "...": "..."},
+                    "source_ticket": {"id": 123, "number": "65003", "state_id": 5, "...": "..."}
+                }
+                ```
+
+            Examples:
+                - Use when: "Merge duplicate 123 into ticket 65004" -> source_ticket_id=123, target_ticket_number="65004"
+                - Use when: "Merge ticket 123 into ticket 124" -> source_ticket_id=123, target_ticket_id=124
+                - Don't use when: Only linking related tickets (merge is irreversible)
+                - Don't use when: Adding a comment (use zammad_add_article)
+
+            Error Handling:
+                - Returns TicketIdGuidanceError if the source ticket is not found, or if the
+                  target ticket ID lookup fails (reported against the failing identifier;
+                  suggests using search)
+                - Returns "Error: Validation failed" if both or neither target identifier is given
+                - Returns "Ticket merge failed: ..." if Zammad rejects the merge (the API
+                  answers failures with HTTP 200 and result='failed'; surfaced as an error)
+                - Returns "Error: Permission denied" if no update permissions
+
+            Note:
+                source_ticket_id / target_ticket_id are internal database IDs, NOT display
+                numbers. Use the 'id' field from search results, not the 'number' field.
+                Both customers may see the merged conversation - merge only tickets that
+                truly belong together (same organization/issue).
+            """
+            client = self.get_client()
+            try:
+                result = client.merge_tickets(**params.model_dump(exclude_none=True))
+                return TicketMergeResult(**result)
+            except Exception as e:
+                if "target ticket lookup failed" in str(e).lower() and params.target_ticket_id is not None:
+                    _handle_ticket_not_found_error(params.target_ticket_id, e)
+                _handle_ticket_not_found_error(params.source_ticket_id, e)
 
         @self.mcp.tool(annotations=_write_annotations("Add Ticket Article"))
         def zammad_add_article(params: ArticleCreate) -> Article:
