@@ -155,6 +155,16 @@ def _idempotent_write_annotations(title: str) -> ToolAnnotations:
     )
 
 
+def _overview_counts(data: dict[str, Any]) -> dict[str, int]:
+    """Extract the overview link -> ticketCount mapping from a GraphQL payload."""
+    overviews = data.get("ticketOverviews") or []
+    return {
+        item["link"]: int(item.get("ticketCount") or 0)
+        for item in overviews
+        if isinstance(item, dict) and item.get("link")
+    }
+
+
 def _handle_ticket_not_found_error(ticket_id: int, error: Exception) -> NoReturn:
     """Check if an exception is a ticket not found error and raise TicketIdGuidanceError.
 
@@ -2041,6 +2051,38 @@ class ZammadMCPServer:
             avg_resolution_time=None,
         )
 
+    @staticmethod
+    def _validate_overview_counts(data: dict[str, Any]) -> tuple[int, int, int, int]:
+        """Extract and validate overview counters from a GraphQL payload.
+
+        Overviews are admin-configurable: any default overview can be
+        deleted or renamed, so every required link must be present.
+        Substituting 0 would yield inconsistent stats (e.g. open > total).
+
+        Returns (total, open, pending, escalated).
+
+        Raises:
+            ValueError: If a required overview link is missing or the
+                counters are inconsistent.
+        """
+        counts = _overview_counts(data)
+
+        required = ("all_tickets", "all_open", "all_pending_reached", "all_escalated")
+        missing = set(required) - counts.keys()
+        if missing:
+            raise ValueError(f"GraphQL overviews payload misses required links {sorted(missing)}: {counts!r}")
+
+        total = counts["all_tickets"]
+        open_count = counts["all_open"]
+        pending = counts["all_pending_reached"]
+        escalated = counts["all_escalated"]
+        if total < open_count + pending:
+            raise ValueError(
+                "Inconsistent GraphQL overview counters: "
+                f"total={total} < open+pending={open_count + pending}: {counts!r}"
+            )
+        return total, open_count, pending, escalated
+
     def _collect_ticket_stats_graphql(self, client: ZammadClient) -> TicketStats:
         """Collect ticket statistics via the Zammad GraphQL ticketOverviews query.
 
@@ -2065,30 +2107,7 @@ class ZammadMCPServer:
                 caller falls back to the paginated scan).
         """
         data = client.graphql("{ ticketOverviews(ignoreUserConditions: true) { link ticketCount } }")
-        overviews = data.get("ticketOverviews") or []
-        counts = {
-            item.get("link"): int(item.get("ticketCount") or 0)
-            for item in overviews
-            if isinstance(item, dict) and item.get("link")
-        }
-
-        # Overviews are admin-configurable: any default overview can be
-        # deleted or renamed, so every required link must be present.
-        # Substituting 0 would yield inconsistent stats (e.g. open > total).
-        required = ("all_tickets", "all_open", "all_pending_reached", "all_escalated")
-        missing = [link for link in required if link not in counts]
-        if missing:
-            raise ValueError(f"GraphQL overviews payload misses required links {missing}: {counts!r}")
-
-        total = counts["all_tickets"]
-        open_count = counts["all_open"]
-        pending = counts["all_pending_reached"]
-        escalated = counts["all_escalated"]
-        if total < open_count + pending:
-            raise ValueError(
-                "Inconsistent GraphQL overview counters: "
-                f"total={total} < open+pending={open_count + pending}: {counts!r}"
-            )
+        total, open_count, pending, escalated = self._validate_overview_counts(data)
         closed = total - open_count - pending
 
         logger.info(

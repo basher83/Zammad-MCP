@@ -152,7 +152,8 @@ class ZammadClient:
         return value in {"1", "true", "yes", "on"}
 
     def _api_session(self) -> requests.Session:
-        """Return zammad_py's internal requests session.
+        """
+        Return zammad_py's internal requests session.
 
         The session already carries the configured authentication
         (Authorization header for tokens, basic-auth tuple for
