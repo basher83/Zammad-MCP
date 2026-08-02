@@ -652,3 +652,93 @@ class TestZammadClientMethods:
 
         with pytest.raises(requests.HTTPError, match="403"):
             client.list_tags()
+
+
+class TestMergeTickets:
+    """Test ZammadClient.merge_tickets."""
+
+    @pytest.fixture
+    def mock_zammad_api(self) -> Generator[Mock, None, None]:
+        """Mock the underlying zammad_py.ZammadAPI."""
+        with patch("mcp_zammad.client.ZammadAPI") as mock_api:
+            yield mock_api
+
+    def _make_client(self, mock_zammad_api: Mock) -> tuple[ZammadClient, Mock]:
+        """Build a client with a mocked API and return (client, mock_instance)."""
+        mock_instance = Mock()
+        mock_zammad_api.return_value = mock_instance
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+        return client, mock_instance
+
+    def test_merge_with_target_number(self, mock_zammad_api: Mock) -> None:
+        """Merge uses legacy ticket_merge route with the target number."""
+        client, mock_instance = self._make_client(mock_zammad_api)
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "result": "success",
+            "target_ticket": {"id": 124, "number": "65004"},
+            "source_ticket": {"id": 123, "number": "65003", "state_id": 5},
+        }
+        mock_response.raise_for_status = Mock()
+        mock_instance.session.put.return_value = mock_response
+
+        result = client.merge_tickets(source_ticket_id=123, target_ticket_number="65004")
+
+        assert result["result"] == "success"
+        assert result["target_ticket"]["id"] == 124
+        mock_instance.session.put.assert_called_once_with("https://test.zammad.com/api/v1/ticket_merge/123/65004")
+        mock_instance.ticket.find.assert_not_called()
+
+    def test_merge_with_target_id_looks_up_number(self, mock_zammad_api: Mock) -> None:
+        """When only the target ID is given, its number is resolved first."""
+        client, mock_instance = self._make_client(mock_zammad_api)
+        mock_instance.ticket.find.return_value = {"id": 124, "number": "65004"}
+        mock_response = Mock()
+        mock_response.json.return_value = {"result": "success", "target_ticket": {"id": 124, "number": "65004"}}
+        mock_response.raise_for_status = Mock()
+        mock_instance.session.put.return_value = mock_response
+
+        result = client.merge_tickets(source_ticket_id=123, target_ticket_id=124)
+
+        mock_instance.ticket.find.assert_called_once_with(124)
+        mock_instance.session.put.assert_called_once_with("https://test.zammad.com/api/v1/ticket_merge/123/65004")
+        assert result["result"] == "success"
+
+    def test_merge_rejects_both_targets(self, mock_zammad_api: Mock) -> None:
+        """Providing both target identifiers raises ValueError."""
+        client, mock_instance = self._make_client(mock_zammad_api)
+
+        with pytest.raises(ValueError, match="exactly one"):
+            client.merge_tickets(source_ticket_id=123, target_ticket_number="65004", target_ticket_id=124)
+
+        mock_instance.session.put.assert_not_called()
+
+    def test_merge_rejects_no_target(self, mock_zammad_api: Mock) -> None:
+        """Providing no target identifier raises ValueError."""
+        client, mock_instance = self._make_client(mock_zammad_api)
+
+        with pytest.raises(ValueError, match="exactly one"):
+            client.merge_tickets(source_ticket_id=123)
+
+        mock_instance.session.put.assert_not_called()
+
+    def test_merge_http_error_propagates(self, mock_zammad_api: Mock) -> None:
+        """HTTP errors from the merge endpoint propagate."""
+        client, mock_instance = self._make_client(mock_zammad_api)
+        mock_response = Mock()
+        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        mock_instance.session.put.return_value = mock_response
+
+        with pytest.raises(requests.HTTPError, match="404"):
+            client.merge_tickets(source_ticket_id=123, target_ticket_number="99999")
+
+    def test_merge_failed_result_raises(self, mock_zammad_api: Mock) -> None:
+        """Zammad reports merge failures as HTTP 200 with result='failed' - must raise."""
+        client, mock_instance = self._make_client(mock_zammad_api)
+        mock_response = Mock()
+        mock_response.json.return_value = {"result": "failed", "message": "The source ticket could not be found."}
+        mock_response.raise_for_status = Mock()
+        mock_instance.session.put.return_value = mock_response
+
+        with pytest.raises(ValueError, match="source ticket could not be found"):
+            client.merge_tickets(source_ticket_id=99999999, target_ticket_number="65004")
