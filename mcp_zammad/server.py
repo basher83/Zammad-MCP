@@ -2060,7 +2060,9 @@ class ZammadMCPServer:
                                    also includes merged/removed states)
 
         Raises:
-            ValueError: If the response does not contain the expected overview links.
+            ValueError: If the response does not contain the expected overview
+                links or the counters are inconsistent (in either case the
+                caller falls back to the paginated scan).
         """
         data = client.graphql("{ ticketOverviews(ignoreUserConditions: true) { link ticketCount } }")
         overviews = data.get("ticketOverviews") or []
@@ -2069,14 +2071,25 @@ class ZammadMCPServer:
             for item in overviews
             if isinstance(item, dict) and item.get("link")
         }
-        if "all_open" not in counts:
-            raise ValueError(f"GraphQL overviews payload misses 'all_open': {counts!r}")
 
-        total = counts.get("all_tickets", 0)
+        # Overviews are admin-configurable: any default overview can be
+        # deleted or renamed, so every required link must be present.
+        # Substituting 0 would yield inconsistent stats (e.g. open > total).
+        required = ("all_tickets", "all_open", "all_pending_reached", "all_escalated")
+        missing = [link for link in required if link not in counts]
+        if missing:
+            raise ValueError(f"GraphQL overviews payload misses required links {missing}: {counts!r}")
+
+        total = counts["all_tickets"]
         open_count = counts["all_open"]
-        pending = counts.get("all_pending_reached", 0)
-        escalated = counts.get("all_escalated", 0)
-        closed = max(total - open_count - pending, 0)
+        pending = counts["all_pending_reached"]
+        escalated = counts["all_escalated"]
+        if total < open_count + pending:
+            raise ValueError(
+                "Inconsistent GraphQL overview counters: "
+                f"total={total} < open+pending={open_count + pending}: {counts!r}"
+            )
+        closed = total - open_count - pending
 
         logger.info(
             "Ticket statistics via GraphQL overviews: total=%s open=%s closed~=%s pending=%s escalated=%s",

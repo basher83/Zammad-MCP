@@ -1464,6 +1464,63 @@ def test_get_ticket_stats_graphql_fallback_on_bad_payload(mock_zammad_client, de
     assert mock_instance.search_tickets.call_count == 2
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        # The 'all_tickets' overview was deleted/renamed by an admin: without
+        # validation total would be 0 while open is 16 — inconsistent stats.
+        pytest.param(
+            {
+                "ticketOverviews": [
+                    {"link": "all_open", "ticketCount": 16},
+                    {"link": "all_pending_reached", "ticketCount": 4},
+                    {"link": "all_escalated", "ticketCount": 2},
+                ]
+            },
+            id="missing-all_tickets",
+        ),
+        # Inconsistent counters: total lower than open + pending.
+        pytest.param(
+            {
+                "ticketOverviews": [
+                    {"link": "all_tickets", "ticketCount": 5},
+                    {"link": "all_open", "ticketCount": 16},
+                    {"link": "all_pending_reached", "ticketCount": 4},
+                    {"link": "all_escalated", "ticketCount": 2},
+                ]
+            },
+            id="inconsistent-counters",
+        ),
+    ],
+)
+def test_get_ticket_stats_graphql_fallback_on_invalid_overviews(mock_zammad_client, decorator_capturer, payload):
+    """Test that incomplete/inconsistent GraphQL overviews fall back to the paginated scan."""
+    mock_instance, _ = mock_zammad_client
+
+    mock_instance.graphql.return_value = payload
+    mock_instance.search_tickets.side_effect = [
+        [{"id": 1, "state": "open", "title": "Open ticket"}],
+        [],
+    ]
+    mock_instance.get_ticket_states.return_value = [
+        {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+    ]
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_system_tools()
+
+    stats = test_tools["zammad_get_ticket_stats"](GetTicketStatsParams())
+
+    assert stats.total_count == 1
+    assert stats.open_count == 1
+    assert mock_instance.search_tickets.call_count == 2
+
+
 def test_resource_handlers(decorator_capturer):
     """Test resource handler registration and execution."""
     server = ZammadMCPServer()
