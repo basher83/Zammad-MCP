@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # mypy: ignore-errors
-# ruff: noqa: PLR2004
 """Post the combined Zammad-MCP issue and PR digest to a tracking issue."""
 
 from __future__ import annotations

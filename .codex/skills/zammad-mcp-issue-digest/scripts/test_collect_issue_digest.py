@@ -1,5 +1,4 @@
 # mypy: ignore-errors
-# ruff: noqa: PLR2004
 """Regression tests for the Zammad-MCP issue digest collector."""
 
 import importlib.util

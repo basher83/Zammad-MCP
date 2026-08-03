@@ -1,10 +1,51 @@
 
-## [Unreleased]
+## [unreleased]
+
 
 ### 🚀 Features
 
-- Add zammad_list_tags tool to list all system tags (requires admin.tag permission)
-- Add zammad_get_ticket_tags tool to get tags for a specific ticket
+- Add tag listing and retrieval tools (#174)
+- *(time-accounting)* Add time_unit support to update_ticket and add_article (#211)
+- *(deps)* Migrate from bundled FastMCP 1 to standalone FastMCP 3
+- *(triage)* Add repo triage skills
+
+### 🐛 Bug Fixes
+
+- Address CodeRabbit review feedback
+- Resolve Codacy D-series docstring violations in changed files
+- *(tests)* Add local fake Zammad server to HTTP integration fixture
+- *(tests)* Rename format param to fmt to avoid shadowing builtin (Ruff A002)
+- *(tests)* Fully teardown mock Zammad server in fixture
+- *(triage)* Address review feedback
+- *(triage)* Tighten review follow-ups
+- *(triage)* Remove unused workflow context fetches
+- *(deps)* Override protobuf to >=5.29.6 to resolve GHSA-8r5m-rr7v-pfvq
+- *(deps)* Isolate semgrep from uv dev graph
+- *(codex)* Address plugin review blockers
+- *(codacy)* Ignore plugin bundle in static analysis
+- *(deps)* Remediate dependency alerts
+
+### 💼 Other
+
+- Address PR review feedback (#213)
+
+### ⚙️ Miscellaneous Tasks
+
+- Update tooling and add documentation
+- Ignore hookify local config files
+- Untrack hookify local configs
+- Remove pre-commit from mise config
+- *(dependabot)* Tune Python dependency updates
+- Declare Python 3.13 and 3.14 support
+- *(python)* Pin runtime below 3.14
+- Skip Codacy upload for fork PRs
+- *(triage)* Add issue and PR automation workflows
+- *(hooks)* Silence pre-commit config warning
+- *(codacy)* Exclude repo-local codex skills
+- *(coderabbit)* Disable automatic PR labeling
+- *(codacy)* Strip non-Python tools, sync versions from codacy-cli init
+- *(codex)* Add repo-local Codex plugin and drop stale repomix xml
+- Replace CLAUDE instructions with AGENTS link
 
 ## [1.1.0] - 2025-12-09
 

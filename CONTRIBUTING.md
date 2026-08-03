@@ -6,7 +6,7 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.10 through 3.13
 - `uv` package manager:
   ```bash
   # macOS/Linux
@@ -78,8 +78,6 @@ If you prefer manual setup:
 # Development mode
 uv run python -m mcp_zammad
 
-# Or directly
-python -m mcp_zammad
 ```
 
 ### Code Quality Checks
@@ -95,7 +93,7 @@ uv run ruff format mcp_zammad tests    # Format code
 uv run ruff check mcp_zammad tests     # Lint code  
 uv run mypy mcp_zammad                 # Type checking
 uv run bandit -r mcp_zammad/           # Security scanning
-uv run semgrep --config=auto mcp_zammad/ # Security & quality
+uv run pre-commit run semgrep --all-files # Security & quality
 uv run safety scan --output json       # Dependency vulnerabilities
 uv run pip-audit                       # Additional dependency audit
 
@@ -109,7 +107,7 @@ uv run pre-commit run --all-files
 
 ### Testing Guidelines
 
-- **Current Coverage**: 91.7% (exceeds target of 80%!)
+- **Coverage gate**: 86% minimum, configured in `pyproject.toml`
 - Write tests for all new features
 - Maintain or improve the current high coverage level
 - Follow the existing test patterns:
@@ -191,7 +189,7 @@ The repository includes several GitHub Actions workflows that run automatically 
   - Runs Codacy's full analysis suite
   - Uploads results to GitHub Security tab as SARIF
   - Integrates with PR checks
-- **Configuration**: 
+- **Configuration**:
   - Set `CODACY_PROJECT_TOKEN` in repository secrets
   - Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` to avoid Docker Hub rate limits
   - Note: Without Docker Hub authentication, the workflow may fail due to rate limits when pulling analysis images
@@ -254,7 +252,7 @@ To configure the required secrets:
 
 - **Ruff format**: 120-character line length
 - **Ruff**: Extensive rule set (see `pyproject.toml`)
-- **MyPy**: Strict type checking enabled
+- **MyPy**: Project type-checking rules are configured in `pyproject.toml`
 
 ### Commit Messages
 
@@ -406,7 +404,7 @@ git tag v1.0.0-rc.1
 
 ### Immediate Needs
 
-- ✅ ~~Increase test coverage to 80%+~~ (Achieved: 91.7%!)
+- ✅ Maintain at least the configured 86% coverage gate
 - Fix unused parameters in functions
 - Implement custom exception classes
 - Add proper URL validation

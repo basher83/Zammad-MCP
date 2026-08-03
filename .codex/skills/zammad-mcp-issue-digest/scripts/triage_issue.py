@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # mypy: ignore-errors
-# ruff: noqa: PLR2004
 """Triage Zammad-MCP GitHub issues and apply controlled labels."""
 
 from __future__ import annotations

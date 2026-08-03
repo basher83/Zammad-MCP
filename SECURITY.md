@@ -6,8 +6,8 @@ We actively support the following versions of Zammad MCP Server with security up
 
 | Version | Supported          | Security Updates | End of Life |
 | ------- | ------------------ | ---------------- | ----------- |
-| 0.1.x   | :white_check_mark: | Active           | TBD         |
-| 0.0.x   | :x:                | None             | 2024-12-31  |
+| 1.x     | :white_check_mark: | Active           | TBD         |
+| 0.x     | :x:                | None             | 2025-08-11  |
 | main    | :white_check_mark: | Development      | N/A         |
 
 **Note**: We recommend always using the latest stable release for production environments.
@@ -109,7 +109,7 @@ ZAMMAD_HTTP_TOKEN=abc123token
 
 #### Network Security
 
-- **Use HTTPS only** - ensure your Zammad URL uses `https://`
+- **Use HTTPS in production** - the client permits `http://` for development and trusted internal environments
 - **Verify SSL certificates** - don't disable SSL verification
 - **Network isolation** - run in isolated environments when possible
 - **Firewall rules** - restrict outbound connections to necessary endpoints only
@@ -227,14 +227,14 @@ This project employs multiple layers of security scanning:
 - ✅ **Bandit**: Identifies common security issues in Python code (active in CI)
 - ✅ **CodeQL**: GitHub's automatic security analysis (enabled by default)
 - ✅ **Codacy**: Comprehensive static analysis and code quality (active in CI)
-- ⏳ **Semgrep**: Pattern-based vulnerability detection (integration pending)
+- ✅ **Semgrep**: Pattern-based vulnerability detection (active in pre-commit and local quality checks)
 
 #### Dependency Scanning
 
-- ✅ **Dependabot**: Automated dependency updates (active)
+- ✅ **Dependabot**: Security alerts; automated version-update pull requests are disabled in repository configuration
 - ✅ **pip-audit**: Python package vulnerability detection (active in CI)
 - ✅ **Safety**: Known vulnerability database checks (active in CI)
-- ⏳ **Renovate**: Automated dependency management (integration pending)
+- ✅ **Renovate**: Automated dependency management governed by the shared preset
 
 #### Container Security
 
@@ -251,7 +251,7 @@ This project employs multiple layers of security scanning:
 # Individual security scans
 uv run pip-audit               # Check for vulnerable packages
 uv run bandit -r mcp_zammad    # Static security analysis
-# uv run semgrep --config=auto .  # Pattern-based scanning (pending setup)
+uv run pre-commit run semgrep --all-files  # Pattern-based scanning
 uv run safety check --output json  # Vulnerability database check
 
 # Docker image scanning
@@ -264,7 +264,7 @@ docker scout cves ghcr.io/basher83/zammad-mcp:latest
 
 For the security scanning workflow to function properly, configure the following secrets in your repository:
 
-- **`SAFETY_API_KEY`**: Required for the Safety vulnerability scanner
+- **`SAFETY_API_KEY`**: Optional; enables authenticated Safety scanning
   - Sign up at <https://safetycli.com/resources/plans>
   - Add the key to Settings → Secrets → Actions
 - **`CODACY_PROJECT_TOKEN`**: For Codacy security analysis (optional)
@@ -285,14 +285,11 @@ The repository includes automated security scanning that runs on:
 Install pre-commit hooks for local security checks:
 
 ```bash
-# Install pre-commit
-uv pip install pre-commit
-
 # Install hooks
-pre-commit install
+uv run pre-commit install
 
 # Run manually
-pre-commit run --all-files
+uv run pre-commit run --all-files
 ```
 
 The repository includes a comprehensive `.pre-commit-config.yaml` with security-focused hooks:
@@ -318,7 +315,8 @@ repos:
         args: ["run", "pip-audit", "--format=json"]
 ```
 
-This configuration ensures security checks run automatically on every commit.
+Installed hooks run on commits made through Git normally. They can be bypassed explicitly, so CI and branch protection
+remain the authoritative enforcement boundary.
 
 ## CVE Process
 

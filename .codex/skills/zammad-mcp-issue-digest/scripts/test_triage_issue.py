@@ -1,5 +1,4 @@
 # mypy: ignore-errors
-# ruff: noqa: PLR2004
 """Tests for Zammad-MCP issue triage automation."""
 
 from __future__ import annotations

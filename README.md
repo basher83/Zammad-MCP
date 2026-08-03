@@ -2,7 +2,7 @@
 
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/basher83/Zammad-MCP?utm_source=oss&utm_medium=github&utm_campaign=basher83%2FZammad-MCP&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9cc0ebac926a4d56b0bdf2271d46bbf7)](https://app.codacy.com/gh/basher83/Zammad-MCP/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
-![Coverage](https://img.shields.io/badge/coverage-90.08%25-brightgreen)
+[![Coverage](https://app.codacy.com/project/badge/Coverage/9cc0ebac926a4d56b0bdf2271d46bbf7)](https://app.codacy.com/gh/basher83/Zammad-MCP/dashboard)
 
 An MCP server that connects AI assistants to Zammad, providing tools for managing tickets, users, organizations, and attachments.
 
@@ -28,6 +28,7 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_delete_attachment` - Delete attachments from ticket articles
 
 - **User & Organization Management**
+  - `zammad_create_user` - Create a Zammad user
   - `zammad_get_user` / `zammad_search_users` - User information and search
   - `zammad_get_organization` / `zammad_search_organizations` - Organization data
   - `zammad_get_current_user` - Get authenticated user info
@@ -108,7 +109,7 @@ docker run --rm -i \
 
 The project publishes Docker images with semantic versioning:
 
-- `latest` - Most recent stable release
+- `latest` - Latest successful build from the default branch; may be unstable
 - `1.2.3` - Specific version (recommended for production)
 - `1.2` - Latest patch of 1.2 minor release
 - `1` - Latest minor/patch of 1.x major release
@@ -132,10 +133,10 @@ cd zammad-mcp
 
 # Run the setup script
 # On macOS/Linux:
-./setup.sh
+./scripts/setup.sh
 
 # On Windows (PowerShell):
-.\setup.ps1
+.\scripts\setup.ps1
 ```
 
 For manual setup, see the [Development](#development) section below.
@@ -319,13 +320,16 @@ docker run -d \
   ghcr.io/basher83/zammad-mcp:latest
 ```
 
-Access the MCP endpoint at `http://localhost:8000/mcp/`.
+Access the MCP endpoint at `http://localhost:8000/mcp`.
 
 #### Production Deployment with Reverse Proxy
 
-⚠️ **SECURITY WARNING**: Bind to `0.0.0.0` only behind a reverse proxy with TLS.
+⚠️ **SECURITY WARNING**: The server does not implement inbound MCP client authentication. `ZAMMAD_*`
+credentials authenticate the server to Zammad; they do not authenticate MCP clients. Bind to `0.0.0.0` only
+behind an authenticated TLS proxy or inside a network restricted to trusted clients.
 
-Use a reverse proxy (nginx/Caddy) for HTTPS and security:
+Use a reverse proxy for TLS and client authentication. The Caddy example below provides TLS only; add an
+authentication policy appropriate for your environment before exposing it outside a trusted network.
 
 **Example with Caddy:**
 
@@ -363,7 +367,7 @@ Configure your MCP client to use HTTP transport:
 {
   "mcpServers": {
     "zammad": {
-      "url": "http://localhost:8000/mcp/"
+      "url": "http://localhost:8000/mcp"
     }
   }
 }
@@ -375,20 +379,20 @@ Configure your MCP client to use HTTP transport:
 2. **Production**: Implement authentication (see [Security](#security))
 3. **HTTPS**: Use reverse proxy for TLS
 4. **Firewall**: Restrict access to trusted networks
-5. **DNS Rebinding**: Built-in origin validation protects against these attacks
+5. **Host/Origin Validation**: Configure this at the authenticated proxy; the server does not add it automatically
 
 ## Examples
 
 ### Search for Open Tickets
 
 ```plaintext
-Use search_tickets with state="open" to find all open tickets
+Use zammad_search_tickets with state="open" to find all open tickets
 ```
 
 ### Create a Support Ticket
 
 ```plaintext
-Use create_ticket with:
+Use zammad_create_ticket with:
 - title: "Customer needs help with login"
 - group: "Support"
 - customer: "customer@example.com"
@@ -398,9 +402,9 @@ Use create_ticket with:
 ### Update and Respond to a Ticket
 
 ```plaintext
-1. Use get_ticket with ticket_id=123 to see the full conversation
-2. Use add_article to add your response
-3. Use update_ticket to change state to "pending reminder"
+1. Use zammad_get_ticket with ticket_id=123 to see the full conversation
+2. Use zammad_add_article to add your response
+3. Use zammad_update_ticket to change state to "pending reminder"
 ```
 
 ### Analyze Escalated Tickets
@@ -412,7 +416,7 @@ Use the escalation_summary prompt to get a report of all tickets approaching esc
 ### Upload Attachments to a Ticket
 
 ```plaintext
-Use add_article with attachments parameter:
+Use zammad_add_article with attachments parameter:
 - ticket_id: 123
 - body: "See attached documentation"
 - attachments: [
@@ -427,7 +431,7 @@ Use add_article with attachments parameter:
 ### Delete an Attachment
 
 ```plaintext
-Use delete_attachment with:
+Use zammad_delete_attachment with:
 - ticket_id: 123
 - article_id: 456
 - attachment_id: 789
@@ -446,10 +450,10 @@ cd zammad-mcp
 
 # Run the setup script
 # On macOS/Linux:
-./setup.sh
+./scripts/setup.sh
 
 # On Windows (PowerShell):
-.\setup.ps1
+.\scripts\setup.ps1
 ```
 
 #### Manual Setup
@@ -567,11 +571,11 @@ Report via [GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/s
 
 ### Security Features
 
-- ✅ **Input Validation**: Validates and sanitizes all user inputs ([models.py](mcp_zammad/models.py))
-- ✅ **SSRF Protection**: URL validation prevents server-side request forgery ([client.py](mcp_zammad/client.py#L46-L58))
-- ✅ **XSS Prevention**: Sanitizes HTML in all text fields ([models.py](mcp_zammad/models.py#L27-L31))
-- ✅ **Secure Authentication**: Prefers API tokens over passwords ([client.py](mcp_zammad/client.py#L60-L92))
-- ✅ **Dependency Scanning**: Dependabot detects vulnerabilities automatically
+- ✅ **Request Validation**: Strict request models reject unknown fields and validate constrained inputs ([models.py](mcp_zammad/models.py))
+- ⚠️ **URL Validation**: Rejects malformed and non-HTTP(S) URLs, but does not block private-network targets ([client.py](mcp_zammad/client.py))
+- ✅ **HTML Sanitization**: Sanitizes selected HTML-bearing fields ([models.py](mcp_zammad/models.py))
+- ✅ **Upstream Authentication**: Supports API tokens, OAuth2, and username/password for Zammad ([client.py](mcp_zammad/client.py))
+- ✅ **Dependency Scanning**: CI runs pip-audit; Dependabot security alerts are enabled separately in GitHub
 - ✅ **Security Testing**: CI runs Bandit, Safety, and pip-audit ([security-scan.yml](.github/workflows/security-scan.yml))
 
 See [SECURITY.md](SECURITY.md) for complete documentation.

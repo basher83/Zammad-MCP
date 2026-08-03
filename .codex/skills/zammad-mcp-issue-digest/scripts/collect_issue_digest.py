@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # mypy: ignore-errors
-# ruff: noqa: PLR2004,SIM108
+# ruff: noqa: PLR2004
 """Collect recent basher83/Zammad-MCP issue activity for repo-focused digests."""
 
 import argparse

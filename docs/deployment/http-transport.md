@@ -24,7 +24,7 @@ ZAMMAD_HTTP_TOKEN=your-token \
 mcp-zammad
 ```
 
-Server available at: `http://127.0.0.1:8000/mcp/`
+Server available at: `http://127.0.0.1:8000/mcp`
 
 ### Docker Deployment
 
@@ -41,6 +41,10 @@ docker run -d \
 ```
 
 ## Production Deployment
+
+> **Security requirement:** The server does not implement inbound MCP client authentication. `ZAMMAD_*` credentials
+> authenticate only to Zammad. Keep the listener on loopback or a private trusted network until an authenticated TLS
+> proxy or equivalent access control is in place.
 
 ### 1. Security Setup
 
@@ -71,17 +75,15 @@ server {
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
 
-    location /mcp/ {
-        proxy_pass http://127.0.0.1:8000/mcp/;
+    location = /mcp {
+        proxy_pass http://127.0.0.1:8000/mcp;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # SSE support
+        # Streamable HTTP responses
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 86400s;
@@ -131,7 +133,8 @@ sudo systemctl status zammad-mcp
 
 ### 3. Docker Compose
 
-Create `docker-compose.yml`:
+The following is a hardened illustrative Compose configuration. It differs from the checked-in development
+`docker-compose.yml`, which publishes host port 9146 on all interfaces.
 
 ```yaml
 version: '3.8'
@@ -168,6 +171,8 @@ docker-compose logs -f zammad-mcp
 
 ### Google Cloud Run
 
+Configure Cloud Run IAM for the intended clients. Do not add `--allow-unauthenticated`.
+
 ```bash
 # Build and push
 gcloud builds submit --tag gcr.io/PROJECT_ID/zammad-mcp
@@ -178,8 +183,7 @@ gcloud run deploy zammad-mcp \
   --platform managed \
   --region us-central1 \
   --set-env-vars MCP_TRANSPORT=http,MCP_HOST=0.0.0.0,MCP_PORT=8080 \
-  --set-secrets ZAMMAD_URL=zammad-url:latest,ZAMMAD_HTTP_TOKEN=zammad-token:latest \
-  --allow-unauthenticated  # Configure authentication separately
+  --set-secrets ZAMMAD_URL=zammad-url:latest,ZAMMAD_HTTP_TOKEN=zammad-token:latest
 ```
 
 ### AWS ECS/Fargate
@@ -213,7 +217,8 @@ Task definition JSON:
 
 ### 1. Authentication
 
-MCP HTTP transport requires client authentication. Options:
+MCP HTTP transport requires client authentication for remote deployment. The server does not implement these options;
+configure one at a proxy, service mesh, or platform boundary:
 
 - **API Keys**: Use HTTP headers
 - **OAuth 2.0**: Token-based authentication
@@ -274,7 +279,7 @@ add_header Access-Control-Allow-Headers "Content-Type, Accept";
 {
   "mcpServers": {
     "zammad": {
-      "url": "https://mcp.your-domain.com/mcp/"
+      "url": "https://mcp.your-domain.com/mcp"
     }
   }
 }
@@ -284,17 +289,15 @@ add_header Access-Control-Allow-Headers "Content-Type, Accept";
 
 ```python
 from mcp import ClientSession
-from mcp.client.streamable_http import StreamableHTTPTransport
+from mcp.client.streamable_http import streamable_http_client
 
-async with ClientSession(
-    StreamableHTTPTransport("http://localhost:8000/mcp/")
-) as session:
-    result = await session.call_tool("zammad_search_tickets", {
-        "query": "status:open"
-    })
+async with streamable_http_client("http://localhost:8000/mcp") as (read, write, _):
+    async with ClientSession(read, write) as session:
+        await session.initialize()
+        result = await session.call_tool("zammad_search_tickets", {"query": "status:open"})
 ```
 
 ## See Also
 
 - [MCP Specification - Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports)
-- [Security Guide](../security.md)
+- [Security Guide](../../SECURITY.md)

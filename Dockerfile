@@ -7,7 +7,7 @@ FROM python:3.13-slim@sha256:eb43ff125d8d58d7449dcba7d336c23bcac412f526d861db493
 WORKDIR /app
 
 # Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest@sha256:3d868e555f8f1dbc324afa005066cd11e1053fc4743b9808ca8025283e65efa5 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:latest@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa /uv /uvx /usr/local/bin/
 
 # Copy only dependency files first for better layer caching
 # This ensures dependency installation is only re-run when these files change
@@ -55,11 +55,9 @@ LABEL org.opencontainers.image.source="https://github.com/basher83/Zammad-MCP"
 LABEL org.opencontainers.image.description="Model Context Protocol server for Zammad ticket system integration"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
-# IMPORTANT: MCP servers communicate via stdio (stdin/stdout), NOT network ports
-# The EXPOSE directive below is ONLY for Docker metadata/documentation
-# This server does NOT listen on any network ports - it reads from stdin and writes to stdout
-# If you need network access, you would need to wrap the MCP server with an HTTP proxy
-# EXPOSE 8080
+# The default transport is stdio. Setting MCP_TRANSPORT=http starts the built-in
+# HTTP transport on MCP_HOST:MCP_PORT; publish that port only behind trusted
+# network controls and inbound client authentication.
 
 # Run the MCP server
 CMD ["mcp-zammad"]
@@ -71,7 +69,7 @@ FROM production AS development
 USER root
 
 # Install uv for development
-COPY --from=ghcr.io/astral-sh/uv:latest@sha256:3d868e555f8f1dbc324afa005066cd11e1053fc4743b9808ca8025283e65efa5 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:latest@sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa /uv /uvx /usr/local/bin/
 
 # Copy dependency files needed for dev sync
 COPY pyproject.toml uv.lock ./

@@ -4,7 +4,6 @@
 [global]
 # Disable specific rules (from original markdownlint config)
 disable = [
-    "MD002",  # First heading level - changelogs use ## for versions
     "MD012",  # Multiple consecutive blank lines - allow for formatting
     "MD013",  # Line length - disabled for flexibility
     "MD022",  # Blank lines around headings - implementation plans need flexible formatting

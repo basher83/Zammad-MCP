@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # mypy: ignore-errors
-# ruff: noqa: PLR2004,SIM108
+# ruff: noqa: SIM108
 """Shared deterministic triage helpers for Zammad-MCP issues and pull requests."""
 
 from __future__ import annotations
