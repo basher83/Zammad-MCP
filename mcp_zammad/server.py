@@ -30,16 +30,22 @@ from .models import (
     DeleteAttachmentResult,
     DownloadAttachmentParams,
     GetArticleAttachmentsParams,
+    GetKBAnswerParams,
+    GetKBCategoryParams,
+    GetKnowledgeBaseParams,
     GetOrganizationParams,
     GetTicketParams,
     GetTicketStatsParams,
     GetTicketTagsParams,
     GetUserParams,
     Group,
+    ListKBAnswersParams,
+    ListKnowledgeBasesParams,
     ListParams,
     Organization,
     PriorityBrief,
     ResponseFormat,
+    SearchKBAnswersParams,
     SearchOrganizationsParams,
     SearchUsersParams,
     StateBrief,
@@ -785,6 +791,126 @@ def _handle_api_error(e: Exception, context: str = "operation") -> str:
     return f"Error during {context}: {type(e).__name__} - {e}"
 
 
+# ============================================================================
+# Knowledge Base helpers (read-only)
+# ============================================================================
+
+
+def _kb_answer_status(answer: dict[str, Any]) -> str:
+    """Derive human-readable publication status from a KB answer dict."""
+    if answer.get("archived_at"):
+        return "archived"
+    if answer.get("published_at"):
+        return "published"
+    if answer.get("internal_at"):
+        return "internal"
+    return "draft"
+
+
+def _format_kb_markdown(kb: dict[str, Any]) -> str:
+    """Format a KnowledgeBase dict as markdown."""
+    lines = [f"# Knowledge Base (ID: {kb.get('id', 'N/A')})", ""]
+    lines.append(f"**Active**: {kb.get('active', False)}")
+    if kb.get("custom_address"):
+        lines.append(f"**Address**: {kb['custom_address']}")
+    lines.append(f"**Homepage Layout**: {kb.get('homepage_layout', 'N/A')}")
+    lines.append(f"**Category Layout**: {kb.get('category_layout', 'N/A')}")
+    cat_ids = kb.get("category_ids") or []
+    ans_ids = kb.get("answer_ids") or []
+    lines.append(f"**Root Categories**: {len(cat_ids)} (IDs: {cat_ids})")
+    lines.append(f"**Answers**: {len(ans_ids)} total")
+    lines.append(f"**Updated**: {kb.get('updated_at', 'N/A')}")
+    return "\n".join(lines)
+
+
+def _format_kb_category_markdown(category: dict[str, Any]) -> str:
+    """Format a KnowledgeBaseCategory dict as markdown."""
+    lines = [f"# KB Category (ID: {category.get('id', 'N/A')})", ""]
+    lines.append(f"**Knowledge Base ID**: {category.get('knowledge_base_id', 'N/A')}")
+    lines.append(f"**Parent ID**: {category.get('parent_id', 'None (root)')}")
+    lines.append(f"**Icon**: {category.get('category_icon', 'N/A')}")
+    lines.append(f"**Position**: {category.get('position', 0)}")
+    child_ids = category.get("child_ids") or []
+    answer_ids = category.get("answer_ids") or []
+    translation_ids = category.get("translation_ids") or []
+    lines.append(f"**Child Categories**: {len(child_ids)} (IDs: {child_ids})")
+    lines.append(f"**Answers**: {len(answer_ids)} (IDs: {answer_ids})")
+    lines.append(f"**Translation IDs**: {translation_ids}")
+    lines.append(f"**Updated**: {category.get('updated_at', 'N/A')}")
+    return "\n".join(lines)
+
+
+def _format_kb_answer_optional_sections(answer: dict[str, Any], body: str) -> list[str]:
+    """Build optional markdown sections (content, attachments, tags) for a KB answer."""
+    lines: list[str] = []
+    if body:
+        lines += ["", "## Content", "", body.strip()]
+    attachments = answer.get("attachments") or []
+    if attachments:
+        lines += ["", "## Attachments", ""]
+        lines += [
+            f"- **{att.get('filename', 'N/A')}** (ID: {att.get('id', 'N/A')}, size: {att.get('size', '?')} bytes)"
+            for att in attachments
+        ]
+    tags = answer.get("tags") or []
+    if tags:
+        lines += ["", f"**Tags**: {', '.join(tags)}"]
+    return lines
+
+
+def _format_kb_answer_markdown(answer: dict[str, Any], title: str = "", body: str = "") -> str:
+    """Format a KnowledgeBaseAnswer dict as markdown."""
+    status = _kb_answer_status(answer)
+    heading = title or f"KB Answer (ID: {answer.get('id', 'N/A')})"
+    translation_ids = answer.get("translation_ids") or []
+    lines = [
+        f"# {heading}", "",
+        f"**ID**: {answer.get('id', 'N/A')}",
+        f"**Category ID**: {answer.get('category_id', 'N/A')}",
+        f"**Status**: {status}",
+        f"**Promoted**: {answer.get('promoted', False)}",
+        f"**Position**: {answer.get('position', 0)}",
+        f"**Translation IDs**: {translation_ids}",
+    ]
+    lines += _format_kb_answer_optional_sections(answer, body)
+    lines += ["", f"**Updated**: {answer.get('updated_at', 'N/A')}"]
+    return "\n".join(lines)
+
+
+def _format_kb_answers_list_markdown(answers: list[dict[str, Any]], kb_id: int, category_id: int) -> str:
+    """Format a list of KB answers as markdown."""
+    lines = [f"# KB Answers in Category {category_id} (KB: {kb_id})", ""]
+    lines.append(f"Found {len(answers)} answer(s)")
+    lines.append("")
+    for answer in answers:
+        status = _kb_answer_status(answer)
+        title = answer.get("_title") or "(no title)"
+        lines.append(f"## {title} (ID: {answer.get('id', 'N/A')})")
+        lines.append(f"- **Status**: {status}")
+        lines.append(f"- **Promoted**: {answer.get('promoted', False)}")
+        lines.append(f"- **Position**: {answer.get('position', 0)}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _format_kb_search_results_markdown(results: list[dict[str, Any]], query: str, kb_id: int) -> str:
+    """Format KB answer search results as markdown."""
+    if not results:
+        return f"No KB answers found matching '{query}' in KB {kb_id}."
+    lines = [f"# KB Answer Search: '{query}' (KB: {kb_id})", ""]
+    lines.append(f"Found {len(results)} match(es)")
+    lines.append("")
+    for answer in results:
+        title = answer.get("_title") or "(no title)"
+        status = _kb_answer_status(answer)
+        lines.append(f"## {title} (ID: {answer.get('id', 'N/A')})")
+        lines.append(f"- **Category ID**: {answer.get('_category_id', answer.get('category_id', 'N/A'))}")
+        lines.append(f"- **Status**: {status}")
+        lines.append(f"- **Promoted**: {answer.get('promoted', False)}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
 
@@ -868,6 +994,7 @@ class ZammadMCPServer:
         self._setup_ticket_tools()
         self._setup_user_org_tools()
         self._setup_system_tools()
+        self._setup_kb_tools()
 
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
@@ -2469,6 +2596,7 @@ class ZammadMCPServer:
         self._setup_user_resource()
         self._setup_organization_resource()
         self._setup_queue_resource()
+        self._setup_kb_resources()
 
     def _setup_ticket_resource(self) -> None:
         """Register ticket resource."""
@@ -2618,6 +2746,165 @@ class ZammadMCPServer:
                 return truncate_response("\n".join(lines))
             except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving queue for group '{group}'")
+
+    def _setup_kb_tools(self) -> None:
+        """Register read-only Knowledge Base tools.
+
+        Failure semantics: client-level errors (network/HTTP) are propagated as
+        exceptions (e.g. :class:`ZammadAPIError`) so MCP surfaces them as
+        actual tool errors instead of returning successful string payloads.
+        """
+        self._setup_kb_info_tools()
+        self._setup_kb_category_tools()
+        self._setup_kb_answer_read_tools()
+
+    def _setup_kb_info_tools(self) -> None:
+        """Register KB list/get knowledge-base tools."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("List Knowledge Bases"))
+        def zammad_list_knowledge_bases(params: ListKnowledgeBasesParams) -> str:
+            """List all knowledge bases available in Zammad.
+
+            Errors (auth, network, HTTP 5xx, ...) are raised as
+            :class:`ZammadAPIError` so the MCP client sees a real tool error.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+            """
+            client = self.get_client()
+            kbs = client.list_knowledge_bases()
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps({"items": kbs, "count": len(kbs)}, indent=2, default=str)
+            else:
+                lines = ["# Knowledge Bases", "", f"Found {len(kbs)} knowledge base(s)", ""]
+                for kb in kbs:
+                    lines.append(f"## KB ID: {kb.get('id', 'N/A')}")
+                    lines.append(f"- **Active**: {kb.get('active', False)}")
+                    if kb.get("custom_address"):
+                        lines.append(f"- **Address**: {kb['custom_address']}")
+                    cat_ids = kb.get("category_ids") or []
+                    lines.append(f"- **Root Categories**: {len(cat_ids)}")
+                    lines.append("")
+                result = "\n".join(lines)
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get Knowledge Base"))
+        def zammad_get_knowledge_base(params: GetKnowledgeBaseParams) -> str:
+            """Get details of a specific knowledge base by ID.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+                Use ``zammad_list_knowledge_bases`` to discover available KB IDs.
+            """
+            client = self.get_client()
+            kb = client.get_knowledge_base(params.kb_id)
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(kb, indent=2, default=str)
+            else:
+                result = _format_kb_markdown(kb)
+            return truncate_response(result)
+
+    def _setup_kb_category_tools(self) -> None:
+        """Register read-only KB category tools."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get KB Category"))
+        def zammad_get_kb_category(params: GetKBCategoryParams) -> str:
+            """Get a knowledge base category by ID.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+            """
+            client = self.get_client()
+            category = client.get_kb_category(params.kb_id, params.category_id)
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(category, indent=2, default=str)
+            else:
+                result = _format_kb_category_markdown(category)
+            return truncate_response(result)
+
+    def _setup_kb_answer_read_tools(self) -> None:
+        """Register read-only KB answer tools (list/search/get)."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("List KB Answers"))
+        def zammad_list_kb_answers(params: ListKBAnswersParams) -> str:
+            """List answers within a KB category.
+
+            Each item exposes the resolved title via the ``_title`` key.
+            """
+            client = self.get_client()
+            answers = client.list_kb_answers(params.kb_id, params.category_id)
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps({"items": answers, "count": len(answers)}, indent=2, default=str)
+            else:
+                result = _format_kb_answers_list_markdown(answers, params.kb_id, params.category_id)
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Search KB Answers"))
+        def zammad_search_kb_answers(params: SearchKBAnswersParams) -> str:
+            """Case-insensitive substring search of KB answers (title and body).
+
+            Searches across all root categories of the KB by default, or only
+            the given ``category_id`` and its descendants when provided.
+            """
+            client = self.get_client()
+            results = client.search_kb_answers(
+                params.kb_id, params.query, category_id=params.category_id
+            )
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(
+                    {"items": results, "count": len(results), "query": params.query},
+                    indent=2,
+                    default=str,
+                )
+            else:
+                result = _format_kb_search_results_markdown(results, params.query, params.kb_id)
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get KB Answer"))
+        def zammad_get_kb_answer(params: GetKBAnswerParams) -> str:
+            """Get a knowledge base answer by ID, including resolved title and body."""
+            client = self.get_client()
+            result_payload = client.get_kb_answer_with_content(params.kb_id, params.answer_id)
+            answer = result_payload["answer"]
+            title = result_payload["title"]
+            body = result_payload["body"]
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(
+                    {"answer": answer, "title": title, "body": body},
+                    indent=2,
+                    default=str,
+                )
+            else:
+                body_truncated = truncate_response(body) if body else ""
+                result = _format_kb_answer_markdown(answer, title=title, body=body_truncated)
+            return result
+
+    def _setup_kb_resources(self) -> None:
+        """Register read-only Knowledge Base resources."""
+
+        @self.mcp.resource("zammad://kb/{kb_id}")
+        def get_kb_resource(kb_id: str) -> str:
+            """Get a knowledge base as a resource."""
+            client = self.get_client()
+            kb = client.get_knowledge_base(int(kb_id))
+            return truncate_response(_format_kb_markdown(kb))
+
+        @self.mcp.resource("zammad://kb/{kb_id}/category/{category_id}")
+        def get_kb_category_resource(kb_id: str, category_id: str) -> str:
+            """Get a KB category as a resource."""
+            client = self.get_client()
+            category = client.get_kb_category(int(kb_id), int(category_id))
+            return truncate_response(_format_kb_category_markdown(category))
+
+        @self.mcp.resource("zammad://kb/{kb_id}/answer/{answer_id}")
+        def get_kb_answer_resource(kb_id: str, answer_id: str) -> str:
+            """Get a KB answer as a resource."""
+            client = self.get_client()
+            result = client.get_kb_answer_with_content(int(kb_id), int(answer_id))
+            body = truncate_response(result["body"]) if result["body"] else ""
+            return _format_kb_answer_markdown(
+                result["answer"], title=result["title"], body=body
+            )
 
     def _setup_prompts(self) -> None:
         """Register all prompts with the MCP server."""

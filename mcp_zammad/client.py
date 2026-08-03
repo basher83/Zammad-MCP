@@ -1,7 +1,9 @@
 """Zammad API client wrapper for the MCP server."""
 
+import html as _html
 import logging
 import os
+import re as _re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -9,6 +11,38 @@ from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
 logger = logging.getLogger(__name__)
+
+# HTTP status codes used by the KB compatibility paths.
+_HTTP_OK = 200
+_HTTP_MULTIPLE_CHOICES = 300
+_HTTP_NO_CONTENT = 204
+_HTTP_NOT_FOUND = 404
+
+# KB ID-probe fallback (used only when GET /knowledge_bases returns 404).
+_KB_PROBE_MAX_ID = 200
+_KB_PROBE_MAX_CONSECUTIVE_MISSES = 50
+
+
+def _is_2xx(status_code: int) -> bool:
+    """Return True iff the HTTP status code is a 2xx success."""
+    return _HTTP_OK <= status_code < _HTTP_MULTIPLE_CHOICES
+
+
+class ZammadAPIError(Exception):
+
+    """
+    Raised when the Zammad API returns a non-2xx response.
+
+    Exposes ``status_code``, ``url`` and ``body`` of the failing response so
+    callers can react to specific error classes (e.g. 401/403/404/5xx).
+    """
+
+    def __init__(self, status_code: int, url: str, body: object) -> None:
+        """Initialize a Zammad API error from response context."""
+        self.status_code = status_code
+        self.url = url
+        self.body = body
+        super().__init__(f"HTTP {status_code} from Zammad: {body} (URL: {url})")
 
 
 class ZammadClient:
@@ -481,3 +515,352 @@ class ZammadClient:
         response = self.api.session.get(f"{self.url}/tag_list")
         response.raise_for_status()
         return list(response.json())
+
+    # ------------------------------------------------------------------
+    # Knowledge Base methods (direct HTTP - not covered by zammad_py).
+    # Read-only operations only; writes/attachments land in follow-up PRs.
+    # ------------------------------------------------------------------
+
+    def _kb_url(self, *parts: str | int) -> str:
+        """Build a knowledge-base API URL from path components."""
+        path = "/".join(str(p) for p in parts)
+        return f"{self.api.url}knowledge_bases/{path}"
+
+    def _kb_raise_or_return(self, response: Any) -> dict[str, Any] | list[Any]:
+        """Raise ZammadAPIError on HTTP error, otherwise return the parsed JSON body.
+
+        Empty bodies (204 / no content) on KB read endpoints are also raised
+        as ZammadAPIError instead of being returned as ``{}`` so unexpected
+        API states are not silently masked.
+        """
+        if not _is_2xx(response.status_code):
+            try:
+                body = response.json()
+            except ValueError:
+                body = response.text
+            raise ZammadAPIError(response.status_code, response.url, body)
+        if response.status_code == _HTTP_NO_CONTENT or not response.content:
+            raise ZammadAPIError(
+                response.status_code,
+                response.url,
+                "Empty response body from KB endpoint",
+            )
+        data = response.json()
+        if isinstance(data, list):
+            return data
+        return dict(data)
+
+    def _probe_kb_ids(self) -> list[dict[str, Any]]:
+        """
+        Probe KB IDs as a fallback for the 404-listing compatibility path.
+
+        Some Zammad versions return 404 on GET /knowledge_bases even when KBs
+        exist, so we probe individual IDs. Iteration starts at 1 and stops
+        once either ``_KB_PROBE_MAX_ID`` is reached or after
+        ``_KB_PROBE_MAX_CONSECUTIVE_MISSES`` consecutive 404 responses, which
+        bounds the work even on instances with sparse / high IDs.
+
+        404 (ID not found) is tolerated; any other non-2xx response raises
+        :class:`ZammadAPIError` so authentication / server failures surface.
+        """
+        results: list[dict[str, Any]] = []
+        consecutive_misses = 0
+        for kb_id in range(1, _KB_PROBE_MAX_ID + 1):
+            response = self.api.session.get(self._kb_url(kb_id))
+            if response.status_code == _HTTP_NOT_FOUND:
+                consecutive_misses += 1
+                if consecutive_misses >= _KB_PROBE_MAX_CONSECUTIVE_MISSES:
+                    break
+                continue
+            consecutive_misses = 0
+            data = self._kb_raise_or_return(response)
+            if isinstance(data, dict) and data:
+                results.append(data)
+        return results
+
+    def list_knowledge_bases(self) -> list[dict[str, Any]]:
+        """
+        List all knowledge bases.
+
+        Zammad's GET /knowledge_bases endpoint is unreliable on some versions
+        and returns 404 even when KBs exist. The only documented fallback is
+        the 404 -> ID-probing path; all other error statuses (401/403/5xx)
+        are propagated as :class:`ZammadAPIError`.
+        """
+        response = self.api.session.get(self.api.url + "knowledge_bases")
+        if response.status_code == _HTTP_NOT_FOUND:
+            return self._probe_kb_ids()
+        if not _is_2xx(response.status_code):
+            try:
+                body = response.json()
+            except ValueError:
+                body = response.text
+            raise ZammadAPIError(response.status_code, response.url, body)
+        if not response.content:
+            raise ZammadAPIError(
+                response.status_code,
+                response.url,
+                "Empty response body for knowledge_bases listing",
+            )
+        data = response.json()
+        if isinstance(data, list):
+            return list(data)
+        if isinstance(data, dict) and data:
+            return [data]
+        raise ZammadAPIError(
+            response.status_code,
+            response.url,
+            f"Unexpected knowledge_bases response shape: {type(data).__name__}",
+        )
+
+    def get_knowledge_base(self, kb_id: int) -> dict[str, Any]:
+        """Get a single knowledge base by ID."""
+        response = self.api.session.get(self._kb_url(kb_id))
+        result = self._kb_raise_or_return(response)
+        if not isinstance(result, dict):
+            raise ZammadAPIError(
+                response.status_code,
+                response.url,
+                f"Unexpected knowledge_base response shape: {type(result).__name__}",
+            )
+        return result
+
+    def get_kb_category(self, kb_id: int, category_id: int) -> dict[str, Any]:
+        """Get a single KB category."""
+        response = self.api.session.get(self._kb_url(kb_id, "categories", category_id))
+        result = self._kb_raise_or_return(response)
+        if not isinstance(result, dict):
+            raise ZammadAPIError(
+                response.status_code,
+                response.url,
+                f"Unexpected kb_category response shape: {type(result).__name__}",
+            )
+        return result
+
+    def get_kb_answer(self, kb_id: int, answer_id: int) -> dict[str, Any]:
+        """
+        Get a single KB answer including translation/body content.
+
+        Fetches the answer and re-fetches with ?include_contents={translation_id}
+        so KnowledgeBaseAnswerTranslationContent (body) is included.
+        """
+        url = self._kb_url(kb_id, "answers", answer_id)
+        response = self.api.session.get(url)
+        payload = self._kb_raise_or_return(response)
+        if not isinstance(payload, dict):
+            raise ZammadAPIError(
+                response.status_code,
+                response.url,
+                f"Unexpected kb_answer response shape: {type(payload).__name__}",
+            )
+        assets = payload.get("assets") or {}
+        answer_entry = (assets.get("KnowledgeBaseAnswer") or {}).get(str(answer_id)) or {}
+        translation_ids: list[int] = answer_entry.get("translation_ids") or []
+        if translation_ids:
+            translation_id = translation_ids[0]
+            response2 = self.api.session.get(url, params={"include_contents": translation_id})
+            data = self._kb_raise_or_return(response2)
+            if isinstance(data, dict):
+                return data
+        return payload
+
+    # --- KB extraction helpers (operate on compound payloads) ---
+
+    def _first_translation_field(
+        self,
+        translations: dict[str, Any],
+        translation_ids: list[int],
+        field: str,
+    ) -> str:
+        """Return the first non-empty string field from translations."""
+        for tid in translation_ids:
+            value = (translations.get(str(tid)) or {}).get(field)
+            if value:
+                return str(value)
+        first = next(iter(translations.values()), {})
+        return str(first[field]) if first.get(field) else ""
+
+    def _extract_kb_answer_title(
+        self, raw_payload: dict[str, Any], answer: dict[str, Any]
+    ) -> str:
+        """Extract the first available title from translation assets."""
+        assets = raw_payload.get("assets") or {}
+        translations = assets.get("KnowledgeBaseAnswerTranslation") or {}
+        if not translations:
+            return ""
+        translation_ids: list[int] = answer.get("translation_ids") or []
+        return self._first_translation_field(translations, translation_ids, "title")
+
+    def _strip_html(self, html: str) -> str:
+        """Strip HTML tags and unescape entities from a string."""
+        return _html.unescape(_re.sub(r"<[^>]+>", " ", html))
+
+    def _body_from_content_assets(
+        self, contents: dict[str, Any], translation_ids: list[int]
+    ) -> str:
+        """Extract plain-text body from KnowledgeBaseAnswerTranslationContent."""
+        for tid in translation_ids:
+            body = (contents.get(str(tid)) or {}).get("body") or ""
+            if body:
+                return self._strip_html(body)
+        first_body = next(iter(contents.values()), {}).get("body") or ""
+        return self._strip_html(first_body) if first_body else ""
+
+    def _body_from_translation_assets(
+        self, translations: dict[str, Any], translation_ids: list[int]
+    ) -> str:
+        """Extract plain-text body from translation content_attributes (legacy)."""
+        for tid in translation_ids:
+            t = translations.get(str(tid)) or {}
+            body = (t.get("content_attributes") or {}).get("body") or ""
+            if body:
+                return self._strip_html(body)
+        return ""
+
+    def _extract_kb_answer_body(
+        self, raw_payload: dict[str, Any], answer: dict[str, Any]
+    ) -> str:
+        """Extract the plain-text body from translation assets."""
+        assets = raw_payload.get("assets") or {}
+        translation_ids: list[int] = answer.get("translation_ids") or []
+        contents = assets.get("KnowledgeBaseAnswerTranslationContent") or {}
+        if contents:
+            return self._body_from_content_assets(contents, translation_ids)
+        translations = assets.get("KnowledgeBaseAnswerTranslation") or {}
+        if translations:
+            return self._body_from_translation_assets(translations, translation_ids)
+        return ""
+
+    def _extract_kb_answer_from_payload(
+        self, payload: dict[str, Any], answer_id: int
+    ) -> dict[str, Any] | None:
+        """Extract the answer dict from a compound KB answer payload."""
+        assets = payload.get("assets") or {}
+        kb_answers = assets.get("KnowledgeBaseAnswer")
+        if kb_answers:
+            return kb_answers.get(str(answer_id)) or next(iter(kb_answers.values()), None)
+        if "KnowledgeBaseAnswer" in payload:
+            answers_map = payload["KnowledgeBaseAnswer"]
+            return answers_map.get(str(answer_id)) or next(iter(answers_map.values()), None)
+        return payload if payload else None
+
+    def get_kb_answer_with_content(self, kb_id: int, answer_id: int) -> dict[str, Any]:
+        """
+        Get a KB answer with extracted title and body as a single processed dict.
+
+        The returned dict has the keys ``answer`` (flat answer dict),
+        ``title`` (str) and ``body`` (str, plain text with HTML stripped).
+        """
+        payload = self.get_kb_answer(kb_id, answer_id)
+        answer = self._extract_kb_answer_from_payload(payload, answer_id) or payload
+        return {
+            "answer": answer,
+            "title": self._extract_kb_answer_title(payload, answer),
+            "body": self._extract_kb_answer_body(payload, answer),
+        }
+
+    def list_kb_answers(self, kb_id: int, category_id: int) -> list[dict[str, Any]]:
+        """
+        List answers within a KB category by expanding the category's answer_ids.
+
+        Each returned answer has '_title' and '_body' injected from translation
+        assets. Per-answer 404s are tolerated as a documented compatibility
+        path (an answer ID listed by the category may have been deleted in a
+        race); all other errors are surfaced as :class:`ZammadAPIError`.
+        """
+        category = self.get_kb_category(kb_id, category_id)
+        answer_ids: list[int] = category.get("answer_ids") or []
+        answers: list[dict[str, Any]] = []
+        for aid in answer_ids:
+            try:
+                answer_data = self.get_kb_answer(kb_id, aid)
+            except ZammadAPIError as exc:
+                if exc.status_code == _HTTP_NOT_FOUND:
+                    logger.warning("KB answer %d not found in category %d", aid, category_id)
+                    continue
+                raise
+            answer_entry = self._extract_kb_answer_from_payload(answer_data, aid)
+            if answer_entry is None:
+                logger.warning("Failed to parse KB answer %d in category %d", aid, category_id)
+                continue
+            answer_entry["_title"] = self._extract_kb_answer_title(answer_data, answer_entry)
+            answer_entry["_body"] = self._extract_kb_answer_body(answer_data, answer_entry)
+            answers.append(answer_entry)
+        return answers
+
+    def _answer_matches_query(self, answer: dict[str, Any], query_lower: str) -> bool:
+        """Return True if query_lower appears in the answer's title or body."""
+        title = answer.get("_title") or ""
+        body = answer.get("_body") or ""
+        return query_lower in title.lower() or query_lower in body.lower()
+
+    def _collect_category_answers(
+        self, kb_id: int, cid: int, query_lower: str
+    ) -> list[dict[str, Any]]:
+        """
+        Return matching answers from a single category.
+
+        Tolerates 404 on the category lookup (documented compatibility path);
+        all other errors are surfaced as :class:`ZammadAPIError`.
+        """
+        matches: list[dict[str, Any]] = []
+        try:
+            answers = self.list_kb_answers(kb_id, cid)
+        except ZammadAPIError as exc:
+            if exc.status_code == _HTTP_NOT_FOUND:
+                logger.warning("KB category %d not found during search", cid)
+                return matches
+            raise
+        for answer in answers:
+            if self._answer_matches_query(answer, query_lower):
+                answer["_category_id"] = cid
+                matches.append(answer)
+        return matches
+
+    def _answers_matching_query(
+        self, kb_id: int, category_ids: list[int], query_lower: str
+    ) -> list[dict[str, Any]]:
+        """Return answers whose title or body matches query_lower."""
+        results: list[dict[str, Any]] = []
+        for cid in category_ids:
+            results.extend(self._collect_category_answers(kb_id, cid, query_lower))
+        return results
+
+    def _expand_category_ids(self, kb_id: int, root_ids: list[int]) -> list[int]:
+        """BFS-expand root category IDs into all descendants via child_ids."""
+        visited: list[int] = []
+        queue: list[int] = list(root_ids)
+        seen: set[int] = set()
+        while queue:
+            cid = queue.pop(0)
+            if cid in seen:
+                continue
+            seen.add(cid)
+            visited.append(cid)
+            try:
+                category = self.get_kb_category(kb_id, cid)
+            except ZammadAPIError as exc:
+                if exc.status_code == _HTTP_NOT_FOUND:
+                    logger.warning("KB category %d not found while expanding tree", cid)
+                    continue
+                raise
+            for child_id in category.get("child_ids") or []:
+                if child_id not in seen:
+                    queue.append(child_id)
+        return visited
+
+    def search_kb_answers(
+        self, kb_id: int, query: str, category_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """
+        Case-insensitive substring search of KB answers across categories.
+
+        If ``category_id`` is provided, search is limited to that category and
+        its descendants. Otherwise all root categories of the KB are scanned.
+        """
+        kb = self.get_knowledge_base(kb_id)
+        root_ids = (
+            [category_id] if category_id is not None else (kb.get("category_ids") or [])
+        )
+        category_ids = self._expand_category_ids(kb_id, root_ids)
+        return self._answers_matching_query(kb_id, category_ids, query.lower())
