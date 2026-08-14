@@ -5,6 +5,7 @@ import html
 import json
 import logging
 import os
+import re
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -47,6 +48,7 @@ from .models import (
     TagOperationResult,
     Ticket,
     TicketCreate,
+    TicketExportParams,
     TicketIdGuidanceError,
     TicketPriority,
     TicketSearchParams,
@@ -101,6 +103,7 @@ MAX_TICKETS_PER_STATE_IN_QUEUE = 10
 MAX_PER_PAGE = 100  # Maximum results per page for pagination
 CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
 ARTICLE_BODY_TRUNCATE_LENGTH = 500  # Maximum length for article body in markdown formatting
+MAX_EXPORT_ERRORS_LOGGED = 100  # Maximum number of per-ticket errors to log during export
 
 # Zammad state type IDs (from Zammad API)
 STATE_TYPE_NEW = 1
@@ -190,6 +193,19 @@ def _brief_field(value: object, attr: str) -> str:
     if isinstance(value, str):
         return value
     return "Unknown"
+
+
+def _strip_html_tags(text: str) -> str:
+    """Strip HTML tags and unescape HTML entities from text.
+
+    Args:
+        text: HTML or plain text string
+
+    Returns:
+        Plain text with HTML tags removed and entities decoded
+    """
+    clean = re.sub(r"<[^>]+>", "", text)
+    return html.unescape(clean).strip()
 
 
 def _escape_article_body(article: Article) -> str:
@@ -753,6 +769,180 @@ def _format_organization_detail_markdown(org: Organization) -> str:
     return "\n".join(lines)
 
 
+def _extract_expanded_field_name(value: object) -> str:
+    """Extract name from an expanded field (dict or string)."""
+    if isinstance(value, dict):
+        return str(value.get("name", ""))
+    return str(value) if value else ""
+
+
+def _build_export_article(article: dict[str, Any]) -> dict[str, Any]:
+    """Build a single export article record with HTML stripped."""
+    body = article.get("body", "")
+    content_type = (article.get("content_type") or "").lower()
+    if "html" in content_type:
+        body = _strip_html_tags(body)
+
+    return {
+        "sender": article.get("sender", "Unknown"),
+        "type": article.get("type", "note"),
+        "from": article.get("from", ""),
+        "subject": article.get("subject", ""),
+        "body": body,
+        "internal": article.get("internal", False),
+        "created_at": article.get("created_at", ""),
+    }
+
+
+def _resolve_export_path(output_path: str) -> Path:
+    """Resolve and validate an export output path against the configured export directory.
+
+    Export writes to the host filesystem, so the destination is confined to the directory
+    named by ZAMMAD_EXPORT_DIR. The variable is required: without it the export tool is
+    unavailable rather than defaulting to a writable location.
+
+    Symlinks are resolved before the containment check, so a symlink inside the export
+    directory cannot be used to escape it.
+
+    Args:
+        output_path: Requested output path, absolute or relative to the export directory.
+
+    Returns:
+        Path: The resolved, validated absolute path.
+
+    Raises:
+        ValueError: If ZAMMAD_EXPORT_DIR is unset, is not a directory, or the resolved
+            path would fall outside it.
+    """
+    export_dir_raw = os.environ.get("ZAMMAD_EXPORT_DIR")
+    if not export_dir_raw:
+        raise ValueError(
+            "Ticket export is disabled: ZAMMAD_EXPORT_DIR is not set. "
+            "Set it to a directory the server may write exports into."
+        )
+
+    export_dir = Path(export_dir_raw).expanduser().resolve()
+    if not export_dir.is_dir():
+        raise ValueError(f"ZAMMAD_EXPORT_DIR does not exist or is not a directory: {export_dir}")
+
+    candidate = Path(output_path).expanduser()
+    resolved = (export_dir / candidate).resolve() if not candidate.is_absolute() else candidate.resolve()
+
+    if resolved != export_dir and export_dir not in resolved.parents:
+        raise ValueError(
+            f"Refusing to write outside the export directory. "
+            f"Resolved path {resolved} is not contained in ZAMMAD_EXPORT_DIR {export_dir}."
+        )
+
+    return resolved
+
+
+def _build_export_record(
+    ticket_data: dict[str, Any],
+    include_internal: bool,
+    summary: dict[str, Any] | None = None,
+    tags: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build a JSONL export record from ticket data.
+
+    The per-ticket detail fetch uses the Zammad ticket find endpoint, which does not
+    support expansion, so group/state/priority arrive as numeric *_id fields only. The
+    list and search endpoints do expand those names, so the batch summary the ticket
+    came from is used as a fallback for the human-readable values.
+
+    Args:
+        ticket_data: Full ticket detail, including articles.
+        include_internal: Whether internal articles are included in the conversation.
+        summary: The batch entry this ticket came from, used to recover expanded names.
+        tags: Tags fetched separately; the ticket payload never carries them.
+    """
+    conversation = []
+    for article in ticket_data.get("articles", []):
+        if not include_internal and article.get("internal", False):
+            continue
+        conversation.append(_build_export_article(article))
+
+    summary = summary or {}
+
+    def expanded(field: str) -> str:
+        """Prefer the detail payload, falling back to the expanded batch summary."""
+        value = _extract_expanded_field_name(ticket_data.get(field, ""))
+        if value:
+            return value
+        return _extract_expanded_field_name(summary.get(field, ""))
+
+    raw_tags = tags if tags is not None else ticket_data.get("tags")
+    resolved_tags = raw_tags if isinstance(raw_tags, list) else []
+
+    return {
+        "ticket_id": ticket_data.get("id"),
+        "ticket_number": str(ticket_data.get("number", "")),
+        "title": ticket_data.get("title", ""),
+        "group": expanded("group"),
+        "state": expanded("state"),
+        "priority": expanded("priority"),
+        "tags": resolved_tags,
+        "created_at": str(ticket_data.get("created_at", "")),
+        "updated_at": str(ticket_data.get("updated_at", "")),
+        "conversation": conversation,
+    }
+
+
+def _format_export_summary(
+    params: "TicketExportParams",
+    exported_count: int,
+    error_count: int,
+    errors: list[str],
+    elapsed: float,
+    use_search: bool,
+    export_path: Path | None = None,
+) -> str:
+    """Format export summary as markdown."""
+    lines = ["# Ticket Export Complete", ""]
+    lines.append(f"- **File**: `{export_path if export_path is not None else params.output_path}`")
+    lines.append(f"- **Tickets exported**: {exported_count}")
+    lines.append(f"- **Errors**: {error_count}")
+    lines.append(f"- **Elapsed time**: {elapsed:.1f}s")
+    lines.append(f"- **Mode**: {'search (10K limit)' if use_search else 'list (no limit)'}")
+    if params.resume_from_page > 1:
+        lines.append(f"- **Resumed from page**: {params.resume_from_page}")
+    lines.append("")
+
+    if use_search:
+        lines.append(
+            "> **Note**: Filtered export uses the search endpoint, which is capped at 10,000 results by Zammad."
+        )
+        lines.append("")
+
+    if errors:
+        lines.append("## Errors (first 100)")
+        lines.append("")
+        for err in errors:
+            lines.append(f"- {err}")
+
+    return "\n".join(lines)
+
+
+def _fetch_export_batch(
+    client: "ZammadClient",
+    params: "TicketExportParams",
+    use_search: bool,
+    page: int,
+) -> list[dict[str, Any]]:
+    """Fetch a batch of tickets for export using search or list endpoint."""
+    if use_search:
+        return client.search_tickets(
+            query=params.query,
+            group=params.group,
+            state=params.state,
+            created_after=params.created_after,
+            created_before=params.created_before,
+            page=page,
+            per_page=params.per_page,
+        )
+    return client.list_tickets(page=page, per_page=params.per_page)
+
+
 def _handle_api_error(e: Exception, context: str = "operation") -> str:
     """Format errors with actionable guidance for LLM agents.
 
@@ -866,6 +1056,7 @@ class ZammadMCPServer:
     def _setup_tools(self) -> None:
         """Register all tools with the MCP server."""
         self._setup_ticket_tools()
+        self._setup_export_tools()
         self._setup_user_org_tools()
         self._setup_system_tools()
 
@@ -1482,6 +1673,127 @@ class ZammadMCPServer:
             client = self.get_client()
             result = client.remove_ticket_tag(params.ticket_id, params.tag)
             return TagOperationResult(**result)
+
+    def _setup_export_tools(self) -> None:
+        """Register export-related tools."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("Export Tickets to JSONL"))
+        def zammad_export_tickets(params: TicketExportParams) -> str:
+            """Export tickets with conversation articles to a JSONL file for AI training.
+
+            Fetches tickets in batches, retrieves all articles for each ticket,
+            strips HTML to plain text, and writes one JSON line per ticket.
+
+            By default (no filters), uses the list endpoint which has no result cap.
+            When filters are specified, uses the search endpoint (capped at 10,000 results).
+
+            Args:
+                params (TicketExportParams): Export parameters containing:
+                    - output_path (str): Path to output JSONL file (must end in .jsonl).
+                      Relative to ZAMMAD_EXPORT_DIR; absolute paths must resolve inside it.
+                    - query (str | None): Free text search filter
+                    - group (str | None): Filter by group name
+                    - state (str | None): Filter by state name
+                    - created_after (str | None): Filter tickets created on/after date (YYYY-MM-DD)
+                    - created_before (str | None): Filter tickets created on/before date (YYYY-MM-DD)
+                    - delay_seconds (float): Delay between API calls (default: 0.5)
+                    - per_page (int): Batch size per page (default: 50)
+                    - include_internal_articles (bool): Include internal notes (default: False)
+                    - resume_from_page (int): Page to resume from (default: 1)
+                    - max_tickets (int | None): Maximum tickets to export (default: None)
+                    - include_tags (bool): Fetch per-ticket tags via an extra API call (default: False)
+
+            Returns:
+                str: Markdown summary with file path, counts, elapsed time, and errors
+
+            JSONL record format (one per line):
+                ```json
+                {
+                    "ticket_id": 123,
+                    "ticket_number": "65003",
+                    "title": "Subject line",
+                    "group": "Support",
+                    "state": "closed",
+                    "priority": "2 normal",
+                    "tags": ["network"],
+                    "created_at": "2024-01-15T10:30:00Z",
+                    "updated_at": "2024-02-01T14:22:00Z",
+                    "conversation": [
+                        {
+                            "sender": "Customer",
+                            "type": "email",
+                            "from": "user@example.com",
+                            "subject": "Subject line",
+                            "body": "Plain text body...",
+                            "internal": false,
+                            "created_at": "2024-01-15T10:30:00Z"
+                        }
+                    ]
+                }
+                ```
+
+            Note:
+                - The file is opened in append mode to support resume from interruption.
+                - Each line is flushed immediately so progress survives crashes.
+                - Errors on individual tickets are logged but do not stop the export.
+                - The search endpoint is capped at 10,000 results by Zammad.
+            """
+            client = self.get_client()
+            start_time = time.monotonic()
+
+            use_search = any([params.query, params.group, params.state, params.created_after, params.created_before])
+
+            export_path = _resolve_export_path(params.output_path)
+
+            exported_count = 0
+            error_count = 0
+            errors: list[str] = []
+            page = params.resume_from_page
+
+            with open(export_path, "a") as f:
+                while page <= MAX_PAGES_FOR_TICKET_SCAN:
+                    batch = _fetch_export_batch(client, params, use_search, page)
+                    if not batch:
+                        break
+
+                    for ticket_summary in batch:
+                        ticket_id = ticket_summary.get("id")
+                        if not ticket_id:
+                            continue
+
+                        try:
+                            time.sleep(params.delay_seconds)
+                            ticket_data = client.get_ticket(
+                                ticket_id=ticket_id, include_articles=True, article_limit=-1
+                            )
+                            ticket_tags: list[str] | None = None
+                            if params.include_tags:
+                                ticket_tags = client.get_ticket_tags(ticket_id)
+                            record = _build_export_record(
+                                ticket_data,
+                                params.include_internal_articles,
+                                summary=ticket_summary,
+                                tags=ticket_tags,
+                            )
+                            f.write(json.dumps(record, default=str) + "\n")
+                            f.flush()
+                            exported_count += 1
+
+                            if params.max_tickets and exported_count >= params.max_tickets:
+                                break
+
+                        except Exception as e:
+                            error_count += 1
+                            if len(errors) < MAX_EXPORT_ERRORS_LOGGED:
+                                errors.append(f"Ticket {ticket_id}: {type(e).__name__} - {e}")
+
+                    if params.max_tickets and exported_count >= params.max_tickets:
+                        break
+
+                    page += 1
+
+            elapsed = time.monotonic() - start_time
+            return _format_export_summary(params, exported_count, error_count, errors, elapsed, use_search, export_path)
 
     def _setup_user_org_tools(self) -> None:
         """Register user and organization tools."""
