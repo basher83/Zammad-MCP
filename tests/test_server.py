@@ -6,7 +6,7 @@ import os
 import pathlib
 import tempfile
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -3230,7 +3230,7 @@ def test_get_organization_supports_json_format(decorator_capturer):
 class TestTicketStatsSearchCap:
     """Group-filtered stats must not report the search cap as an exact total."""
 
-    _STATES = [
+    _STATES: ClassVar[list[dict[str, Any]]] = [
         {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
