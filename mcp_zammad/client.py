@@ -10,6 +10,11 @@ from zammad_py.exceptions import ConfigException
 
 logger = logging.getLogger(__name__)
 
+# Requests defaults to no timeout, which lets a stalled connection hang a tool call
+# indefinitely. Every direct session call passes an explicit bound instead.
+DEFAULT_REQUEST_TIMEOUT = 30.0
+MAX_REQUEST_TIMEOUT = 600.0
+
 
 class ZammadClient:
     """Wrapper around zammad_py ZammadAPI with additional functionality."""
@@ -23,6 +28,7 @@ class ZammadClient:
         oauth2_token: str | None = None,
         *,
         insecure: bool | None = None,
+        timeout: float | None = None,
     ) -> None:
         """Initialize Zammad client with environment variables or provided credentials.
 
@@ -34,6 +40,11 @@ class ZammadClient:
         Set insecure=True, or set ZAMMAD_INSECURE to 1/true/yes/on, only for
         trusted self-signed/internal certificate chains. Defaults to secure TLS
         verification.
+
+        timeout bounds every direct HTTP call in seconds, and can also be set with
+        ZAMMAD_REQUEST_TIMEOUT. Defaults to DEFAULT_REQUEST_TIMEOUT; values that are
+        not positive numbers at or below MAX_REQUEST_TIMEOUT are rejected in favour
+        of the default.
         """
         self.url = url or os.getenv("ZAMMAD_URL")
         self.username = username or os.getenv("ZAMMAD_USERNAME")
@@ -47,6 +58,7 @@ class ZammadClient:
             oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
         )
         self.insecure = insecure if insecure is not None else ZammadClient._parse_bool_env("ZAMMAD_INSECURE")
+        self.timeout = timeout if timeout is not None else ZammadClient._parse_timeout_env("ZAMMAD_REQUEST_TIMEOUT")
 
         if not self.url:
             raise ConfigException("Zammad URL is required. Set ZAMMAD_URL environment variable.")
@@ -152,6 +164,42 @@ class ZammadClient:
         value = os.getenv(env_var, "").strip().lower()
         return value in {"1", "true", "yes", "on"}
 
+    @staticmethod
+    def _parse_timeout_env(env_var: str) -> float:
+        """Parse a request timeout in seconds, falling back to the default.
+
+        The value is bounded: it must be positive and no greater than
+        MAX_REQUEST_TIMEOUT, so a misconfiguration cannot restore the
+        unbounded-wait behaviour this replaces. Unparseable or out-of-range
+        values log a warning and fall back rather than failing startup.
+        """
+        raw = os.getenv(env_var, "").strip()
+        if not raw:
+            return DEFAULT_REQUEST_TIMEOUT
+
+        try:
+            value = float(raw)
+        except ValueError:
+            logger.warning(
+                "Ignoring invalid %s=%r; using default of %ss.",
+                env_var,
+                raw,
+                DEFAULT_REQUEST_TIMEOUT,
+            )
+            return DEFAULT_REQUEST_TIMEOUT
+
+        if not 0 < value <= MAX_REQUEST_TIMEOUT:
+            logger.warning(
+                "Ignoring out-of-range %s=%r; expected 0 < seconds <= %s. Using default of %ss.",
+                env_var,
+                raw,
+                MAX_REQUEST_TIMEOUT,
+                DEFAULT_REQUEST_TIMEOUT,
+            )
+            return DEFAULT_REQUEST_TIMEOUT
+
+        return value
+
     def search_tickets(
         self,
         query: str | None = None,
@@ -197,9 +245,12 @@ class ZammadClient:
         Requests expanded fields so that group, state, priority, owner and customer
         come back as names. zammad_py's ticket.find() accepts no query parameters, so
         the request is issued through the library's session directly, matching the
-        approach already used by list_tags().
+        approach already used by list_tags(). Both pass the client's configured
+        timeout, since requests would otherwise wait indefinitely.
         """
-        response = self.api.session.get(f"{self.url}/tickets/{ticket_id}", params={"expand": "true"})
+        response = self.api.session.get(
+            f"{self.url}/tickets/{ticket_id}", params={"expand": "true"}, timeout=self.timeout
+        )
         response.raise_for_status()
         ticket = response.json()
 
@@ -486,6 +537,6 @@ class ZammadClient:
             requests.HTTPError: If the API request fails (e.g., 403 Forbidden)
         """
         # Use zammad_py's internal session for authentication
-        response = self.api.session.get(f"{self.url}/tag_list")
+        response = self.api.session.get(f"{self.url}/tag_list", timeout=self.timeout)
         response.raise_for_status()
         return list(response.json())

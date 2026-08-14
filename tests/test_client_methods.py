@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from mcp_zammad.client import ZammadClient
+from mcp_zammad.client import DEFAULT_REQUEST_TIMEOUT, MAX_REQUEST_TIMEOUT, ZammadClient
 
 # Test constants to avoid magic numbers
 EXPECTED_TWO_RESULTS = 2
@@ -630,7 +630,9 @@ class TestZammadClientMethods:
         assert result[0]["count"] == 15
         assert result[1]["name"] == "billing"
         assert result[2]["name"] == "feature-request"
-        mock_instance.session.get.assert_called_once_with("https://test.zammad.com/api/v1/tag_list")
+        mock_instance.session.get.assert_called_once_with(
+            "https://test.zammad.com/api/v1/tag_list", timeout=DEFAULT_REQUEST_TIMEOUT
+        )
 
     def test_list_tags_empty(self, mock_zammad_api: Mock) -> None:
         """Test list_tags returns empty list when no tags defined."""
@@ -708,6 +710,7 @@ class TestGetTicketExpandsReferenceFields:
                 "group": "GSI Tech Team",
                 "state": "closed",
                 "priority": "2 normal",
+                "owner": "agent@example.com",
                 "customer": "user@example.com",
             }
         )
@@ -719,6 +722,7 @@ class TestGetTicketExpandsReferenceFields:
         assert result["group"] == "GSI Tech Team"
         assert result["state"] == "closed"
         assert result["priority"] == "2 normal"
+        assert result["owner"] == "agent@example.com"
         assert result["customer"] == "user@example.com"
 
     def test_http_error_propagates(self, mock_zammad_api: Mock) -> None:
@@ -732,3 +736,68 @@ class TestGetTicketExpandsReferenceFields:
         client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
         with pytest.raises(requests.HTTPError):
             client.get_ticket(999, include_articles=False)
+
+
+class TestRequestTimeout:
+    """Direct HTTP calls must carry a bounded timeout.
+
+    requests defaults to waiting forever, so a stalled Zammad connection would
+    hang the tool call with no way to recover.
+    """
+
+    @pytest.fixture
+    def mock_zammad_api(self):
+        with patch("mcp_zammad.client.ZammadAPI") as mock_api:
+            yield mock_api
+
+    def _client(self, mock_zammad_api: Mock, **kwargs) -> tuple[ZammadClient, Mock]:
+        mock_instance = Mock()
+        mock_instance.session.get.return_value = _mock_ticket_response({"id": 1})
+        mock_zammad_api.return_value = mock_instance
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token", **kwargs)
+        return client, mock_instance
+
+    def test_default_timeout_applied(self, mock_zammad_api: Mock) -> None:
+        """get_ticket passes the default timeout."""
+        client, mock_instance = self._client(mock_zammad_api)
+        client.get_ticket(1, include_articles=False)
+        assert mock_instance.session.get.call_args.kwargs["timeout"] == DEFAULT_REQUEST_TIMEOUT
+
+    def test_explicit_timeout_used(self, mock_zammad_api: Mock) -> None:
+        """A constructor timeout overrides the default."""
+        client, mock_instance = self._client(mock_zammad_api, timeout=5.0)
+        client.get_ticket(1, include_articles=False)
+        assert mock_instance.session.get.call_args.kwargs["timeout"] == 5.0
+
+    def test_list_tags_uses_same_timeout(self, mock_zammad_api: Mock) -> None:
+        """The other direct session call is bounded consistently."""
+        client, mock_instance = self._client(mock_zammad_api, timeout=7.5)
+        mock_instance.session.get.return_value = _mock_ticket_response([])
+        client.list_tags()
+        assert mock_instance.session.get.call_args.kwargs["timeout"] == 7.5
+
+    def test_env_var_configures_timeout(self, mock_zammad_api: Mock, monkeypatch) -> None:
+        """ZAMMAD_REQUEST_TIMEOUT sets the bound."""
+        monkeypatch.setenv("ZAMMAD_REQUEST_TIMEOUT", "12.5")
+        client, mock_instance = self._client(mock_zammad_api)
+        client.get_ticket(1, include_articles=False)
+        assert mock_instance.session.get.call_args.kwargs["timeout"] == 12.5
+
+    @pytest.mark.parametrize("value", ["0", "-1", "abc", "", "601"])
+    def test_invalid_env_falls_back_to_default(self, mock_zammad_api: Mock, monkeypatch, value: str) -> None:
+        """Unusable values fall back rather than disabling the bound."""
+        monkeypatch.setenv("ZAMMAD_REQUEST_TIMEOUT", value)
+        client, _ = self._client(mock_zammad_api)
+        assert client.timeout == DEFAULT_REQUEST_TIMEOUT
+
+    def test_max_timeout_accepted(self, mock_zammad_api: Mock, monkeypatch) -> None:
+        """The upper bound itself is valid."""
+        monkeypatch.setenv("ZAMMAD_REQUEST_TIMEOUT", str(MAX_REQUEST_TIMEOUT))
+        client, _ = self._client(mock_zammad_api)
+        assert client.timeout == MAX_REQUEST_TIMEOUT
+
+    def test_timeout_is_never_none(self, mock_zammad_api: Mock) -> None:
+        """No configuration path yields an unbounded wait."""
+        client, _ = self._client(mock_zammad_api)
+        assert client.timeout is not None
+        assert client.timeout > 0
