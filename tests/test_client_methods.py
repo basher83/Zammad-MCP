@@ -15,6 +15,14 @@ EXPECTED_TWO_RESULTS = 2
 EXPECTED_THREE_RESULTS = 3
 
 
+def _mock_ticket_response(payload: dict) -> Mock:
+    """Build a mock requests.Response for the expanded single-ticket endpoint."""
+    response = Mock()
+    response.json.return_value = payload
+    response.raise_for_status.return_value = None
+    return response
+
+
 class TestZammadClientMethods:
     """Test ZammadClient methods."""
 
@@ -323,7 +331,7 @@ class TestZammadClientMethods:
     def test_get_ticket_with_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with article pagination."""
         mock_instance = Mock()
-        mock_instance.ticket.find.return_value = {"id": 1, "title": "Test Ticket"}
+        mock_instance.session.get.return_value = _mock_ticket_response({"id": 1, "title": "Test Ticket"})
         mock_instance.ticket.articles.return_value = [
             {"id": 1, "body": "Article 1"},
             {"id": 2, "body": "Article 2"},
@@ -346,7 +354,7 @@ class TestZammadClientMethods:
     def test_get_ticket_all_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with all articles."""
         mock_instance = Mock()
-        mock_instance.ticket.find.return_value = {"id": 1, "title": "Test Ticket"}
+        mock_instance.session.get.return_value = _mock_ticket_response({"id": 1, "title": "Test Ticket"})
         mock_instance.ticket.articles.return_value = [{"id": 1, "body": "Article 1"}, {"id": 2, "body": "Article 2"}]
         mock_zammad_api.return_value = mock_instance
 
@@ -652,3 +660,75 @@ class TestZammadClientMethods:
 
         with pytest.raises(requests.HTTPError, match="403"):
             client.list_tags()
+
+
+class TestGetTicketExpandsReferenceFields:
+    """get_ticket must request expanded fields.
+
+    The single-ticket endpoint returns only group_id/state_id/priority_id unless
+    expand is requested, which previously left Ticket.group, .state, .priority,
+    .owner and .customer as None so tools rendered them as "Unknown".
+    """
+
+    @pytest.fixture
+    def mock_zammad_api(self):
+        with patch("mcp_zammad.client.ZammadAPI") as mock_api:
+            yield mock_api
+
+    def test_requests_expand(self, mock_zammad_api: Mock) -> None:
+        """The request carries expand=true."""
+        mock_instance = Mock()
+        mock_instance.session.get.return_value = _mock_ticket_response({"id": 1})
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+        client.get_ticket(1, include_articles=False)
+
+        _, kwargs = mock_instance.session.get.call_args
+        assert kwargs["params"] == {"expand": "true"}
+
+    def test_targets_the_ticket_endpoint(self, mock_zammad_api: Mock) -> None:
+        """The request hits /tickets/<id>."""
+        mock_instance = Mock()
+        mock_instance.session.get.return_value = _mock_ticket_response({"id": 42})
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+        client.get_ticket(42, include_articles=False)
+
+        args, _ = mock_instance.session.get.call_args
+        assert args[0] == "https://test.zammad.com/api/v1/tickets/42"
+
+    def test_expanded_names_survive(self, mock_zammad_api: Mock) -> None:
+        """Expanded names are returned rather than dropped."""
+        mock_instance = Mock()
+        mock_instance.session.get.return_value = _mock_ticket_response(
+            {
+                "id": 1,
+                "group": "GSI Tech Team",
+                "state": "closed",
+                "priority": "2 normal",
+                "customer": "user@example.com",
+            }
+        )
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+        result = client.get_ticket(1, include_articles=False)
+
+        assert result["group"] == "GSI Tech Team"
+        assert result["state"] == "closed"
+        assert result["priority"] == "2 normal"
+        assert result["customer"] == "user@example.com"
+
+    def test_http_error_propagates(self, mock_zammad_api: Mock) -> None:
+        """A failed request raises rather than returning a partial ticket."""
+        mock_instance = Mock()
+        response = Mock()
+        response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        mock_instance.session.get.return_value = response
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+        with pytest.raises(requests.HTTPError):
+            client.get_ticket(999, include_articles=False)
