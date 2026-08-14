@@ -301,9 +301,18 @@ class TicketSearchParams(StrictBaseModel):
     group: str | None = Field(None, description="Filter by group name")
     owner: str | None = Field(None, description="Filter by owner login/email")
     customer: str | None = Field(None, description="Filter by customer email")
+    created_after: date | None = Field(None, description="Only tickets created on or after this date (YYYY-MM-DD)")
+    created_before: date | None = Field(None, description="Only tickets created on or before this date (YYYY-MM-DD)")
     page: int = Field(default=1, ge=1, description="Page number (must be >= 1)")
     per_page: int = Field(default=25, ge=1, le=100, description="Results per page (1-100)")
     response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "TicketSearchParams":
+        """Reject an inverted date range rather than silently returning nothing."""
+        if self.created_after and self.created_before and self.created_after > self.created_before:
+            raise ValueError("created_after must not be later than created_before")
+        return self
 
 
 class Attachment(BaseModel):
