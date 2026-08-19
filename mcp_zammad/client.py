@@ -247,8 +247,8 @@ class ZammadClient:
         priority: str | None = None,
         owner: str | None = None,
         group: str | None = None,
-        customer: str | None = None,
         time_unit: float | None = None,
+        customer: str | None = None,
     ) -> dict[str, Any]:
         """Update an existing ticket."""
         if time_unit is not None and time_unit <= 0:

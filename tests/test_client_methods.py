@@ -86,7 +86,7 @@ class TestZammadClientMethods:
 
         result = client.update_ticket(1, customer="new@example.com")
 
-        assert "customer" in result
+        assert result["customer"]["email"] == "new@example.com"
         mock_instance.ticket.update.assert_called_once_with(1, {"customer": "new@example.com"})
 
     def test_update_ticket_with_time_unit(self, mock_zammad_api: Mock) -> None:
