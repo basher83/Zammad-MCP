@@ -72,6 +72,23 @@ class TestZammadClientMethods:
         assert result["title"] == "Updated Title"
         mock_instance.ticket.update.assert_called_once_with(1, {"title": "Updated Title", "state": "open"})
 
+    def test_update_ticket_with_customer(self, mock_zammad_api: Mock) -> None:
+        """Test update_ticket method with customer reassignment."""
+        mock_instance = Mock()
+        mock_instance.ticket.update.return_value = {
+            "id": 1,
+            "title": "Updated Title",
+            "customer": {"email": "new@example.com"},
+        }
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.update_ticket(1, customer="new@example.com")
+
+        assert "customer" in result
+        mock_instance.ticket.update.assert_called_once_with(1, {"customer": "new@example.com"})
+
     def test_update_ticket_with_time_unit(self, mock_zammad_api: Mock) -> None:
         """Test update_ticket method with time_unit for time accounting."""
         mock_instance = Mock()
