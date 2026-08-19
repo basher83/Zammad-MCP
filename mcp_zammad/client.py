@@ -248,6 +248,7 @@ class ZammadClient:
         owner: str | None = None,
         group: str | None = None,
         time_unit: float | None = None,
+        customer: str | None = None,
     ) -> dict[str, Any]:
         """Update an existing ticket."""
         if time_unit is not None and time_unit <= 0:
@@ -264,6 +265,8 @@ class ZammadClient:
             update_data["owner"] = owner
         if group is not None:
             update_data["group"] = group
+        if customer is not None:
+            update_data["customer"] = customer
         if time_unit is not None:
             update_data["time_unit"] = time_unit
 
