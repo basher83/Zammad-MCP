@@ -49,7 +49,7 @@ The main server implementation using FastMCP framework.
 
 **Key Features:**
 
-- 22 tools for comprehensive Zammad operations
+- 21 tools for comprehensive Zammad operations
 - 4 resources with URI-based access pattern
 - 3 pre-configured prompts for common scenarios
 - Lifespan management for proper initialization
