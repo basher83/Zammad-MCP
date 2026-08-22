@@ -5,6 +5,7 @@ import os
 from typing import Any
 from urllib.parse import urlparse
 
+import requests  # type: ignore[import-untyped]
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
@@ -189,11 +190,34 @@ class ZammadClient:
 
         return list(result)
 
+    def _find_ticket_expanded(self, ticket_id: int) -> dict[str, Any]:
+        """Fetch a single ticket with ``expand=true``.
+
+        The expand value must be the lowercase string ``"true"`` — Zammad is
+        case-sensitive here and ``requests`` serializes the bool ``True`` as
+        ``"True"``, which Zammad ignores.
+
+        Raises:
+            requests.HTTPError: If the API request fails, carrying Zammad's
+                response body so callers can detect "Couldn't find Ticket ..."
+        """
+        response = self.api.session.get(f"{self.url}/tickets/{ticket_id}", params={"expand": "true"})
+        if not response.ok:
+            raise requests.HTTPError(response.text)
+        return dict(response.json())
+
     def get_ticket(
         self, ticket_id: int, include_articles: bool = True, article_limit: int = 10, article_offset: int = 0
     ) -> dict[str, Any]:
-        """Get a single ticket by ID with optional article pagination."""
-        ticket = self.api.ticket.find(ticket_id)
+        """Get a single ticket by ID with optional article pagination.
+
+        Uses a direct HTTP call via zammad_py's internal session because
+        ``Resource.find()`` accepts no filters, so there is no way to pass
+        ``expand=true`` through it. Without expansion Zammad only returns the
+        ``*_id`` fields and the state/priority/group/owner/customer names all
+        render as "Unknown".
+        """
+        ticket = self._find_ticket_expanded(ticket_id)
 
         if include_articles:
             articles = self.api.ticket.articles(ticket_id)
