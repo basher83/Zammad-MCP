@@ -402,24 +402,6 @@ class DownloadAttachmentParams(StrictBaseModel):
     )
 
 
-class DeleteAttachmentParams(StrictBaseModel):
-    """Delete attachment request parameters."""
-
-    ticket_id: int = Field(gt=0, description="Ticket ID")
-    article_id: int = Field(gt=0, description="Article ID")
-    attachment_id: int = Field(gt=0, description="Attachment ID")
-
-
-class DeleteAttachmentResult(StrictBaseModel):
-    """Result of attachment deletion operation."""
-
-    success: bool = Field(description="Whether the deletion succeeded")
-    ticket_id: int = Field(description="Ticket ID")
-    article_id: int = Field(description="Article ID")
-    attachment_id: int = Field(description="Attachment ID that was deleted")
-    message: str = Field(description="Human-readable result message")
-
-
 class TagOperationParams(StrictBaseModel):
     """Tag operation (add/remove) request parameters."""
 

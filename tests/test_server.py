@@ -20,7 +20,6 @@ from mcp_zammad.models import (
     ArticleType,
     Attachment,
     AttachmentUpload,
-    DeleteAttachmentParams,
     GetOrganizationParams,
     GetTicketParams,
     GetTicketStatsParams,
@@ -45,7 +44,6 @@ from mcp_zammad.models import (
 )
 from mcp_zammad.server import (
     CHARACTER_LIMIT,
-    AttachmentDeletionError,
     ZammadMCPServer,
     _format_ticket_detail_markdown,
     main,
@@ -2595,64 +2593,22 @@ class TestAttachmentSupport:
         with pytest.raises(Exception, match="API Error"):
             server_inst.client.download_attachment(123, 456, 789)  # type: ignore[union-attr]
 
-    def test_delete_attachment_tool_success(self, decorator_capturer) -> None:
-        """Test zammad_delete_attachment tool success."""
+    def test_no_attachment_deletion_tool_is_registered(self, decorator_capturer) -> None:
+        """Zammad exposes no attachment-deletion endpoint, so no tool may claim to.
+
+        The REST API only routes GET /ticket_attachment/:ticket_id/:article_id/:id.
+        The closest supported operation is deleting the whole article via
+        DELETE /ticket_articles/:id.
+        """
         server_inst = ZammadMCPServer()
         server_inst.client = Mock()
 
-        # Mock successful deletion
-        server_inst.client.delete_attachment.return_value = True  # type: ignore[union-attr]
-
-        # Setup tools using decorator_capturer fixture
         test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
         server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
         server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
         server_inst._setup_tools()
 
-        # Create params
-        params = DeleteAttachmentParams(ticket_id=123, article_id=456, attachment_id=789)
-
-        # Call tool
-        result = test_tools["zammad_delete_attachment"](params)
-
-        # Verify result structure
-        assert result.success is True
-        assert result.ticket_id == 123
-        assert result.article_id == 456
-        assert result.attachment_id == 789
-        assert "Successfully deleted attachment 789" in result.message
-        assert "article 456" in result.message
-        assert "ticket 123" in result.message
-
-        # Verify client called correctly
-        server_inst.client.delete_attachment.assert_called_once_with(  # type: ignore[union-attr]
-            ticket_id=123, article_id=456, attachment_id=789
-        )
-
-    def test_delete_attachment_tool_not_found(self, decorator_capturer) -> None:
-        """Test zammad_delete_attachment with non-existent attachment."""
-        server_inst = ZammadMCPServer()
-        server_inst.client = Mock()
-
-        # Mock API error
-        server_inst.client.delete_attachment.side_effect = Exception("Attachment not found")  # type: ignore[union-attr]
-
-        # Setup tools using decorator_capturer fixture
-        test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
-        server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
-        server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
-        server_inst._setup_tools()
-
-        # Create params
-        params = DeleteAttachmentParams(ticket_id=123, article_id=456, attachment_id=999)
-
-        # Verify AttachmentDeletionError is raised
-        with pytest.raises(AttachmentDeletionError) as exc_info:
-            test_tools["zammad_delete_attachment"](params)
-
-        # Verify error details
-        assert exc_info.value.attachment_id == 999
-        assert "Attachment not found" in str(exc_info.value)
+        assert "zammad_delete_attachment" not in test_tools
 
 
 class TestJSONOutputAndTruncation:
