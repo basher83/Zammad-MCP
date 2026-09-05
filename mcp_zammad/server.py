@@ -1883,6 +1883,11 @@ class ZammadMCPServer:
     _STATE_NAME_OPEN = frozenset({"new", "open"})
     _STATE_NAME_CLOSED = frozenset({"closed"})
     _STATE_NAME_PENDING = frozenset({"pending reminder", "pending close"})
+    # Fallback prefix for custom states that Zammad's own UI treats as pending
+    # (e.g. a user-defined "pending refund"). A prefix match is deliberately
+    # narrower than the old substring check: it catches "pending anything"
+    # without misfiring on states that merely contain the word elsewhere.
+    _STATE_NAME_PENDING_PREFIX = "pending"
 
     def _categorize_ticket_state(self, state_name: str) -> tuple[int, int, int]:
         """Categorize a ticket state into open/closed/pending counters.
@@ -1898,16 +1903,17 @@ class ZammadMCPServer:
             than the numeric state_type_id, which is per-instance and unstable:
             - "new", "open" -> open
             - "closed" -> closed
-            - "pending reminder", "pending close" -> pending
-            Any other state (e.g. a custom state) is counted in the total but
-            not in any bucket.
+            - "pending reminder", "pending close", or any custom state starting
+              with "pending " -> pending
+            Any other state (e.g. "merged") is counted in the total but not in
+            any bucket.
         """
         name = state_name.strip().casefold()
         if name in self._STATE_NAME_OPEN:
             return (1, 0, 0)
         if name in self._STATE_NAME_CLOSED:
             return (0, 1, 0)
-        if name in self._STATE_NAME_PENDING:
+        if name in self._STATE_NAME_PENDING or name.startswith(self._STATE_NAME_PENDING_PREFIX):
             return (0, 0, 1)
         return (0, 0, 0)
 
