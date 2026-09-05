@@ -1412,12 +1412,19 @@ def test_categorize_ticket_state_uses_name_not_type_id():
     assert server_inst._categorize_ticket_state("closed") == (0, 1, 0)
     assert server_inst._categorize_ticket_state("pending reminder") == (0, 0, 1)
     assert server_inst._categorize_ticket_state("pending close") == (0, 0, 1)
-    # Custom "pending *" states fall into pending via the prefix fallback,
-    # so user-defined states (e.g. "pending refund") are not silently dropped.
+    # The bare "pending" state (exact match) is pending.
+    assert server_inst._categorize_ticket_state("pending") == (0, 0, 1)
+    # Custom "pending " states fall into pending via the space-terminated
+    # word fallback, so user-defined states (e.g. "pending refund") are not
+    # silently dropped.
     assert server_inst._categorize_ticket_state("pending refund") == (0, 0, 1)
+    # The fallback is deliberately narrow: near-miss names are NOT auto-
+    # pending (a bare prefix or substring would miscount these).
+    assert server_inst._categorize_ticket_state("pendingly") == (0, 0, 0)
+    assert server_inst._categorize_ticket_state("pending-approval") == (0, 0, 0)
+    assert server_inst._categorize_ticket_state("PENDING") == (0, 0, 1)
     assert server_inst._categorize_ticket_state("PENDING APPROVAL") == (0, 0, 1)
-    # The prefix match is deliberately narrow: a state that merely *contains*
-    # "pending" elsewhere (not as a leading word) is NOT auto-pending.
+    # A state that merely *contains* "pending" elsewhere is NOT auto-pending.
     assert server_inst._categorize_ticket_state("reviewed pending approval") == (0, 0, 0)
     # Other custom states: counted in the total, excluded from every bucket.
     assert server_inst._categorize_ticket_state("merged") == (0, 0, 0)
