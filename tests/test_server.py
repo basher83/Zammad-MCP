@@ -1399,12 +1399,10 @@ def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
 
 
 def test_categorize_ticket_state_uses_name_not_type_id():
-    """Categorization must key on the state *name*, not the numeric state_type_id.
-
-    Regression guard: on instances with renumbered built-in states or custom
-    states, the numeric state_type_id does not line up with the defaults, so
-    only the semantic name can be trusted.
-    """
+    """Categorize by state name, not numeric state_type_id (per-instance and unstable)."""
+    # Regression guard: on instances with renumbered built-in states or custom
+    # states, the numeric state_type_id does not line up with the defaults, so
+    # only the semantic name can be trusted.
     server_inst = ZammadMCPServer()
 
     assert server_inst._categorize_ticket_state("new") == (1, 0, 0)
@@ -1433,13 +1431,11 @@ def test_categorize_ticket_state_uses_name_not_type_id():
 
 
 def test_get_ticket_stats_uses_state_name_not_state_type_id(mock_zammad_client, decorator_capturer):
-    """Stats must be correct when state_type_id values are non-default.
-
-    Replicates a real Zammad instance where the built-in states are renumbered
-    (closed=5, pending reminder=3) and a custom "merged" state (id 6) exists.
-    The old implementation compared state_type_id against hardcoded defaults
-    (1-5), which scrambled the counts on such an instance.
-    """
+    """Ticket stats stay correct when state_type_id values are non-default."""
+    # Replicates a real Zammad instance where the built-in states are renumbered
+    # (closed=5, pending reminder=3) and a custom "merged" state (id 6) exists.
+    # The old implementation compared state_type_id against hardcoded defaults
+    # (1-5), which scrambled the counts on such an instance.
     mock_instance, _ = mock_zammad_client
 
     tickets = [
@@ -1457,7 +1453,13 @@ def test_get_ticket_stats_uses_state_name_not_state_type_id(mock_zammad_client, 
     mock_instance.get_ticket_states.return_value = [
         {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
-        {"id": 3, "name": "pending reminder", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {
+            "id": 3,
+            "name": "pending reminder",
+            "state_type_id": 3,
+            "created_at": "2024-01-01",
+            "updated_at": "2024-01-01",
+        },
         {"id": 5, "name": "closed", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 4, "name": "pending close", "state_type_id": 4, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 6, "name": "merged", "state_type_id": 6, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
