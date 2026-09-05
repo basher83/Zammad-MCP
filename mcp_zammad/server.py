@@ -102,14 +102,6 @@ MAX_PER_PAGE = 100  # Maximum results per page for pagination
 CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
 ARTICLE_BODY_TRUNCATE_LENGTH = 500  # Maximum length for article body in markdown formatting
 
-# Zammad state type IDs (from Zammad API)
-STATE_TYPE_NEW = 1
-STATE_TYPE_OPEN = 2
-STATE_TYPE_CLOSED = 3
-STATE_TYPE_PENDING_REMINDER = 4
-STATE_TYPE_PENDING_CLOSE = 5
-
-
 # Tool annotation constants
 def _read_only_annotations(title: str) -> ToolAnnotations:
     """Create read-only tool annotations with title."""
@@ -1848,8 +1840,6 @@ class ZammadMCPServer:
             del self._states_cache
         if hasattr(self, "_priorities_cache"):
             del self._priorities_cache
-        if hasattr(self, "_state_type_mapping"):
-            del self._state_type_mapping
 
     @staticmethod
     def _extract_state_name(ticket: dict[str, Any]) -> str:
@@ -1884,16 +1874,21 @@ class ZammadMCPServer:
             or ticket.get("update_escalation_at")
         )
 
-    def _get_state_type_mapping(self) -> dict[str, int]:
-        """Get mapping of state names to state_type_id.
-
-        Returns:
-            Dictionary mapping state name to state_type_id
-        """
-        if not hasattr(self, "_state_type_mapping"):
-            states = self._get_cached_states()
-            self._state_type_mapping = {state.name: state.state_type_id for state in states}
-        return self._state_type_mapping
+    # Semantic ticket state names that map to the open/closed/pending buckets.
+    # Categorization is keyed on the state *name*, not the numeric state_type_id:
+    # state_type_id is assigned per instance and is not stable across Zammad
+    # versions or installations, so matching on it produced incorrect counts on
+    # instances whose state set differs from the defaults (e.g. a renumbered
+    # "closed" state or an extra custom state such as "merged").
+    _STATE_NAME_OPEN = frozenset({"new", "open"})
+    _STATE_NAME_CLOSED = frozenset({"closed"})
+    _STATE_NAME_PENDING = frozenset({"pending", "pending reminder", "pending close"})
+    # Fallback prefix for custom states that Zammad's own UI treats as pending
+    # (e.g. a user-defined "pending refund"). A space-terminated word match is
+    # deliberately narrower than a bare prefix or substring: it catches
+    # "pending anything" without misfiring on near-miss names such as
+    # "pendingly" or "pending-approval", which are not reliably pending states.
+    _STATE_NAME_PENDING_PREFIX = "pending "
 
     def _categorize_ticket_state(self, state_name: str) -> tuple[int, int, int]:
         """Categorize a ticket state into open/closed/pending counters.
@@ -1905,20 +1900,21 @@ class ZammadMCPServer:
             Tuple of (open_increment, closed_increment, pending_increment)
 
         Note:
-            Uses state_type_id from Zammad instead of string matching:
-            - 1 (new), 2 (open) -> open
-            - 3 (closed) -> closed
-            - 4 (pending reminder), 5 (pending close) -> pending
+            Categorizes by the semantic state name (case-insensitive) rather
+            than the numeric state_type_id, which is per-instance and unstable:
+            - "new", "open" -> open
+            - "closed" -> closed
+            - "pending", "pending reminder", "pending close", or any custom
+              state starting with "pending " (space-terminated) -> pending
+            Any other state (e.g. "merged") is counted in the total but not in
+            any bucket.
         """
-        state_type_mapping = self._get_state_type_mapping()
-        state_type_id = state_type_mapping.get(state_name, 0)
-
-        # Categorize based on state_type_id
-        if state_type_id in [STATE_TYPE_NEW, STATE_TYPE_OPEN]:
+        name = state_name.strip().casefold()
+        if name in self._STATE_NAME_OPEN:
             return (1, 0, 0)
-        if state_type_id == STATE_TYPE_CLOSED:
+        if name in self._STATE_NAME_CLOSED:
             return (0, 1, 0)
-        if state_type_id in [STATE_TYPE_PENDING_REMINDER, STATE_TYPE_PENDING_CLOSE]:
+        if name in self._STATE_NAME_PENDING or name.startswith(self._STATE_NAME_PENDING_PREFIX):
             return (0, 0, 1)
         return (0, 0, 0)
 
@@ -2084,7 +2080,8 @@ class ZammadMCPServer:
             Note:
                 Uses pagination to scan tickets without loading all into memory.
                 May take several seconds for large ticket databases (>10k tickets).
-                State categorization uses state_type_id: new/open=open, closed=closed, pending=pending.
+                State categorization is by semantic state name: new/open=open,
+                closed=closed, pending reminder/pending close=pending.
                 Date filtering (start_date, end_date) not yet implemented - shows warning if provided.
                 Processes up to 100,000 tickets (1000 pages x 100 per page).
             """
@@ -2222,7 +2219,8 @@ class ZammadMCPServer:
                 Results are cached in memory for performance (cleared on server restart).
                 All states are returned in a single response (no pagination needed).
                 Use state 'name' field when creating/updating tickets, not ID.
-                State types: 1=new, 2=open, 3=closed, 4=pending reminder, 5=pending close.
+                The state_type_id values shown are per-instance and are not
+                meaningful across different Zammad installations.
             """
             states = self._get_cached_states()
 
