@@ -1,5 +1,4 @@
-"""
-Expose Pydantic parameter models as flat MCP tool arguments.
+"""Expose Pydantic parameter models as flat MCP tool arguments.
 
 FastMCP derives a tool's ``inputSchema`` from the function signature. A tool
 declared as ``def tool(params: Model)`` therefore advertises a single nested

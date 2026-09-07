@@ -1,5 +1,4 @@
-"""
-Boundary tests for flat tool argument schemas (issue #212).
+"""Boundary tests for flat tool argument schemas (issue #212).
 
 AI agents send tool arguments as a flat dict. Every tool must expose its
 parameters at the top level of ``inputSchema`` and accept flat calls, while
