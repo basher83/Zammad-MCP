@@ -2608,6 +2608,9 @@ class TestAttachmentSupport:
         server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
         server_inst._setup_tools()
 
+        # Sibling attachment tools must still register, so the absence check below is not vacuous.
+        assert "zammad_get_article_attachments" in test_tools
+        assert "zammad_download_attachment" in test_tools
         assert "zammad_delete_attachment" not in test_tools
 
 

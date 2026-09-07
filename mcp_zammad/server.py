@@ -110,17 +110,6 @@ def _write_annotations(title: str) -> ToolAnnotations:
     )
 
 
-def _destructive_write_annotations(title: str) -> ToolAnnotations:
-    """Create destructive write tool annotations with title."""
-    return ToolAnnotations(
-        readOnlyHint=False,
-        destructiveHint=True,
-        idempotentHint=False,
-        openWorldHint=True,
-        title=title,
-    )
-
-
 def _idempotent_write_annotations(title: str) -> ToolAnnotations:
     """Create idempotent write tool annotations with title."""
     return ToolAnnotations(
