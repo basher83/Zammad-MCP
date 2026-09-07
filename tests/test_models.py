@@ -58,6 +58,11 @@ class TestTicketUpdate:
         update = TicketUpdate(title="<i>Important</i> Update")  # type: ignore[call-arg]
         assert update.title == "&lt;i&gt;Important&lt;/i&gt; Update"
 
+    def test_quotes_preserved_in_plain_text_title(self):
+        """Test that quotes remain literal while HTML-sensitive characters are escaped."""
+        update = TicketUpdate(title='<i>Say "hi", it\'s AT&T</i>')  # type: ignore[call-arg]
+        assert update.title == '&lt;i&gt;Say "hi", it\'s AT&amp;T&lt;/i&gt;'
+
     def test_none_title_not_sanitized(self):
         """Test that None title is not processed."""
         update = TicketUpdate(state="closed")  # type: ignore[call-arg]

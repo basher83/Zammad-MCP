@@ -293,7 +293,7 @@ class TicketUpdate(StrictBaseModel):
     @classmethod
     def sanitize_title(cls, v: str | None) -> str | None:
         """Escape HTML to prevent XSS attacks."""
-        return html.escape(v) if v else v
+        return html.escape(v, quote=False) if v else v
 
 
 class TicketSearchParams(StrictBaseModel):
