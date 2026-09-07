@@ -400,7 +400,7 @@ Use create_ticket with:
 ```plaintext
 1. Use get_ticket with ticket_id=123 to see the full conversation
 2. Use add_article to add your response
-3. Use update_ticket to change state to "pending reminder"
+3. Use update_ticket to change state to "pending reminder" with a pending_time (e.g. "2026-07-01T08:00:00Z")
 ```
 
 ### Analyze Escalated Tickets

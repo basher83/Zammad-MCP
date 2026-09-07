@@ -1473,6 +1473,7 @@ def test_resource_handlers(decorator_capturer):
                 created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
                 updated_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
                 created_by=UserBrief(id=1, login="agent", email="agent@example.com"),
+                attachments=[Attachment(id=42, filename="report.pdf", size=2048)],
             )
         ],
     )
@@ -1495,6 +1496,8 @@ def test_resource_handlers(decorator_capturer):
     assert "Priority: high" in result
     assert "Customer: test@example.com" in result
     assert "Initial ticket description" in result
+    assert "download via zammad_download_attachment, article_id=1" in result
+    assert "id=42: report.pdf, 2048 bytes" in result
 
     # Test user resource
     server.client.get_user.return_value = {
