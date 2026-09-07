@@ -1004,6 +1004,30 @@ def test_update_ticket_with_time_unit_tool(mock_zammad_client, sample_ticket_dat
     mock_instance.update_ticket.assert_called_once_with(ticket_id=1, title="Updated Title", time_unit=2.5)
 
 
+def test_update_ticket_with_customer_tool(mock_zammad_client, sample_ticket_data, decorator_capturer):
+    """Test zammad_update_ticket tool forwards customer for reassignment."""
+    mock_instance, _ = mock_zammad_client
+
+    updated_ticket = sample_ticket_data.copy()
+    updated_ticket["customer"] = {"id": 5, "email": "new@example.com"}
+
+    mock_instance.update_ticket.return_value = updated_ticket
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = TicketUpdateParams(ticket_id=1, customer="new@example.com")
+    result = test_tools["zammad_update_ticket"](params)
+
+    assert result.id == 1
+    mock_instance.update_ticket.assert_called_once_with(ticket_id=1, customer="new@example.com")
+
+
 def test_update_ticket_without_time_unit_tool(mock_zammad_client, sample_ticket_data, decorator_capturer):
     """Test zammad_update_ticket tool omits time_unit when not provided."""
     mock_instance, _ = mock_zammad_client
