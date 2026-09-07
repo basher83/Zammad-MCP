@@ -2594,7 +2594,8 @@ class TestAttachmentSupport:
             server_inst.client.download_attachment(123, 456, 789)  # type: ignore[union-attr]
 
     def test_no_attachment_deletion_tool_is_registered(self, decorator_capturer) -> None:
-        """Zammad exposes no attachment-deletion endpoint, so no tool may claim to.
+        """
+        Zammad exposes no attachment-deletion endpoint, so no tool may claim to.
 
         The Zammad REST API only routes GET /ticket_attachment/:ticket_id/:article_id/:id;
         there is no DELETE counterpart. The closest supported operation is deleting the
