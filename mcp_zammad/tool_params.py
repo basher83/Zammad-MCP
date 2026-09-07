@@ -1,4 +1,5 @@
-"""Expose Pydantic parameter models as flat MCP tool arguments.
+"""
+Expose Pydantic parameter models as flat MCP tool arguments.
 
 FastMCP derives a tool's ``inputSchema`` from the function signature. A tool
 declared as ``def tool(params: Model)`` therefore advertises a single nested
@@ -22,13 +23,19 @@ R = TypeVar("R")
 
 
 def flat_params(model: type[M]) -> Callable[[Callable[[M], R]], Callable[..., R]]:
-    """Expose ``model``'s fields as keyword-only tool arguments.
+    """
+    Expose ``model``'s fields as keyword-only tool arguments.
 
-    Args:
-        model: The Pydantic model the decorated tool accepts as its sole ``params`` argument.
+    Parameters
+    ----------
+    model : type[M]
+        The Pydantic model the decorated tool accepts as its sole ``params`` argument.
 
-    Returns:
+    Returns
+    -------
+    Callable[[Callable[[M], R]], Callable[..., R]]
         A decorator that wraps the tool so FastMCP sees one argument per model field.
+
     """
 
     def decorator(fn: Callable[[M], R]) -> Callable[..., R]:
@@ -46,31 +53,42 @@ def flat_params(model: type[M]) -> Callable[[Callable[[M], R]], Callable[..., R]
 
 
 def _flat_signature(model: type[BaseModel], return_annotation: Any) -> inspect.Signature:
-    """Build a signature with one keyword-only parameter per model field.
+    """
+    Build a signature with one keyword-only parameter per model field.
 
-    Args:
-        model: The Pydantic model whose fields become parameters.
-        return_annotation: The wrapped tool's return annotation.
+    Parameters
+    ----------
+    model : type[BaseModel]
+        The Pydantic model whose fields become parameters.
+    return_annotation : Any
+        The wrapped tool's return annotation.
 
-    Returns:
+    Returns
+    -------
+    inspect.Signature
         A signature FastMCP can introspect to produce a flat ``inputSchema``.
+
     """
     parameters = [_field_parameter(name, field) for name, field in model.model_fields.items()]
     return inspect.Signature(parameters, return_annotation=return_annotation)
 
 
 def _field_parameter(name: str, field: FieldInfo) -> inspect.Parameter:
-    """Convert a model field into a keyword-only parameter exposed under its field name.
+    """
+    Convert a model field into a keyword-only parameter.
 
-    Aliases are stripped from the copied ``FieldInfo`` so the schema property and the
-    accepted argument both use the Python field name rather than the API alias.
+    Parameters
+    ----------
+    name : str
+        The model field name.
+    field : FieldInfo
+        The field constraints and default.
 
-    Args:
-        name: The model field name.
-        field: The field's ``FieldInfo`` carrying description, constraints, and default.
+    Returns
+    -------
+    inspect.Parameter
+        The parameter exposed under the Python field name.
 
-    Returns:
-        A keyword-only ``inspect.Parameter`` annotated with the field's constraints.
     """
     info = copy.copy(field)
     info.alias = None

@@ -147,8 +147,8 @@ show_missing = true
 directory = "htmlcov"
 
 [tool.uv]
-# Force transitive dependencies above known-vulnerable ranges.
-override-dependencies = [
+# Constrain transitive dependencies above known-vulnerable ranges.
+constraint-dependencies = [
     "authlib>=1.7.1",
     "click>=8.3.3",
     "cryptography>=50.0.0",
