@@ -29,6 +29,7 @@ dependencies = [
     "pydantic>=2.11.7",
     "python-dotenv>=1.2.2",
     "httpx>=0.28.1",
+    "requests>=2.32.0",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +39,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.15.10",
     "mypy>=1.20.1",
+    "types-requests>=2.32.0",
     "pip-audit>=2.6.0",
     "bandit[sarif]>=1.9.4",
     "safety>=3.7.0",
@@ -112,6 +114,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.15.10",
     "mypy>=1.20.1",
+    "types-requests>=2.32.0",
     "pip-audit>=2.6.0",
     "bandit[sarif]>=1.9.4",
     "safety>=3.7.0",
