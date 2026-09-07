@@ -323,6 +323,8 @@ class TestZammadClientMethods:
     @staticmethod
     def _mock_ticket_response(mock_instance: Mock, payload: dict, *, ok: bool = True, text: str = "") -> Mock:
         """Point the client's session at a canned GET /tickets/{id} response."""
+        # zammad_py normalises its base url to always end with "/".
+        mock_instance.url = "https://test.zammad.com/api/v1/"
         response = Mock()
         response.ok = ok
         response.text = text
@@ -422,6 +424,22 @@ class TestZammadClientMethods:
 
         with pytest.raises(requests.HTTPError, match="Couldn't find Ticket"):
             client.get_ticket(999)
+
+    @pytest.mark.parametrize("base_url", ["https://test.zammad.com/api/v1", "https://test.zammad.com/api/v1/"])
+    def test_get_ticket_url_tolerates_trailing_slash(self, base_url: str) -> None:
+        """A trailing slash on ZAMMAD_URL must not produce ``/api/v1//tickets/1``.
+
+        Uses the real ZammadAPI (which normalises its base url) and only stubs
+        the session, so the URL join is exercised for real.
+        """
+        client = ZammadClient(url=base_url, http_token="test-token")
+        session = Mock()
+        session.get.return_value = Mock(ok=True, json=Mock(return_value={"id": 1}))
+        client.api.session = session
+
+        client.get_ticket(1, include_articles=False)
+
+        session.get.assert_called_once_with("https://test.zammad.com/api/v1/tickets/1", params={"expand": "true"})
 
     def test_create_ticket(self, mock_zammad_api: Mock) -> None:
         """Test create_ticket method."""

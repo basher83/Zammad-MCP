@@ -201,7 +201,9 @@ class ZammadClient:
             requests.HTTPError: If the API request fails, carrying Zammad's
                 response body so callers can detect "Couldn't find Ticket ..."
         """
-        response = self.api.session.get(f"{self.url}/tickets/{ticket_id}", params={"expand": "true"})
+        # self.api.url is zammad_py's normalised base (always ends in "/"), so a
+        # trailing slash on ZAMMAD_URL cannot produce ".../api/v1//tickets/1".
+        response = self.api.session.get(f"{self.api.url}tickets/{ticket_id}", params={"expand": "true"})
         if not response.ok:
             raise requests.HTTPError(response.text)
         return dict(response.json())
