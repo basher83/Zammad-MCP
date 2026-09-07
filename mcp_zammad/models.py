@@ -5,7 +5,7 @@ import html
 import os
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
@@ -671,139 +671,6 @@ class TagOperationResult(BaseModel):
 
     success: bool = Field(description="Whether the operation was successful")
     message: str | None = Field(None, description="Optional message about the operation")
-
-
-# ============================================================================
-# Knowledge Base models (read-only PR)
-# ============================================================================
-
-
-class KnowledgeBaseLocale(BaseModel):
-    """Locale entry associated with a knowledge base."""
-
-    id: int
-    knowledge_base_id: int
-    system_locale_id: int
-    primary: bool = False
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
-class KnowledgeBaseTranslation(BaseModel):
-    """Translation (title / footer) for a knowledge base."""
-
-    id: int
-    title: str | None = None
-    footer_note: str | None = None
-    kb_locale_id: int
-    knowledge_base_id: int
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
-class KnowledgeBase(BaseModel):
-    """Zammad Knowledge Base top-level object."""
-
-    id: int
-    iconset: str | None = None
-    color_highlight: str | None = None
-    color_header: str | None = None
-    color_header_link: str | None = None
-    homepage_layout: str | None = None
-    category_layout: str | None = None
-    active: bool = True
-    show_feed_icon: bool = False
-    custom_address: str | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-    translation_ids: list[int] | None = None
-    kb_locale_ids: list[int] | None = None
-    category_ids: list[int] | None = None
-    answer_ids: list[int] | None = None
-    permission_ids: list[int] | None = None
-
-
-class KnowledgeBaseCategoryTranslation(BaseModel):
-    """Translation (title) for a KB category."""
-
-    id: int
-    title: str | None = None
-    kb_locale_id: int
-    category_id: int
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
-class KnowledgeBaseCategory(BaseModel):
-    """Zammad Knowledge Base category."""
-
-    id: int
-    knowledge_base_id: int
-    parent_id: int | None = None
-    category_icon: str | None = None
-    position: int = 0
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-    translation_ids: list[int] | None = None
-    answer_ids: list[int] | None = None
-    child_ids: list[int] | None = None
-    permission_ids: list[int] | None = None
-    permissions_effective: list[dict[str, Any]] | None = None
-
-
-class KnowledgeBaseAnswerTranslationContent(BaseModel):
-    """Body content for a KB answer translation."""
-
-    id: int
-    body: str | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
-class KnowledgeBaseAnswerTranslation(BaseModel):
-    """Translation (title + body) for a KB answer."""
-
-    id: int
-    title: str | None = None
-    kb_locale_id: int
-    answer_id: int
-    content_id: int | None = None
-    created_by_id: int | None = None
-    updated_by_id: int | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-
-class KnowledgeBaseAnswerAttachment(BaseModel):
-    """Attachment metadata returned inside a KB answer payload."""
-
-    id: int
-    url: str | None = None
-    preview_url: str | None = None
-    filename: str | None = None
-    size: str | None = None
-    preferences: dict[str, Any] | None = None
-
-
-class KnowledgeBaseAnswer(BaseModel):
-    """Zammad Knowledge Base answer (article)."""
-
-    id: int
-    category_id: int
-    promoted: bool = False
-    internal_note: str | None = None
-    position: int = 0
-    archived_at: datetime | None = None
-    archived_by_id: int | None = None
-    internal_at: datetime | None = None
-    internal_by_id: int | None = None
-    published_at: datetime | None = None
-    published_by_id: int | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-    translation_ids: list[int] | None = None
-    attachments: list[KnowledgeBaseAnswerAttachment] | None = None
-    tags: list[str] | None = None
 
 
 # --- KB read-only param models (StrictBaseModel) ---

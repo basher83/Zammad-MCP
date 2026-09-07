@@ -864,7 +864,8 @@ def _format_kb_answer_markdown(answer: dict[str, Any], title: str = "", body: st
     heading = title or f"KB Answer (ID: {answer.get('id', 'N/A')})"
     translation_ids = answer.get("translation_ids") or []
     lines = [
-        f"# {heading}", "",
+        f"# {heading}",
+        "",
         f"**ID**: {answer.get('id', 'N/A')}",
         f"**Category ID**: {answer.get('category_id', 'N/A')}",
         f"**Status**: {status}",
@@ -2847,9 +2848,7 @@ class ZammadMCPServer:
             the given ``category_id`` and its descendants when provided.
             """
             client = self.get_client()
-            results = client.search_kb_answers(
-                params.kb_id, params.query, category_id=params.category_id
-            )
+            results = client.search_kb_answers(params.kb_id, params.query, category_id=params.category_id)
             if params.response_format == ResponseFormat.JSON:
                 result = json.dumps(
                     {"items": results, "count": len(results), "query": params.query},
@@ -2902,9 +2901,7 @@ class ZammadMCPServer:
             client = self.get_client()
             result = client.get_kb_answer_with_content(int(kb_id), int(answer_id))
             body = truncate_response(result["body"]) if result["body"] else ""
-            return _format_kb_answer_markdown(
-                result["answer"], title=result["title"], body=body
-            )
+            return _format_kb_answer_markdown(result["answer"], title=result["title"], body=body)
 
     def _setup_prompts(self) -> None:
         """Register all prompts with the MCP server."""

@@ -4,6 +4,7 @@ import html as _html
 import logging
 import os
 import re as _re
+from collections import deque
 from typing import Any
 from urllib.parse import urlparse
 
@@ -18,10 +19,6 @@ _HTTP_MULTIPLE_CHOICES = 300
 _HTTP_NO_CONTENT = 204
 _HTTP_NOT_FOUND = 404
 
-# KB ID-probe fallback (used only when GET /knowledge_bases returns 404).
-_KB_PROBE_MAX_ID = 200
-_KB_PROBE_MAX_CONSECUTIVE_MISSES = 50
-
 
 def _is_2xx(status_code: int) -> bool:
     """Return True iff the HTTP status code is a 2xx success."""
@@ -29,7 +26,6 @@ def _is_2xx(status_code: int) -> bool:
 
 
 class ZammadAPIError(Exception):
-
     """
     Raised when the Zammad API returns a non-2xx response.
 
@@ -529,9 +525,8 @@ class ZammadClient:
     def _kb_raise_or_return(self, response: Any) -> dict[str, Any] | list[Any]:
         """Raise ZammadAPIError on HTTP error, otherwise return the parsed JSON body.
 
-        Empty bodies (204 / no content) on KB read endpoints are also raised
-        as ZammadAPIError instead of being returned as ``{}`` so unexpected
-        API states are not silently masked.
+        Empty, malformed, or unexpected bodies on KB endpoints are also raised
+        as ZammadAPIError so API failures never leak untyped exceptions.
         """
         if not _is_2xx(response.status_code):
             try:
@@ -545,73 +540,52 @@ class ZammadClient:
                 response.url,
                 "Empty response body from KB endpoint",
             )
-        data = response.json()
-        if isinstance(data, list):
+        try:
+            data = response.json()
+        except (TypeError, ValueError) as exc:
+            raise ZammadAPIError(response.status_code, response.url, response.text) from exc
+        if isinstance(data, (dict, list)):
             return data
-        return dict(data)
-
-    def _probe_kb_ids(self) -> list[dict[str, Any]]:
-        """
-        Probe KB IDs as a fallback for the 404-listing compatibility path.
-
-        Some Zammad versions return 404 on GET /knowledge_bases even when KBs
-        exist, so we probe individual IDs. Iteration starts at 1 and stops
-        once either ``_KB_PROBE_MAX_ID`` is reached or after
-        ``_KB_PROBE_MAX_CONSECUTIVE_MISSES`` consecutive 404 responses, which
-        bounds the work even on instances with sparse / high IDs.
-
-        404 (ID not found) is tolerated; any other non-2xx response raises
-        :class:`ZammadAPIError` so authentication / server failures surface.
-        """
-        results: list[dict[str, Any]] = []
-        consecutive_misses = 0
-        for kb_id in range(1, _KB_PROBE_MAX_ID + 1):
-            response = self.api.session.get(self._kb_url(kb_id))
-            if response.status_code == _HTTP_NOT_FOUND:
-                consecutive_misses += 1
-                if consecutive_misses >= _KB_PROBE_MAX_CONSECUTIVE_MISSES:
-                    break
-                continue
-            consecutive_misses = 0
-            data = self._kb_raise_or_return(response)
-            if isinstance(data, dict) and data:
-                results.append(data)
-        return results
-
-    def list_knowledge_bases(self) -> list[dict[str, Any]]:
-        """
-        List all knowledge bases.
-
-        Zammad's GET /knowledge_bases endpoint is unreliable on some versions
-        and returns 404 even when KBs exist. The only documented fallback is
-        the 404 -> ID-probing path; all other error statuses (401/403/5xx)
-        are propagated as :class:`ZammadAPIError`.
-        """
-        response = self.api.session.get(self.api.url + "knowledge_bases")
-        if response.status_code == _HTTP_NOT_FOUND:
-            return self._probe_kb_ids()
-        if not _is_2xx(response.status_code):
-            try:
-                body = response.json()
-            except ValueError:
-                body = response.text
-            raise ZammadAPIError(response.status_code, response.url, body)
-        if not response.content:
-            raise ZammadAPIError(
-                response.status_code,
-                response.url,
-                "Empty response body for knowledge_bases listing",
-            )
-        data = response.json()
-        if isinstance(data, list):
-            return list(data)
-        if isinstance(data, dict) and data:
-            return [data]
         raise ZammadAPIError(
             response.status_code,
             response.url,
-            f"Unexpected knowledge_bases response shape: {type(data).__name__}",
+            f"Unexpected KB response shape: {type(data).__name__}",
         )
+
+    def list_knowledge_bases(self) -> list[dict[str, Any]]:
+        """List all knowledge bases from Zammad's permission-filtered bootstrap payload."""
+        response = self.api.session.post(self.api.url + "knowledge_bases/init")
+        payload = self._kb_raise_or_return(response)
+        if not isinstance(payload, dict):
+            raise ZammadAPIError(
+                response.status_code,
+                response.url,
+                f"Unexpected knowledge_bases init response shape: {type(payload).__name__}",
+            )
+        assets = payload.get("assets", {})
+        if not isinstance(assets, dict):
+            raise ZammadAPIError(
+                response.status_code,
+                response.url,
+                f"Unexpected knowledge_bases assets shape: {type(assets).__name__}",
+            )
+        knowledge_bases = assets.get("KnowledgeBase", {})
+        if not isinstance(knowledge_bases, dict):
+            raise ZammadAPIError(
+                response.status_code,
+                response.url,
+                f"Unexpected KnowledgeBase assets shape: {type(knowledge_bases).__name__}",
+            )
+        results: list[dict[str, Any]] = []
+        for knowledge_base in knowledge_bases.values():
+            if not isinstance(knowledge_base, dict) or not knowledge_base:
+                raise ZammadAPIError(
+                    response.status_code,
+                    response.url,
+                    f"Unexpected KnowledgeBase asset shape: {type(knowledge_base).__name__}",
+                )
+            results.append(knowledge_base)
+        return results
 
     def get_knowledge_base(self, kb_id: int) -> dict[str, Any]:
         """Get a single knowledge base by ID."""
@@ -677,12 +651,10 @@ class ZammadClient:
             value = (translations.get(str(tid)) or {}).get(field)
             if value:
                 return str(value)
-        first = next(iter(translations.values()), {})
+        first: dict[str, Any] = next(iter(translations.values()), {})
         return str(first[field]) if first.get(field) else ""
 
-    def _extract_kb_answer_title(
-        self, raw_payload: dict[str, Any], answer: dict[str, Any]
-    ) -> str:
+    def _extract_kb_answer_title(self, raw_payload: dict[str, Any], answer: dict[str, Any]) -> str:
         """Extract the first available title from translation assets."""
         assets = raw_payload.get("assets") or {}
         translations = assets.get("KnowledgeBaseAnswerTranslation") or {}
@@ -695,20 +667,17 @@ class ZammadClient:
         """Strip HTML tags and unescape entities from a string."""
         return _html.unescape(_re.sub(r"<[^>]+>", " ", html))
 
-    def _body_from_content_assets(
-        self, contents: dict[str, Any], translation_ids: list[int]
-    ) -> str:
+    def _body_from_content_assets(self, contents: dict[str, Any], translation_ids: list[int]) -> str:
         """Extract plain-text body from KnowledgeBaseAnswerTranslationContent."""
         for tid in translation_ids:
             body = (contents.get(str(tid)) or {}).get("body") or ""
             if body:
                 return self._strip_html(body)
-        first_body = next(iter(contents.values()), {}).get("body") or ""
+        first: dict[str, Any] = next(iter(contents.values()), {})
+        first_body = first.get("body") or ""
         return self._strip_html(first_body) if first_body else ""
 
-    def _body_from_translation_assets(
-        self, translations: dict[str, Any], translation_ids: list[int]
-    ) -> str:
+    def _body_from_translation_assets(self, translations: dict[str, Any], translation_ids: list[int]) -> str:
         """Extract plain-text body from translation content_attributes (legacy)."""
         for tid in translation_ids:
             t = translations.get(str(tid)) or {}
@@ -717,9 +686,7 @@ class ZammadClient:
                 return self._strip_html(body)
         return ""
 
-    def _extract_kb_answer_body(
-        self, raw_payload: dict[str, Any], answer: dict[str, Any]
-    ) -> str:
+    def _extract_kb_answer_body(self, raw_payload: dict[str, Any], answer: dict[str, Any]) -> str:
         """Extract the plain-text body from translation assets."""
         assets = raw_payload.get("assets") or {}
         translation_ids: list[int] = answer.get("translation_ids") or []
@@ -731,9 +698,7 @@ class ZammadClient:
             return self._body_from_translation_assets(translations, translation_ids)
         return ""
 
-    def _extract_kb_answer_from_payload(
-        self, payload: dict[str, Any], answer_id: int
-    ) -> dict[str, Any] | None:
+    def _extract_kb_answer_from_payload(self, payload: dict[str, Any], answer_id: int) -> dict[str, Any] | None:
         """Extract the answer dict from a compound KB answer payload."""
         assets = payload.get("assets") or {}
         kb_answers = assets.get("KnowledgeBaseAnswer")
@@ -794,9 +759,7 @@ class ZammadClient:
         body = answer.get("_body") or ""
         return query_lower in title.lower() or query_lower in body.lower()
 
-    def _collect_category_answers(
-        self, kb_id: int, cid: int, query_lower: str
-    ) -> list[dict[str, Any]]:
+    def _collect_category_answers(self, kb_id: int, cid: int, query_lower: str) -> list[dict[str, Any]]:
         """
         Return matching answers from a single category.
 
@@ -817,9 +780,7 @@ class ZammadClient:
                 matches.append(answer)
         return matches
 
-    def _answers_matching_query(
-        self, kb_id: int, category_ids: list[int], query_lower: str
-    ) -> list[dict[str, Any]]:
+    def _answers_matching_query(self, kb_id: int, category_ids: list[int], query_lower: str) -> list[dict[str, Any]]:
         """Return answers whose title or body matches query_lower."""
         results: list[dict[str, Any]] = []
         for cid in category_ids:
@@ -829,10 +790,10 @@ class ZammadClient:
     def _expand_category_ids(self, kb_id: int, root_ids: list[int]) -> list[int]:
         """BFS-expand root category IDs into all descendants via child_ids."""
         visited: list[int] = []
-        queue: list[int] = list(root_ids)
+        queue = deque(root_ids)
         seen: set[int] = set()
         while queue:
-            cid = queue.pop(0)
+            cid = queue.popleft()
             if cid in seen:
                 continue
             seen.add(cid)
@@ -849,9 +810,7 @@ class ZammadClient:
                     queue.append(child_id)
         return visited
 
-    def search_kb_answers(
-        self, kb_id: int, query: str, category_id: int | None = None
-    ) -> list[dict[str, Any]]:
+    def search_kb_answers(self, kb_id: int, query: str, category_id: int | None = None) -> list[dict[str, Any]]:
         """
         Case-insensitive substring search of KB answers across categories.
 
@@ -859,8 +818,6 @@ class ZammadClient:
         its descendants. Otherwise all root categories of the KB are scanned.
         """
         kb = self.get_knowledge_base(kb_id)
-        root_ids = (
-            [category_id] if category_id is not None else (kb.get("category_ids") or [])
-        )
+        root_ids = [category_id] if category_id is not None else (kb.get("category_ids") or [])
         category_ids = self._expand_category_ids(kb_id, root_ids)
         return self._answers_matching_query(kb_id, category_ids, query.lower())
