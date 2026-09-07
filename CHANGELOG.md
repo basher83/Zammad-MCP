@@ -11,6 +11,7 @@
 
 ### 🐛 Bug Fixes
 
+- Expose MCP tool arguments at the top level for AI agent compatibility (#212)
 - Address CodeRabbit review feedback
 - Resolve Codacy D-series docstring violations in changed files
 - *(tests)* Add local fake Zammad server to HTTP integration fixture
