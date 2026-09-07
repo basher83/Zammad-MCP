@@ -34,7 +34,6 @@ from mcp_zammad.models import (
     SearchUsersParams,
     StateBrief,
     Ticket,
-    TicketCreate,
     TicketPriority,
     TicketSearchParams,
     TicketState,
@@ -478,22 +477,19 @@ def test_create_ticket_tool(mock_zammad_client, ticket_factory, decorator_captur
     )
 
 
-def test_create_ticket_customer_not_found_error(mock_zammad_client, decorator_capturer):
-    """Test that create_ticket gives helpful error when customer not found."""
+@pytest.mark.asyncio
+async def test_create_ticket_customer_not_found_error(mock_zammad_client):
+    """Test that the registered create-ticket tool gives a helpful error."""
     mock_instance, _ = mock_zammad_client
     mock_instance.create_ticket.side_effect = Exception("No lookup value found for 'customer'")
 
     server_inst = ZammadMCPServer()
     server_inst.client = mock_instance
-    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
-    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
-    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
-    server_inst._setup_tools()
-
-    params = TicketCreate(title="Test", group="Support", customer="new@example.com", article_body="Body")
+    tool = await server_inst.mcp.get_tool("zammad_create_ticket")
+    assert tool is not None
 
     with pytest.raises(ValueError) as exc_info:
-        test_tools["zammad_create_ticket"](**params.model_dump())
+        await tool.run({"title": "Test", "group": "Support", "customer": "new@example.com", "article_body": "Body"})
 
     assert "zammad_create_user" in str(exc_info.value)
 
