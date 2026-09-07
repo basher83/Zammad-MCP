@@ -959,6 +959,8 @@ class ZammadMCPServer:
                 "group": params.group,
                 "owner": params.owner,
                 "customer": params.customer,
+                "created_after": params.created_after,
+                "created_before": params.created_before,
             }
             filters = [f"{k}='{v}'" for k, v in filter_parts.items() if v]
             query_info = ", ".join(filters) if filters else "All tickets"

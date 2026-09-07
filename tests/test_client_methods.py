@@ -661,7 +661,8 @@ class TestSearchTicketsDateFilters:
     """Creation-date bounds must reach the Zammad search query."""
 
     @pytest.fixture
-    def mock_zammad_api(self):
+    def mock_zammad_api(self) -> Generator[Mock, None, None]:
+        """Mock the underlying zammad_py.ZammadAPI."""
         with patch("mcp_zammad.client.ZammadAPI") as mock_api:
             yield mock_api
 
