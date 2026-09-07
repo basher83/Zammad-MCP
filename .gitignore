@@ -262,3 +262,6 @@ secrets/
 
 # Hookify local rule configs (personal preferences)
 .claude/hookify.*.local.md
+
+# Local vendored deps (used only by feature branches such as PII, not in upstream).
+vendor/
