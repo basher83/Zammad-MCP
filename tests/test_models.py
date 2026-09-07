@@ -38,6 +38,17 @@ class TestTicketCreate:
         )
         assert ticket.article_body == "&lt;b&gt;Bold&lt;/b&gt; and &lt;script&gt;alert('XSS')&lt;/script&gt;"
 
+    def test_quotes_preserved_in_plain_text(self):
+        """Test that double quotes and apostrophes survive sanitization while & is still escaped."""
+        ticket = TicketCreate(
+            title='He said "we\'ve got it"',
+            group="Support",
+            customer="test@example.com",
+            article_body='Quote: "you\'d agree" & more',
+        )
+        assert ticket.title == 'He said "we\'ve got it"'
+        assert ticket.article_body == 'Quote: "you\'d agree" &amp; more'
+
     def test_field_length_limits(self):
         """Test that field length limits are enforced."""
         with pytest.raises(ValidationError) as exc_info:
@@ -85,6 +96,11 @@ class TestArticleCreate:
             body="<div onclick='alert()'>Click me</div>",
         )
         assert article.body == "&lt;div onclick='alert()'&gt;Click me&lt;/div&gt;"
+
+    def test_double_quotes_preserved_in_plain_text_body(self):
+        """Test that double quotes are not turned into &quot; for text/plain bodies."""
+        article = ArticleCreate(ticket_id=123, body='She said "hello" & left')
+        assert article.body == 'She said "hello" &amp; left'
 
     def test_ticket_id_validation(self):
         """Test that ticket_id must be positive."""
