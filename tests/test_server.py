@@ -233,6 +233,28 @@ async def test_prompts():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("name", "arguments"),
+    [
+        ("analyze_ticket", {"ticket_id": "$1"}),
+        ("draft_response", {"ticket_id": "$1", "tone": "$2"}),
+        ("escalation_summary", {"group": "$1"}),
+    ],
+)
+async def test_prompts_render_with_non_numeric_arguments(name: str, arguments: dict[str, str]) -> None:
+    """Prompt arguments arrive as strings, so they must not be coerced to int.
+
+    Clients that turn MCP prompts into slash commands render them with placeholder
+    values such as "$1" to discover their arguments. Annotating ticket_id as int made
+    FastMCP raise PromptError on those placeholders, so the prompts were unusable.
+    """
+    result = await mcp.render_prompt(name, arguments)
+
+    rendered = result.messages[0].content.text  # type: ignore[union-attr]
+    assert "$1" in rendered
+
+
+@pytest.mark.asyncio
 async def test_initialization_failure():
     """Test that initialization handles failures gracefully."""
     with patch("mcp_zammad.server.ZammadClient") as mock_client_class:
@@ -1579,13 +1601,13 @@ def test_prompt_handlers(decorator_capturer):
 
     # Test analyze_ticket prompt
     assert "analyze_ticket" in test_prompts
-    result = test_prompts["analyze_ticket"](ticket_id=123)
+    result = test_prompts["analyze_ticket"](ticket_id="123")
     assert "analyze ticket with ID 123" in result
     assert "get_ticket tool" in result
 
     # Test draft_response prompt
     assert "draft_response" in test_prompts
-    result = test_prompts["draft_response"](ticket_id=123, tone="friendly")
+    result = test_prompts["draft_response"](ticket_id="123", tone="friendly")
     assert "draft a friendly response to ticket with ID 123" in result
     assert "add_article" in result
 
