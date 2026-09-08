@@ -85,10 +85,25 @@ def test_non_string_content_type_rejected() -> None:
         ArticleCreate(ticket_id=1, body="hi", content_type=42)  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize("raw", [42, None, ["json"]])
+def test_non_string_response_format_rejected(raw: object) -> None:
+    """Non-string enum input must not be case-folded; it should fail standard validation."""
+    with pytest.raises(ValidationError, match="response_format"):
+        GetTicketParams(ticket_id=1, response_format=raw)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("field", ["article_type", "sender"])
+def test_non_string_article_enums_rejected(field: str) -> None:
+    """Non-string article enum input should still fail standard validation."""
+    with pytest.raises(ValidationError, match=field):
+        ArticleCreate(ticket_id=1, body="hi", **{field: 42})
+
+
 def test_schema_keeps_canonical_values() -> None:
     """Generated schemas should still advertise only canonical values."""
     ticket_schema = GetTicketParams.model_json_schema()
     article_schema = ArticleCreate.model_json_schema()
     assert ticket_schema["$defs"]["ResponseFormat"]["enum"] == ["markdown", "json"]
+    assert article_schema["$defs"]["ArticleType"]["enum"] == ["note", "email", "phone"]
     assert article_schema["$defs"]["ArticleSender"]["enum"] == ["Agent", "Customer", "System"]
     assert article_schema["properties"]["content_type"]["enum"] == ["text/plain", "text/html"]
