@@ -18,6 +18,7 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_create_ticket` - Create new tickets
   - `zammad_update_ticket` - Update ticket properties
   - `zammad_add_article` - Add comments/notes to tickets
+  - `zammad_merge_tickets` - Merge a ticket into another (irreversible)
   - `zammad_add_ticket_tag` / `zammad_remove_ticket_tag` - Manage ticket tags
   - `zammad_get_ticket_tags` - Get tags assigned to a specific ticket
   - `zammad_list_tags` - List all tags defined in the system (requires admin.tag permission)
@@ -436,6 +437,18 @@ Use zammad_delete_attachment with:
 - article_id: 456
 - attachment_id: 789
 ```
+
+### Merge Duplicate Tickets
+
+Useful for collapsing recurring auto-generated tickets (cron failures, monitoring noise) into one incident. The source ticket's articles move to the target and the source is closed as "merged". This cannot be undone.
+
+```plaintext
+Use zammad_merge_tickets with:
+- source_ticket_id: 123          # internal ID of the ticket to merge away
+- target_ticket_number: "20002"  # display number of the surviving ticket
+```
+
+`target_ticket_id` may be given instead of `target_ticket_number`, but not both.
 
 ## Development
 

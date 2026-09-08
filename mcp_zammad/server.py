@@ -48,6 +48,8 @@ from .models import (
     Ticket,
     TicketCreate,
     TicketIdGuidanceError,
+    TicketMergeParams,
+    TicketMergeResult,
     TicketPriority,
     TicketSearchParams,
     TicketState,
@@ -1404,6 +1406,39 @@ class ZammadMCPServer:
                     else f"Failed to delete attachment {params.attachment_id}"
                 ),
             )
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Merge Tickets"))
+        def zammad_merge_tickets(params: TicketMergeParams) -> TicketMergeResult:
+            """Merge a source ticket into a target ticket.
+
+            All articles from the source ticket are moved to the target and the
+            source is closed with state "merged". This cannot be undone.
+
+            Args:
+                params (TicketMergeParams): Validated parameters containing:
+                    - source_ticket_id (int): Internal ID of the ticket to merge away
+                    - target_ticket_number (str, optional): Display number of the surviving ticket
+                    - target_ticket_id (int, optional): Internal ID of the surviving ticket
+                    Exactly one of target_ticket_number or target_ticket_id is required.
+
+            Returns:
+                TicketMergeResult with the Zammad result and the surviving target ticket
+
+            Examples:
+                - Use when: Collapsing duplicate auto-generated tickets (cron failures,
+                  monitoring noise) into a single incident ticket
+                - Don't use when: Unsure which ticket should survive (search first)
+
+            Note:
+                Requires agent permissions on both tickets. Irreversible.
+            """
+            client = self.get_client()
+            payload = client.merge_tickets(
+                source_ticket_id=params.source_ticket_id,
+                target_ticket_number=params.target_ticket_number,
+                target_ticket_id=params.target_ticket_id,
+            )
+            return TicketMergeResult(result=payload["result"], target_ticket=Ticket(**payload["target_ticket"]))
 
         @self.mcp.tool(annotations=_idempotent_write_annotations("Add Ticket Tag"))
         def zammad_add_ticket_tag(params: TagOperationParams) -> TagOperationResult:
