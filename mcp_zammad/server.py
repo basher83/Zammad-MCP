@@ -1181,7 +1181,7 @@ class ZammadMCPServer:
                 params (ArticleCreate): Validated article creation parameters containing:
                     - ticket_id (int): Internal database ID (required, NOT display number)
                     - body (str): Article content/message (required)
-                    - article_type (ArticleType): Article type - note, email, or phone (required)
+                    - article_type (ArticleType): Article type - note, email, or phone (default: note)
                     - internal (bool): Internal note vs customer-visible (default: False)
                     - subject (str | None): Article subject (for emails)
                     - content_type (str | None): text/plain or text/html (default: text/plain)
@@ -1205,9 +1205,9 @@ class ZammadMCPServer:
                 ```
 
             Examples:
-                - Use when: "Add note to ticket 123" -> ticket_id=123, body="text", article_type=NOTE
-                - Use when: "Reply to customer" -> ticket_id=123, body="reply", article_type=EMAIL
-                - Use when: "Internal comment" -> ticket_id=123, body="note", article_type=NOTE, internal=True
+                - Use when: "Add note to ticket 123" -> ticket_id=123, body="text", article_type="note"
+                - Use when: "Reply to customer" -> ticket_id=123, body="reply", article_type="email"
+                - Use when: "Internal comment" -> ticket_id=123, body="note", article_type="note", internal=True
                 - Use when: "Upload files with article" -> ticket_id=123, body="See attached", attachments=[...]
                 - Don't use when: Creating new ticket (use zammad_create_ticket with article)
                 - Don't use when: Updating ticket fields (use zammad_update_ticket)
