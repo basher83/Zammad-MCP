@@ -21,7 +21,8 @@ SIGNATURE_PREFIX = "sha1="
 class EventSink(Protocol):
     """Destination for accepted, normalized events."""
 
-    def append(self, event: WebhookEvent) -> None: ...  # codacy: ignore E704
+    def append(self, event: WebhookEvent) -> None:
+        """Retain one accepted event."""
 
 
 class WebhookRejectedError(Exception):
@@ -76,22 +77,34 @@ def _classify(ticket: Mapping[str, Any], article: Mapping[str, Any] | None) -> E
     return "ticket.article.create"
 
 
-def normalize_payload(payload: Any, *, trigger: str | None, received_at: datetime) -> WebhookEvent:
-    """Reduce a Zammad ticket webhook payload to its stable identifying fields.
-
-    Raises:
-        WebhookRejectedError: 400 when the payload is not a ticket delivery with integer identifiers.
-    """
+def _require_ticket(payload: Any) -> tuple[Mapping[str, Any], int]:
     ticket = payload.get("ticket") if isinstance(payload, Mapping) else None
     ticket_id = _optional_int(ticket.get("id")) if isinstance(ticket, Mapping) else None
     if ticket is None or ticket_id is None:
         raise WebhookRejectedError(
             400, "Unsupported payload: expected a Zammad ticket webhook with an integer ticket.id"
         )
+    return ticket, ticket_id
+
+
+def _optional_article(payload: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, int | None]:
     article = payload.get("article")
+    if article is None:
+        return None, None
     article_id = _optional_int(article.get("id")) if isinstance(article, Mapping) else None
-    if article is not None and article_id is None:
+    if article_id is None:
         raise WebhookRejectedError(400, "Unsupported payload: ticket article must carry an integer article.id")
+    return article, article_id
+
+
+def normalize_payload(payload: Any, *, trigger: str | None, received_at: datetime) -> WebhookEvent:
+    """Reduce a Zammad ticket webhook payload to its stable identifying fields.
+
+    Raises:
+        WebhookRejectedError: 400 when the payload is not a ticket delivery with integer identifiers.
+    """
+    ticket, ticket_id = _require_ticket(payload)
+    article, article_id = _optional_article(payload)
     number = ticket.get("number")
     return WebhookEvent(
         event_type=_classify(ticket, article),

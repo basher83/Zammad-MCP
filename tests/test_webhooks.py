@@ -10,11 +10,11 @@ import pytest
 from mcp_zammad.events import EventStore
 from mcp_zammad.webhooks import WebhookHandler
 
-SECRET = "test-webhook-secret"
+SIGNING_KEY = "unit-test-hmac-key"  # not a real credential
 RECEIVED_AT = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
 
 
-def sign(body: bytes, secret: str = SECRET) -> str:
+def sign(body: bytes, secret: str = SIGNING_KEY) -> str:
     return "sha1=" + hmac.new(secret.encode(), body, hashlib.sha1).hexdigest()
 
 
@@ -48,7 +48,7 @@ def store() -> EventStore:
 
 @pytest.fixture
 def handler(store: EventStore) -> WebhookHandler:
-    return WebhookHandler(secret_provider=lambda: SECRET, clock=lambda: RECEIVED_AT, sink=store)
+    return WebhookHandler(secret_provider=lambda: SIGNING_KEY, clock=lambda: RECEIVED_AT, sink=store)
 
 
 def test_signed_ticket_update_is_accepted_and_normalized(handler: WebhookHandler, store: EventStore) -> None:

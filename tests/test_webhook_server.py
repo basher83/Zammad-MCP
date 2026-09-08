@@ -15,11 +15,11 @@ from fastmcp import Client
 from mcp_zammad.events import EventStore, WebhookEvent
 from mcp_zammad.server import ZammadMCPServer
 
-SECRET = "server-test-secret"
+SIGNING_KEY = "server-test-hmac-key"  # not a real credential
 ROUTE = "/webhooks/zammad"
 
 
-def signed(payload: dict, secret: str = SECRET) -> tuple[bytes, dict[str, str]]:
+def signed(payload: dict, secret: str = SIGNING_KEY) -> tuple[bytes, dict[str, str]]:
     body = json.dumps(payload).encode()
     signature = "sha1=" + hmac.new(secret.encode(), body, hashlib.sha1).hexdigest()
     return body, {"content-type": "application/json", "x-hub-signature": signature}
@@ -37,7 +37,7 @@ def zammad_client() -> Iterator[Mock]:
 
 @pytest.fixture
 def server_with_secret(zammad_client: Mock) -> Iterator[ZammadMCPServer]:
-    with patch.dict("os.environ", {"ZAMMAD_WEBHOOK_SECRET": SECRET}):
+    with patch.dict("os.environ", {"ZAMMAD_WEBHOOK_SECRET": SIGNING_KEY}):
         yield ZammadMCPServer(event_store=EventStore(capacity=3))
 
 

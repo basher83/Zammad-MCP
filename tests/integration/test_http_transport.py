@@ -20,10 +20,10 @@ from fastmcp import Client
 
 logger = logging.getLogger(__name__)
 
-WEBHOOK_SECRET = "integration-webhook-secret"
+WEBHOOK_SIGNING_KEY = "integration-test-hmac-key"  # not a real credential
 
 
-def signed_delivery(payload: dict, secret: str = WEBHOOK_SECRET) -> tuple[bytes, dict[str, str]]:
+def signed_delivery(payload: dict, secret: str = WEBHOOK_SIGNING_KEY) -> tuple[bytes, dict[str, str]]:
     """Build a Zammad-style webhook body and HMAC-SHA1 ``X-Hub-Signature`` header."""
     body = json.dumps(payload).encode()
     signature = "sha1=" + hmac.new(secret.encode(), body, hashlib.sha1).hexdigest()
@@ -128,7 +128,7 @@ def http_server(mock_zammad_server: str) -> Iterator[str]:
             "MCP_PORT": str(port),
             "ZAMMAD_URL": mock_zammad_server,
             "ZAMMAD_HTTP_TOKEN": "test-token",
-            "ZAMMAD_WEBHOOK_SECRET": WEBHOOK_SECRET,
+            "ZAMMAD_WEBHOOK_SECRET": WEBHOOK_SIGNING_KEY,
         }
     )
 
