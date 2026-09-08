@@ -1,5 +1,8 @@
 """Integration tests for HTTP transport."""
 
+import asyncio
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -13,8 +16,18 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import httpx
 import pytest
+from fastmcp import Client
 
 logger = logging.getLogger(__name__)
+
+WEBHOOK_SECRET = "integration-webhook-secret"
+
+
+def signed_delivery(payload: dict, secret: str = WEBHOOK_SECRET) -> tuple[bytes, dict[str, str]]:
+    """Build a Zammad-style webhook body and HMAC-SHA1 ``X-Hub-Signature`` header."""
+    body = json.dumps(payload).encode()
+    signature = "sha1=" + hmac.new(secret.encode(), body, hashlib.sha1).hexdigest()
+    return body, {"Content-Type": "application/json", "X-Hub-Signature": signature}
 
 
 def start_mcp_server(
@@ -115,6 +128,7 @@ def http_server(mock_zammad_server: str) -> Iterator[str]:
             "MCP_PORT": str(port),
             "ZAMMAD_URL": mock_zammad_server,
             "ZAMMAD_HTTP_TOKEN": "test-token",
+            "ZAMMAD_WEBHOOK_SECRET": WEBHOOK_SECRET,
         }
     )
 
@@ -185,6 +199,31 @@ def test_mcp_endpoint_exists(http_server) -> None:
     assert location is not None, "Location header must be present in 307 redirect"
     # FastMCP redirects from /mcp/ (with slash) to /mcp (without slash)
     assert location.endswith("/mcp"), f"Expected redirect to /mcp endpoint, got: {location}"
+
+
+@pytest.mark.integration
+def test_webhook_delivery_is_retrievable_through_mcp(http_server) -> None:
+    """Signed deliveries are accepted, unsigned ones rejected, and events are listable via MCP."""
+    first, first_headers = signed_delivery({"ticket": {"id": 501, "number": "10501"}})
+    second, second_headers = signed_delivery({"ticket": {"id": 502, "article_count": 4}, "article": {"id": 9}})
+    forged, forged_headers = signed_delivery({"ticket": {"id": 503}}, secret="not-the-secret")
+
+    assert httpx.post(f"{http_server}/webhooks/zammad", content=first, headers=first_headers).status_code == 202
+    assert httpx.post(f"{http_server}/webhooks/zammad", content=second, headers=second_headers).status_code == 202
+    assert httpx.post(f"{http_server}/webhooks/zammad", content=forged, headers=forged_headers).status_code == 401
+
+    async def list_events() -> dict:
+        async with Client(f"{http_server}/mcp") as client:
+            result = await client.call_tool("zammad_list_events", {"params": {"limit": 10}})
+        return result.structured_content
+
+    data = asyncio.run(list_events())
+    assert [(e["event_type"], e["ticket_id"]) for e in data["events"]] == [
+        ("ticket.update", 501),
+        ("ticket.article.create", 502),
+    ]
+    assert data["events"][1]["article_id"] == 9
+    assert data["retained_total"] == 2
 
 
 @pytest.mark.integration

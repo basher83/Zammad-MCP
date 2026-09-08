@@ -39,6 +39,9 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_list_ticket_priorities` - Get all priority levels (cached for performance)
   - `zammad_get_ticket_stats` - Get ticket statistics (optimized with pagination)
 
+- **Webhook Events** (HTTP transport only)
+  - `zammad_list_events` - Poll ticket events delivered by Zammad webhooks (see [Webhook Events](#webhook-events-http-transport-only))
+
 ### Resources
 
 Access Zammad data directly:
@@ -380,6 +383,37 @@ Configure your MCP client to use HTTP transport:
 3. **HTTPS**: Use reverse proxy for TLS
 4. **Firewall**: Restrict access to trusted networks
 5. **Host/Origin Validation**: Configure this at the authenticated proxy; the server does not add it automatically
+
+### Webhook Events (HTTP Transport Only)
+
+Instead of repeatedly searching for changed tickets, Zammad can push ticket events to the server, and MCP clients poll
+them with `zammad_list_events`. This needs `MCP_TRANSPORT=http`; stdio mode has no inbound listener.
+
+1. **Configure a secret** (the endpoint answers `503` until it is set):
+
+   ```bash
+   export ZAMMAD_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+   ```
+
+2. **Expose `POST /webhooks/zammad`** to your Zammad instance, behind TLS (reverse proxy). The signature proves the
+   payload came from Zammad but does not encrypt it.
+
+3. **Create the webhook in Zammad** (admin only): *Manage → Webhooks → New Webhook*
+   - Endpoint: `https://your-mcp-host/webhooks/zammad`
+   - HMAC SHA1 Signature Token: the same value as `ZAMMAD_WEBHOOK_SECRET`
+   - Keep the default JSON payload (the server reads `ticket.id`, `ticket.number`, `ticket.article_count`,
+     `ticket.updated_at`, and `article.id`)
+
+4. **Create a trigger** (*Manage → Triggers → New Trigger*) that fires on the ticket actions you care about and executes
+   the webhook.
+
+The server maps deliveries to `ticket.create` (first article), `ticket.article.create` (later articles), or
+`ticket.update` (no article in payload). Invalid or missing `X-Hub-Signature` headers return `401`; non-ticket or
+malformed payloads return `400`. Only identifiers and timestamps are retained — never article bodies.
+
+Retention is process-local and bounded (1000 events, oldest evicted first) and is lost on restart. Poll with
+`zammad_list_events`, pass the returned `next_since` as `since` on the next call, then fetch details with
+`zammad_get_ticket`.
 
 ## Examples
 
