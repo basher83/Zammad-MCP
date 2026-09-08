@@ -12,6 +12,7 @@ from mcp_zammad.models import (
     ResponseFormat,
     TicketCreate,
     TicketUpdate,
+    TicketUpdateParams,
 )
 
 
@@ -68,6 +69,21 @@ class TestTicketUpdate:
         with pytest.raises(ValidationError) as exc_info:
             TicketUpdate(title="x" * 201)  # type: ignore[call-arg]  # Exceeds 200 char limit
         assert "String should have at most 200 characters" in str(exc_info.value)
+
+
+class TestTicketUpdateParams:
+    """Test TicketUpdateParams model validation."""
+
+    def test_customer_at_max_length_accepted(self):
+        """A 255-character customer value is accepted (max_length boundary)."""
+        params = TicketUpdateParams(ticket_id=1, customer="x" * 255)  # type: ignore[call-arg]
+        assert params.customer == "x" * 255
+
+    def test_customer_over_max_length_rejected(self):
+        """A 256-character customer value is rejected (exceeds max_length)."""
+        with pytest.raises(ValidationError) as exc_info:
+            TicketUpdateParams(ticket_id=1, customer="x" * 256)  # type: ignore[call-arg]
+        assert "String should have at most 255 characters" in str(exc_info.value)
 
 
 class TestArticleCreate:

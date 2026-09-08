@@ -373,6 +373,7 @@ class TicketUpdateParams(StrictBaseModel):
     priority: str | None = Field(None, description="New priority name", max_length=100)
     owner: str | None = Field(None, description="New owner login/email", max_length=255)
     group: str | None = Field(None, description="New group name", max_length=100)
+    customer: str | None = Field(None, description="New customer email/login (must exist in Zammad)", max_length=255)
     time_unit: float | None = Field(
         None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
     )
