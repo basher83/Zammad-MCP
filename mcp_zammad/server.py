@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from .audit import AuditConfig, AuditLogger, AuditMiddleware, error_details
 from .client import ZammadClient
 from .logging_config import configure_logging
 from .models import (
@@ -788,19 +789,31 @@ def _handle_api_error(e: Exception, context: str = "operation") -> str:
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
 
-    def __init__(self, host: str | None = None, port: int | None = None) -> None:
+    def __init__(
+        self,
+        host: str | None = None,
+        port: int | None = None,
+        *,
+        audit_logger: AuditLogger | None = None,
+    ) -> None:
         """Initialize the server.
 
         Args:
             host: Deprecated. Pass host to mcp.run() instead.
             port: Deprecated. Pass port to mcp.run() instead.
+            audit_logger: Audit sink for tool-call and lifecycle events. Defaults to
+                one built from the ZAMMAD_AUDIT_LOG_* environment variables.
 
         """
         if host is not None or port is not None:
             logger.warning("ZammadMCPServer(host=..., port=...) is deprecated; pass host/port to mcp.run(...) instead.")
         self.client: ZammadClient | None = None
+        self._connected_user_id: int | str | None = None
+        self.audit = audit_logger or AuditLogger(AuditConfig.from_env(os.environ))
         # Create FastMCP with lifespan configured
         self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
+        if self.audit.enabled:
+            self.mcp.add_middleware(AuditMiddleware(self.audit))
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
@@ -839,12 +852,13 @@ class ZammadMCPServer:
     def _create_client(self, *, verify_connection: bool) -> ZammadClient:
         """Create a Zammad client after loading environment configuration."""
         self._bootstrap_env()
-        client = ZammadClient()
+        client = ZammadClient(audit_logger=self.audit)
         logger.info("Zammad client initialized successfully")
 
         if verify_connection:
             current_user = client.get_current_user()
-            logger.info("Connected as user ID: %s", current_user.get("id", "unknown"))
+            self._connected_user_id = current_user.get("id")
+            logger.info("Connected as user ID: %s", self._connected_user_id or "unknown")
 
         return client
 
@@ -859,9 +873,12 @@ class ZammadMCPServer:
         """Initialize the Zammad client on server startup."""
         try:
             self.client = self._create_client(verify_connection=True)
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to initialize Zammad client")
+            self.audit.log_event("authentication", "zammad_connect", success=False, details=error_details(exc))
             raise
+        details = {"user_id": self._connected_user_id}
+        self.audit.log_event("authentication", "zammad_connect", success=True, details=details)
 
     def _setup_tools(self) -> None:
         """Register all tools with the MCP server."""
