@@ -162,6 +162,18 @@ filtered_data = {k: v for k, v in data.items()
                 if k not in ['password', 'token', 'secret']}
 ```
 
+### MCP Server Audit Logging
+
+The server can emit an opt-in audit trail (`ZAMMAD_AUDIT_LOG_ENABLED=true`) as JSON Lines to
+stderr, a file, or syslog. It records tool-call outcomes, connection outcomes, and URL security
+checks for forensic review. It is an operator-controlled aid, not a compliance certification:
+
+- Records contain no tool arguments, Zammad responses, credentials, or full URLs; failures are
+  logged by exception type only, and sensitive-looking `details` keys are redacted.
+- Records are written locally only. Retention, rotation, and access control for file and syslog
+  destinations are the operator's responsibility; treat the audit file as sensitive metadata.
+- Audit output never uses stdout, so it cannot corrupt the stdio transport.
+
 ## Zammad Instance Security
 
 ### Instance Configuration
