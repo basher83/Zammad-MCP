@@ -5,7 +5,7 @@ import html
 import os
 from datetime import date, datetime
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
@@ -384,6 +384,10 @@ class TicketUpdateParams(StrictBaseModel):
         return html.escape(v) if v else v
 
 
+# Same bounds as TagOperationParams.tag so bulk and single-tag tools reject the same input.
+TagName = Annotated[str, Field(min_length=1, max_length=100)]
+
+
 class BulkTicketUpdateParams(StrictBaseModel):
     """Bulk ticket update request parameters."""
 
@@ -396,8 +400,8 @@ class BulkTicketUpdateParams(StrictBaseModel):
     owner: str | None = Field(None, description="New owner login/email", max_length=255)
     group: str | None = Field(None, description="New group name", max_length=100)
     time_unit: float | None = Field(None, description="Time spent per ticket for time accounting", gt=0)
-    add_tags: list[str] | None = Field(None, description="Tags to add to every ticket")
-    remove_tags: list[str] | None = Field(None, description="Tags to remove from every ticket")
+    add_tags: list[TagName] | None = Field(None, description="Tags to add to every ticket")
+    remove_tags: list[TagName] | None = Field(None, description="Tags to remove from every ticket")
     note: str | None = Field(None, description="Internal note to add to every ticket", max_length=10000)
     delay_seconds: float = Field(0, ge=0, description="Pause between tickets to reduce API pressure")
 
