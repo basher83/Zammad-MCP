@@ -26,6 +26,9 @@ from .models import (
     ArticleCreate,
     Attachment,
     AttachmentDownloadError,
+    BulkTicketUpdateParams,
+    BulkUpdateFailure,
+    BulkUpdateResult,
     DeleteAttachmentParams,
     DeleteAttachmentResult,
     DownloadAttachmentParams,
@@ -785,6 +788,61 @@ def _handle_api_error(e: Exception, context: str = "operation") -> str:
     return f"Error during {context}: {type(e).__name__} - {e}"
 
 
+_BULK_TICKET_FIELDS = {"title", "state", "priority", "owner", "group", "time_unit"}
+
+
+def _apply_bulk_ticket_actions(client: ZammadClient, ticket_id: int, params: BulkTicketUpdateParams) -> None:
+    """Apply every requested bulk action to a single ticket.
+
+    Args:
+        client: Zammad client boundary.
+        ticket_id: Internal ticket ID to modify.
+        params: Validated bulk request describing the actions.
+
+    Raises:
+        Exception: Any client error from the first failing action.
+    """
+    fields = params.model_dump(include=_BULK_TICKET_FIELDS, exclude_none=True)
+    if fields:
+        client.update_ticket(ticket_id=ticket_id, **fields)
+    for tag in params.add_tags or []:
+        client.add_ticket_tag(ticket_id, tag)
+    for tag in params.remove_tags or []:
+        client.remove_ticket_tag(ticket_id, tag)
+    if params.note is not None:
+        client.add_article(ticket_id=ticket_id, body=params.note, article_type="note", internal=True)
+
+
+def _run_bulk_ticket_update(client: ZammadClient, params: BulkTicketUpdateParams) -> BulkUpdateResult:
+    """Process tickets sequentially, collecting per-ticket outcomes.
+
+    Args:
+        client: Zammad client boundary.
+        params: Validated bulk request.
+
+    Returns:
+        BulkUpdateResult: Successful IDs, failures with reasons, and totals.
+    """
+    successful: list[int] = []
+    failed: list[BulkUpdateFailure] = []
+    last_index = len(params.ticket_ids) - 1
+    for index, ticket_id in enumerate(params.ticket_ids):
+        try:
+            _apply_bulk_ticket_actions(client, ticket_id, params)
+            successful.append(ticket_id)
+        except Exception as e:
+            error = _handle_api_error(e, f"bulk update of ticket {ticket_id}")
+            failed.append(BulkUpdateFailure(ticket_id=ticket_id, error=error))
+        if params.delay_seconds and index < last_index:
+            time.sleep(params.delay_seconds)
+    return BulkUpdateResult(
+        successful_ticket_ids=successful,
+        failed=failed,
+        total_processed=len(params.ticket_ids),
+        total_successful=len(successful),
+    )
+
+
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
 
@@ -1482,6 +1540,52 @@ class ZammadMCPServer:
             client = self.get_client()
             result = client.remove_ticket_tag(params.ticket_id, params.tag)
             return TagOperationResult(**result)
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Bulk Update Tickets"))
+        def zammad_bulk_update_tickets(params: BulkTicketUpdateParams) -> BulkUpdateResult:
+            """Apply the same changes to up to 100 tickets in one call (update, assign, tag, close).
+
+            Args:
+                params (BulkTicketUpdateParams): Validated parameters containing:
+                    - ticket_ids (list[int]): 1-100 unique internal database IDs (NOT display numbers)
+                    - title, state, priority, owner, group, time_unit: Same semantics as zammad_update_ticket
+                    - add_tags (list[str] | None): Tags to add to every ticket
+                    - remove_tags (list[str] | None): Tags to remove from every ticket
+                    - note (str | None): Internal note added to every ticket
+                    - delay_seconds (float): Pause between tickets (default 0)
+                At least one field, tag, or note must be supplied.
+
+            Returns:
+                BulkUpdateResult: Per-ticket outcome summary with schema:
+
+                ```json
+                {
+                    "successful_ticket_ids": [1, 3],
+                    "failed": [{"ticket_id": 2, "error": "Error: Resource not found ..."}],
+                    "total_processed": 3,
+                    "total_successful": 2
+                }
+                ```
+
+            Examples:
+                - Use when: "Close tickets 1, 2, 3" -> ticket_ids=[1, 2, 3], state="closed"
+                - Use when: "Assign these to Alice" -> ticket_ids=[...], owner="alice@company.com"
+                - Use when: "Tag all as vip" -> ticket_ids=[...], add_tags=["vip"]
+                - Use when: "Close with a note" -> ticket_ids=[...], state="closed", note="Resolved"
+                - Don't use when: Changing a single ticket (use zammad_update_ticket)
+                - Don't use when: More than 100 tickets (split into multiple calls)
+
+            Error Handling:
+                - Tickets are processed one at a time; a failure never stops the batch
+                - Each failure is reported in `failed` with an actionable message
+                - A ticket appears in successful_ticket_ids only if every requested action succeeded
+                - Zammad has no bulk endpoint: earlier tickets stay changed if a later one fails
+
+            Note:
+                This is a destructive, non-atomic operation. Review ticket_ids carefully
+                (use zammad_search_tickets first) before applying mass state or owner changes.
+            """
+            return _run_bulk_ticket_update(self.get_client(), params)
 
     def _setup_user_org_tools(self) -> None:
         """Register user and organization tools."""
