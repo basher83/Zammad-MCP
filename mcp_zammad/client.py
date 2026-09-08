@@ -5,6 +5,7 @@ import os
 from typing import Any
 from urllib.parse import urlparse
 
+import requests  # type: ignore[import-untyped]
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
@@ -75,16 +76,14 @@ class ZammadClient:
         )
         if self.insecure:
             # Allow connecting to instances with self-signed/missing CA certs.
-            session = getattr(self.api, "session", None)
-            if session is None:
-                connection = getattr(self.api, "_connection", None)
-                session = getattr(connection, "session", None) if connection is not None else None
-            if session is None:
+            try:
+                session = self._api_session()
+            except ConfigException:
                 msg = (
                     "ZAMMAD_INSECURE is enabled but the installed zammad-py client does not expose a "
                     "requests session; TLS verification cannot be disabled."
                 )
-                raise ConfigException(msg)
+                raise ConfigException(msg) from None
             session.verify = False
             logger.warning(
                 "TLS certificate verification is disabled (ZAMMAD_INSECURE=true). "
@@ -151,6 +150,56 @@ class ZammadClient:
         """Parse common truthy values from environment variables."""
         value = os.getenv(env_var, "").strip().lower()
         return value in {"1", "true", "yes", "on"}
+
+    def _api_session(self) -> requests.Session:
+        """Return zammad_py's internal requests session (auth and TLS config included)."""
+        # The session already carries the configured authentication
+        # (Authorization header for tokens, basic-auth tuple for
+        # username/password) and TLS configuration (verify=False when
+        # ZAMMAD_INSECURE is enabled), so direct HTTP calls through it
+        # behave exactly like the library's own REST calls.
+        #
+        # Raises ConfigException if the installed zammad-py version does not
+        # expose a session.
+        session = getattr(self.api, "session", None)
+        if session is None:
+            connection = getattr(self.api, "_connection", None)
+            session = getattr(connection, "session", None) if connection is not None else None
+        if session is None:
+            raise ConfigException(
+                "The installed zammad-py client does not expose a requests session; "
+                "direct HTTP requests are unavailable."
+            )
+        return session
+
+    def graphql(self, query: str, variables: dict[str, Any] | None = None, timeout: float = 30.0) -> dict[str, Any]:
+        """Execute a GraphQL query against the Zammad /graphql endpoint."""
+        # The modern Zammad web UI uses GraphQL instead of legacy REST endpoints
+        # (some of which, like /overviews and /tickets/selector, may reject
+        # personal access tokens). GraphQL is backed by database queries, so
+        # counts returned here are real-time and do not depend on the search
+        # index (unlike /tickets/search, which can be stale when Elasticsearch
+        # reindexing lags).
+        #
+        # Raises ConfigException (zammad-py session unavailable),
+        # requests.RequestException (HTTP errors), ValueError (GraphQL errors
+        # in the payload) or TypeError (unexpected payload shape).
+        parsed = urlparse(self.url or "")
+        graphql_url = f"{parsed.scheme}://{parsed.netloc}/graphql"
+
+        response = self._api_session().post(
+            graphql_url,
+            json={"query": query, "variables": variables or {}},
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("errors"):
+            raise ValueError(f"GraphQL query failed: {payload['errors']}")
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise TypeError(f"Unexpected GraphQL response shape: {payload!r}")
+        return data
 
     def search_tickets(
         self,
@@ -478,6 +527,6 @@ class ZammadClient:
             requests.HTTPError: If the API request fails (e.g., 403 Forbidden)
         """
         # Use zammad_py's internal session for authentication
-        response = self.api.session.get(f"{self.url}/tag_list")
+        response = self._api_session().get(f"{self.url}/tag_list")
         response.raise_for_status()
         return list(response.json())
