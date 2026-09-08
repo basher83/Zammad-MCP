@@ -3,7 +3,7 @@
 import logging
 import os
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
@@ -504,6 +504,7 @@ class ZammadClient:
         Raises:
             ValueError: If not exactly one target is given, or Zammad reports failure in-band.
             requests.HTTPError: If the API request fails (e.g., 403 Forbidden, 404 Not Found).
+
         """
         if (target_ticket_number is None) == (target_ticket_id is None):
             msg = "Provide exactly one of target_ticket_number or target_ticket_id"
@@ -511,7 +512,10 @@ class ZammadClient:
         if target_ticket_number is None:
             target_ticket_number = str(self.api.ticket.find(target_ticket_id)["number"])
 
-        response = self.api.session.put(f"{self.url}/ticket_merge/{source_ticket_id}/{target_ticket_number}")
+        # Encode as a single path segment so "/" or "?" in a caller-supplied number
+        # cannot redirect the authenticated PUT to a different endpoint.
+        target_segment = quote(target_ticket_number, safe="")
+        response = self.api.session.put(f"{self.url}/ticket_merge/{source_ticket_id}/{target_segment}")
         response.raise_for_status()
         payload = dict(response.json())
         if payload.get("result") != "success":

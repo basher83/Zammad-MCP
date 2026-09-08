@@ -41,6 +41,24 @@ def test_merge_by_target_number(api: Mock) -> None:
     api.ticket.find.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("number", "encoded"),
+    [
+        ("../../tickets/7", "..%2F..%2Ftickets%2F7"),
+        ("abc?x=1", "abc%3Fx%3D1"),
+        ("20002", "20002"),
+    ],
+)
+def test_merge_encodes_target_number_as_single_path_segment(api: Mock, number: str, encoded: str) -> None:
+    """A caller-supplied number must never redirect the authenticated PUT to another endpoint."""
+    api.session.put.return_value = _put_response({"result": "success", "target_ticket": TARGET})
+    client = ZammadClient(url=URL, http_token="test-token")
+
+    client.merge_tickets(10, target_ticket_number=number)
+
+    api.session.put.assert_called_once_with(f"{URL}/ticket_merge/10/{encoded}")
+
+
 def test_merge_by_target_id_resolves_number(api: Mock) -> None:
     api.ticket.find.return_value = dict(TARGET)
     api.session.put.return_value = _put_response({"result": "success", "target_ticket": TARGET})
