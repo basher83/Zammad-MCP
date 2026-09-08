@@ -78,6 +78,18 @@ def _classify(ticket: Mapping[str, Any], article: Mapping[str, Any] | None) -> E
 
 
 def _require_ticket(payload: Any) -> tuple[Mapping[str, Any], int]:
+    """Extract the ticket object and its integer id from a webhook payload.
+
+    Args:
+        payload: Decoded JSON body of the delivery; any type is accepted.
+
+    Returns:
+        The ticket mapping and its id.
+
+    Raises:
+        WebhookRejectedError: 400 when the payload is not a mapping with an
+            integer ``ticket.id``.
+    """
     ticket = payload.get("ticket") if isinstance(payload, Mapping) else None
     ticket_id = _optional_int(ticket.get("id")) if isinstance(ticket, Mapping) else None
     if ticket is None or ticket_id is None:
@@ -88,6 +100,18 @@ def _require_ticket(payload: Any) -> tuple[Mapping[str, Any], int]:
 
 
 def _optional_article(payload: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, int | None]:
+    """Extract the article object and its integer id when the payload carries one.
+
+    Args:
+        payload: Decoded JSON body of the delivery, already known to be a mapping.
+
+    Returns:
+        ``(article, article_id)``, or ``(None, None)`` when no article is present.
+
+    Raises:
+        WebhookRejectedError: 400 when an article is present but lacks an
+            integer ``article.id``.
+    """
     article = payload.get("article")
     if article is None:
         return None, None
