@@ -26,8 +26,6 @@ from .models import (
     ArticleCreate,
     Attachment,
     AttachmentDownloadError,
-    DeleteAttachmentParams,
-    DeleteAttachmentResult,
     DownloadAttachmentParams,
     GetArticleAttachmentsParams,
     GetOrganizationParams,
@@ -57,27 +55,6 @@ from .models import (
     UserBrief,
     UserCreate,
 )
-
-
-class AttachmentDeletionError(Exception):
-    """Raised when attachment deletion fails."""
-
-    def __init__(self, ticket_id: int, article_id: int, attachment_id: int, reason: str) -> None:
-        """Initialize attachment deletion error.
-
-        Args:
-            ticket_id: Ticket ID
-            article_id: Article ID
-            attachment_id: Attachment ID that failed to delete
-            reason: Reason for failure
-        """
-        self.ticket_id = ticket_id
-        self.article_id = article_id
-        self.attachment_id = attachment_id
-        self.reason = reason
-        super().__init__(
-            f"Failed to delete attachment {attachment_id} from article {article_id} in ticket {ticket_id}: {reason}"
-        )
 
 
 # Protocol for items that can be dumped to dict (for type safety)
@@ -1359,51 +1336,6 @@ class ZammadMCPServer:
 
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")
-
-        @self.mcp.tool(annotations=_destructive_write_annotations("Delete Attachment"))
-        def zammad_delete_attachment(params: DeleteAttachmentParams) -> DeleteAttachmentResult:
-            """Delete an attachment from a ticket article.
-
-            Args:
-                params: DeleteAttachmentParams with ticket_id, article_id, attachment_id
-
-            Returns:
-                DeleteAttachmentResult with success status and message
-
-            Examples:
-                - Use when: Removing incorrect file uploads or outdated attachments
-                - Don't use when: Attachment IDs unknown (list attachments first)
-
-            Note:
-                Requires Zammad delete permissions. Deletion is permanent.
-            """
-            client = self.get_client()
-
-            try:
-                success = client.delete_attachment(
-                    ticket_id=params.ticket_id,
-                    article_id=params.article_id,
-                    attachment_id=params.attachment_id,
-                )
-            except Exception as e:
-                raise AttachmentDeletionError(
-                    ticket_id=params.ticket_id,
-                    article_id=params.article_id,
-                    attachment_id=params.attachment_id,
-                    reason=str(e),
-                ) from e
-
-            return DeleteAttachmentResult(
-                success=success,
-                ticket_id=params.ticket_id,
-                article_id=params.article_id,
-                attachment_id=params.attachment_id,
-                message=(
-                    f"Successfully deleted attachment {params.attachment_id} from article {params.article_id} in ticket {params.ticket_id}"
-                    if success
-                    else f"Failed to delete attachment {params.attachment_id}"
-                ),
-            )
 
         @self.mcp.tool(annotations=_idempotent_write_annotations("Add Ticket Tag"))
         def zammad_add_ticket_tag(params: TagOperationParams) -> TagOperationResult:

@@ -6,8 +6,6 @@ from pydantic import ValidationError
 from mcp_zammad.models import (
     ArticleCreate,
     AttachmentUpload,
-    DeleteAttachmentParams,
-    DeleteAttachmentResult,
     GetTicketParams,
     ResponseFormat,
     TicketCreate,
@@ -185,53 +183,3 @@ class TestArticleCreateWithAttachments:
         assert article.ticket_id == 123
         assert article.body == "Simple comment"
         assert article.attachments is None
-
-
-class TestDeleteAttachmentParams:
-    """Tests for DeleteAttachmentParams model."""
-
-    def test_valid_params(self):
-        """Test creating valid delete attachment parameters."""
-        params = DeleteAttachmentParams(ticket_id=123, article_id=456, attachment_id=789)
-        assert params.ticket_id == 123
-        assert params.article_id == 456
-        assert params.attachment_id == 789
-
-    def test_invalid_ticket_id(self):
-        """Test that ticket_id must be positive."""
-        with pytest.raises(ValidationError, match="greater than 0"):
-            DeleteAttachmentParams(ticket_id=0, article_id=456, attachment_id=789)
-
-
-class TestDeleteAttachmentResult:
-    """Tests for DeleteAttachmentResult model."""
-
-    def test_successful_deletion(self):
-        """Test creating successful deletion result."""
-        result = DeleteAttachmentResult(
-            success=True,
-            ticket_id=123,
-            article_id=456,
-            attachment_id=789,
-            message="Successfully deleted attachment 789 from article 456 in ticket 123",
-        )
-        assert result.success is True
-        assert result.ticket_id == 123
-        assert result.article_id == 456
-        assert result.attachment_id == 789
-        assert "Successfully deleted" in result.message
-
-    def test_failed_deletion(self):
-        """Test creating failed deletion result."""
-        result = DeleteAttachmentResult(
-            success=False,
-            ticket_id=123,
-            article_id=456,
-            attachment_id=789,
-            message="Failed to delete attachment 789",
-        )
-        assert result.success is False
-        assert result.ticket_id == 123
-        assert result.article_id == 456
-        assert result.attachment_id == 789
-        assert "Failed" in result.message
