@@ -5,7 +5,7 @@ import html
 import os
 from datetime import date, datetime
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
@@ -204,7 +204,13 @@ class Article(BaseModel):
 
 
 class Ticket(BaseModel):
-    """Zammad ticket."""
+    """Zammad ticket.
+
+    Custom object attributes defined in Zammad Admin arrive as additional
+    top-level keys and are retained as extra fields.
+    """
+
+    model_config = ConfigDict(extra="allow")
 
     id: int
     number: str
@@ -376,12 +382,30 @@ class TicketUpdateParams(StrictBaseModel):
     time_unit: float | None = Field(
         None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
     )
+    custom_fields: dict[str, Any] | None = Field(
+        None,
+        description="Custom Zammad object attributes to set, keyed by attribute name (e.g. {'region': 'north'})",
+    )
 
     @field_validator("title")
     @classmethod
     def sanitize_title(cls, v: str | None) -> str | None:
         """Escape HTML to prevent XSS attacks."""
         return html.escape(v) if v else v
+
+    @field_validator("custom_fields")
+    @classmethod
+    def reject_reserved_custom_field_names(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Reject custom field names that are empty or shadow built-in update fields."""
+        if v is None:
+            return v
+        reserved = set(cls.model_fields) - {"custom_fields"}
+        for name in v:
+            if not name:
+                raise ValueError("custom_fields keys must be non-empty attribute names")
+            if name in reserved:
+                raise ValueError(f"custom_fields key '{name}' is a built-in field; pass it as a top-level parameter")
+        return v
 
 
 class GetArticleAttachmentsParams(StrictBaseModel):
