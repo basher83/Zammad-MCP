@@ -20,6 +20,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .client import ZammadClient
+from .kb_tools import register_knowledge_base_resources, register_knowledge_base_tools
 from .logging_config import configure_logging
 from .models import (
     Article,
@@ -868,6 +869,7 @@ class ZammadMCPServer:
         self._setup_ticket_tools()
         self._setup_user_org_tools()
         self._setup_system_tools()
+        register_knowledge_base_tools(self.mcp, self.get_client, truncate_response, _read_only_annotations)
 
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
@@ -2469,6 +2471,7 @@ class ZammadMCPServer:
         self._setup_user_resource()
         self._setup_organization_resource()
         self._setup_queue_resource()
+        register_knowledge_base_resources(self.mcp, self.get_client, truncate_response)
 
     def _setup_ticket_resource(self) -> None:
         """Register ticket resource."""
