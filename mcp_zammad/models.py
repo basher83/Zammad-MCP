@@ -5,9 +5,36 @@ import html
 import os
 from datetime import date, datetime
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+
+
+class CaseInsensitiveStrEnum(str, Enum):
+    """String enum that resolves members case-insensitively while keeping canonical values."""
+
+    @classmethod
+    def _missing_(cls, value: object) -> "CaseInsensitiveStrEnum | None":
+        """Return the member whose value matches ``value`` ignoring case, or None to trigger a normal error.
+
+        Args:
+            value: The raw lookup value that did not match a member exactly.
+
+        Returns:
+            The matching canonical member, or None when no member matches or ``value`` is not a string.
+        """
+        if not isinstance(value, str):
+            return None
+        folded = value.casefold()
+        return next((member for member in cls if member.value.casefold() == folded), None)
+
+
+def _casefold_str(value: Any) -> Any:
+    """Lowercase string input so literal validation is case-insensitive; leave other types untouched."""
+    return value.casefold() if isinstance(value, str) else value
+
+
+ContentType = Annotated[Literal["text/plain", "text/html"], BeforeValidator(_casefold_str)]
 
 
 class StrictBaseModel(BaseModel):
@@ -21,7 +48,7 @@ class StrictBaseModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
-class ResponseFormat(str, Enum):
+class ResponseFormat(CaseInsensitiveStrEnum):
     """Output format for tool responses.
 
     Attributes:
@@ -33,7 +60,7 @@ class ResponseFormat(str, Enum):
     JSON = "json"
 
 
-class ArticleType(str, Enum):
+class ArticleType(CaseInsensitiveStrEnum):
     """Article type enumeration.
 
     Attributes:
@@ -47,7 +74,7 @@ class ArticleType(str, Enum):
     PHONE = "phone"
 
 
-class ArticleSender(str, Enum):
+class ArticleSender(CaseInsensitiveStrEnum):
     """Article sender type enumeration.
 
     Attributes:
@@ -329,7 +356,7 @@ class ArticleCreate(StrictBaseModel):
     subject: str | None = Field(default=None, max_length=500, description="Email subject")
     to: str | None = Field(default=None, max_length=1000, description="Email recipient")
     cc: str | None = Field(default=None, max_length=1000, description="Email CC recipient(s)")
-    content_type: Literal["text/plain", "text/html"] = Field(default="text/plain", description="Article content type")
+    content_type: ContentType = Field(default="text/plain", description="Article content type")
     time_unit: float | None = Field(
         default=None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
     )
