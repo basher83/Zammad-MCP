@@ -8,6 +8,7 @@ import os
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, NoReturn, Protocol, TypeVar
 
@@ -754,6 +755,16 @@ def _format_organization_detail_markdown(org: Organization) -> str:
     return "\n".join(lines)
 
 
+_RATE_LIMIT_GUIDANCE = (
+    "Error: Zammad rate limit reached during {context}{detail}. "
+    "Wait before retrying, reduce request frequency or page size, or enable client-side "
+    "throttling with ZAMMAD_RATE_LIMIT_ENABLED=true."
+)
+_SERVER_ERROR_GUIDANCE = (
+    "Error: Zammad server error during {context}{detail}. "
+    "The server is failing or temporarily unavailable; retry later or check the Zammad instance."
+)
+
 _API_ERROR_GUIDANCE: tuple[tuple[tuple[str, ...], str], ...] = (
     (
         ("not found", "404"),
@@ -761,6 +772,7 @@ _API_ERROR_GUIDANCE: tuple[tuple[tuple[str, ...], str], ...] = (
     ),
     (("forbidden", "403"), "Error: Permission denied for {context}. Your credentials lack access to this resource."),
     (("unauthorized", "401"), "Error: Authentication failed for {context}. Check ZAMMAD_HTTP_TOKEN is valid."),
+    (("429", "too many requests", "rate limit"), _RATE_LIMIT_GUIDANCE),
     (
         ("timeout",),
         "Error: Request timeout during {context}. The server may be slow - try again or reduce the scope.",
@@ -775,11 +787,9 @@ _API_ERROR_GUIDANCE: tuple[tuple[tuple[str, ...], str], ...] = (
 def _resilience_error_message(e: Exception, context: str) -> str | None:
     """Return guidance for retry-exhaustion or open-circuit errors, else None."""
     if isinstance(e, RetryExhaustedError):
-        return (
-            f"Error: Zammad rate limit reached during {context} ({e}). "
-            "Wait before retrying, reduce request frequency or page size, or enable client-side "
-            "throttling with ZAMMAD_RATE_LIMIT_ENABLED=true."
-        )
+        throttled = e.status_code == HTTPStatus.TOO_MANY_REQUESTS
+        template = _RATE_LIMIT_GUIDANCE if throttled else _SERVER_ERROR_GUIDANCE
+        return template.format(context=context, detail=f" ({e})")
     if isinstance(e, CircuitOpenError):
         return f"Error: Zammad is temporarily unavailable during {context} ({e}). Wait for the recovery timeout."
     return None
@@ -804,7 +814,7 @@ def _handle_api_error(e: Exception, context: str = "operation") -> str:
     # First matching pattern wins; order mirrors the original precedence.
     for patterns, template in _API_ERROR_GUIDANCE:
         if any(pattern in error_msg for pattern in patterns):
-            return template.format(context=context)
+            return template.format(context=context, detail="")
 
     # Generic error with type information
     return f"Error during {context}: {type(e).__name__} - {e}"

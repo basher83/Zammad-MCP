@@ -572,7 +572,7 @@ The client wraps every Zammad request with retries, an optional client-side thro
 | `ZAMMAD_MAX_RETRIES` | `3` | Retries for safe reads; `0` disables |
 | `ZAMMAD_RETRY_BACKOFF_BASE` | `1.0` | Backoff seconds: `base * 2^attempt` |
 | `ZAMMAD_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Consecutive failures before failing fast |
-| `ZAMMAD_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `30` | Seconds before a single probe request is allowed |
+| `ZAMMAD_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `30` | Seconds before requests are allowed again; one more failure re-opens the circuit |
 
 Behavior to be aware of:
 
@@ -580,8 +580,9 @@ Behavior to be aware of:
   Writes (`POST`/`PUT`/`PATCH`/`DELETE`) are sent exactly once so a slow Zammad never duplicates a ticket or article.
 - A `Retry-After` header expressed in seconds overrides the backoff (capped at 60s); other formats fall back to backoff.
 - Throttling and circuit state are per process. Multiple server instances do not share a budget.
-- When retries are exhausted or the circuit is open, tools return an `Error:` message naming the cause and the
-  relevant variable. Reduce request frequency, paginate, or enable throttling if you keep hitting Zammad's limits.
+- When retries are exhausted or the circuit is open, tools return an `Error:` message naming the cause: a 429
+  outcome (or a throttled write) points at rate limiting and `ZAMMAD_RATE_LIMIT_ENABLED`; a 5xx outcome reports a
+  server error. Reduce request frequency, paginate, or enable throttling if you keep hitting Zammad's limits.
 
 ## Security
 

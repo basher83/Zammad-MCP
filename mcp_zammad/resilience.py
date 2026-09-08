@@ -63,7 +63,10 @@ def _settle(breaker: CircuitBreaker, method: str, url: str, attempts: int, outco
     breaker.record_failure()
     if method not in SAFE_METHODS:
         return response
-    raise RetryExhaustedError(f"{method} {url} failed after {attempts} attempts; last status {response.status_code}")
+    raise RetryExhaustedError(
+        f"{method} {url} failed after {attempts} attempts; last status {response.status_code}",
+        status_code=response.status_code,
+    )
 
 
 def _make_limiter(config: ResilienceConfig, clock: Clock) -> RateLimiter | None:

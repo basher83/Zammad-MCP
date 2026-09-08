@@ -55,8 +55,18 @@ def test_retry_cap_raises_retry_exhausted() -> None:
         harness.session.get(URL)
 
     assert "429" in str(exc_info.value)
+    assert exc_info.value.status_code == 429
     assert isinstance(exc_info.value, requests.exceptions.RequestException)
     assert len(harness.calls) == 3
+
+
+def test_retry_exhausted_carries_last_server_error_status() -> None:
+    harness = Harness([make_response(503)] * 3, max_retries=2)
+
+    with pytest.raises(RetryExhaustedError) as exc_info:
+        harness.session.get(URL)
+
+    assert exc_info.value.status_code == 503
 
 
 def test_non_retryable_client_error_is_returned_once() -> None:

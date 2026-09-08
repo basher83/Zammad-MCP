@@ -17,7 +17,16 @@ Sleeper = Callable[[float], None]
 
 
 class RetryExhaustedError(requests.exceptions.RequestException):
-    """Raised when a safe request still fails after the configured retries."""
+    """Raised when a safe request still fails after the configured retries.
+
+    Args:
+        message: Human-readable summary of the failed attempts.
+        status_code: HTTP status of the last response (429 or 5xx).
+    """
+
+    def __init__(self, message: str, *, status_code: int) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def is_retryable(response: requests.Response | None) -> bool:
