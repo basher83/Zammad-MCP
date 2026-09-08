@@ -1,4 +1,5 @@
-"""Expose Pydantic parameter models as flat MCP tool arguments.
+"""
+Expose Pydantic parameter models as flat MCP tool arguments.
 
 FastMCP derives a tool's ``inputSchema`` from the function signature. A tool
 declared as ``def tool(params: Model)`` therefore advertises a single nested
@@ -22,8 +23,7 @@ R = TypeVar("R")
 
 
 def flat_params(model: type[M]) -> Callable[[Callable[[M], R]], Callable[..., R]]:
-    """
-    Expose ``model``'s fields as keyword-only tool arguments.
+    """Expose ``model``'s fields as keyword-only tool arguments.
 
     Parameters
     ----------
@@ -52,8 +52,7 @@ def flat_params(model: type[M]) -> Callable[[Callable[[M], R]], Callable[..., R]
 
 
 def _flat_signature(model: type[BaseModel], return_annotation: Any) -> inspect.Signature:
-    """
-    Build a signature with one keyword-only parameter per model field.
+    """Build a signature with one keyword-only parameter per model field.
 
     Parameters
     ----------
@@ -73,8 +72,7 @@ def _flat_signature(model: type[BaseModel], return_annotation: Any) -> inspect.S
 
 
 def _field_parameter(name: str, field: FieldInfo) -> inspect.Parameter:
-    """
-    Convert a model field into a keyword-only parameter.
+    """Convert a model field into a keyword-only parameter.
 
     Parameters
     ----------
