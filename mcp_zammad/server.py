@@ -19,7 +19,8 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from .audit import AuditConfig, AuditLogger, AuditMiddleware, error_details
+from .audit import AuditConfig, AuditLogger, error_details
+from .audit_middleware import AuditMiddleware
 from .client import ZammadClient
 from .logging_config import configure_logging
 from .models import (
