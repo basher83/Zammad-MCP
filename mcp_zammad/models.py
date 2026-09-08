@@ -384,6 +384,42 @@ class TicketUpdateParams(StrictBaseModel):
         return html.escape(v) if v else v
 
 
+class TicketMergeParams(StrictBaseModel):
+    """Merge ticket request parameters (exactly one of target number/ID required)."""
+
+    source_ticket_id: int = Field(
+        gt=0,
+        description="Internal database ID of the duplicate ticket (it is merged away and gets state 'merged')",
+    )
+    target_ticket_number: str | None = Field(
+        None,
+        min_length=1,
+        max_length=50,
+        pattern=r"^\d+$",
+        description="Display number of the ticket to merge into (e.g. '65003')",
+    )
+    target_ticket_id: int | None = Field(
+        None,
+        gt=0,
+        description="Internal database ID of the ticket to merge into (its number is looked up automatically)",
+    )
+
+    @model_validator(mode="after")
+    def exactly_one_target(self) -> "TicketMergeParams":
+        """Ensure exactly one target identifier is provided."""
+        if (self.target_ticket_number is None) == (self.target_ticket_id is None):
+            raise ValueError("Provide exactly one of target_ticket_number or target_ticket_id")
+        return self
+
+
+class TicketMergeResult(BaseModel):
+    """Result of a ticket merge operation."""
+
+    result: str = Field(description="Merge status ('success' on success)")
+    target_ticket: Ticket = Field(description="The surviving ticket after the merge")
+    source_ticket: Ticket | None = Field(None, description="The merged (duplicate) ticket, if returned by the API")
+
+
 class GetArticleAttachmentsParams(StrictBaseModel):
     """Get article attachments request parameters."""
 

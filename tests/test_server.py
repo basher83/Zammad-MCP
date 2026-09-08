@@ -35,6 +35,8 @@ from mcp_zammad.models import (
     StateBrief,
     Ticket,
     TicketCreate,
+    TicketIdGuidanceError,
+    TicketMergeParams,
     TicketPriority,
     TicketSearchParams,
     TicketState,
@@ -496,6 +498,47 @@ def test_create_ticket_customer_not_found_error(mock_zammad_client, decorator_ca
         test_tools["zammad_create_ticket"](params)
 
     assert "zammad_create_user" in str(exc_info.value)
+
+
+class TestMergeTicketsTool:
+    """Test zammad_merge_tickets error attribution (source vs target)."""
+
+    def _setup_merge_tool(self, mock_zammad_client, decorator_capturer):
+        """Build a server with a mocked client and return its merge tool."""
+        mock_instance, _ = mock_zammad_client
+        server_inst = ZammadMCPServer()
+        server_inst.client = mock_instance
+        test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+        server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+        server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+        server_inst._setup_tools()
+        return mock_instance, test_tools["zammad_merge_tickets"]
+
+    def test_target_lookup_failure_reported_against_target(self, mock_zammad_client, decorator_capturer) -> None:
+        """A failing target lookup must not be misreported as a missing source ticket."""
+        mock_instance, merge_tool = self._setup_merge_tool(mock_zammad_client, decorator_capturer)
+        mock_instance.merge_tickets.side_effect = ValueError(
+            "Target ticket lookup failed for target_ticket_id=124: Couldn't find Ticket with 'id'=124"
+        )
+
+        params = TicketMergeParams(source_ticket_id=123, target_ticket_id=124)  # type: ignore[call-arg]
+
+        with pytest.raises(TicketIdGuidanceError) as exc_info:
+            merge_tool(params)
+
+        assert exc_info.value.ticket_id == 124
+
+    def test_source_failure_reported_against_source(self, mock_zammad_client, decorator_capturer) -> None:
+        """A genuine source-ticket failure is still reported against the source ticket."""
+        mock_instance, merge_tool = self._setup_merge_tool(mock_zammad_client, decorator_capturer)
+        mock_instance.merge_tickets.side_effect = Exception("Couldn't find Ticket with 'id'=123")
+
+        params = TicketMergeParams(source_ticket_id=123, target_ticket_number="65004")  # type: ignore[call-arg]
+
+        with pytest.raises(TicketIdGuidanceError) as exc_info:
+            merge_tool(params)
+
+        assert exc_info.value.ticket_id == 123
 
 
 def test_add_article_tool(mock_zammad_client, sample_article_data, decorator_capturer):
