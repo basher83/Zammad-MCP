@@ -39,6 +39,12 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_list_ticket_priorities` - Get all priority levels (cached for performance)
   - `zammad_get_ticket_stats` - Get ticket statistics (optimized with pagination)
 
+- **Knowledge Base (read-only)**
+  - `zammad_list_knowledge_bases` / `zammad_get_knowledge_base` - Discover knowledge bases visible to the current user
+  - `zammad_get_kb_category` - Browse a category's child categories and answers
+  - `zammad_list_kb_answers` / `zammad_search_kb_answers` - List answers or search them by title
+  - `zammad_get_kb_answer` - Read an answer including its body
+
 ### Resources
 
 Access Zammad data directly:
@@ -47,6 +53,9 @@ Access Zammad data directly:
 - `zammad://user/{id}` - User profile information
 - `zammad://organization/{id}` - Organization details
 - `zammad://queue/{group}` - Ticket queue for a group
+- `zammad://kb/{kb_id}` - Knowledge base summary
+- `zammad://kb/{kb_id}/category/{category_id}` - Knowledge base category
+- `zammad://kb/{kb_id}/answer/{answer_id}` - Knowledge base answer with body
 
 ### Prompts
 

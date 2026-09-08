@@ -8,6 +8,13 @@ from urllib.parse import urlparse
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
+from .knowledge_base import (
+    KnowledgeBaseNotFoundError,
+    KnowledgeBaseSnapshot,
+    extract_answer_body,
+    parse_init_assets,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -481,3 +488,79 @@ class ZammadClient:
         response = self.api.session.get(f"{self.url}/tag_list")
         response.raise_for_status()
         return list(response.json())
+
+    def _kb_snapshot(self) -> KnowledgeBaseSnapshot:
+        """Fetch the knowledge-base structure visible to the caller via ``init``.
+
+        Returns:
+            Parsed snapshot of visible knowledge bases, categories and answers.
+
+        Raises:
+            requests.HTTPError: If Zammad rejects the request.
+            KnowledgeBaseResponseError: If the payload has an unexpected shape.
+        """
+        return parse_init_assets(self.api.knowledge_bases.init())
+
+    def list_knowledge_bases(self) -> list[dict[str, Any]]:
+        """List knowledge bases visible to the authenticated user."""
+        return list(self._kb_snapshot().knowledge_bases.values())
+
+    def get_knowledge_base(self, kb_id: int) -> dict[str, Any]:
+        """Get one knowledge base by ID.
+
+        Raises:
+            KnowledgeBaseNotFoundError: If the knowledge base is not visible.
+        """
+        return _lookup(self._kb_snapshot().knowledge_bases, kb_id, "Knowledge base")
+
+    def get_kb_category(self, kb_id: int, category_id: int) -> dict[str, Any]:
+        """Get one category, including its child category and answer IDs.
+
+        Raises:
+            KnowledgeBaseNotFoundError: If the category is not visible in that knowledge base.
+        """
+        return _lookup(_scoped(self._kb_snapshot().categories, kb_id), category_id, "Category")
+
+    def list_kb_answers(self, kb_id: int, category_id: int | None = None) -> list[dict[str, Any]]:
+        """List visible answers in a knowledge base, optionally within one category.
+
+        Raises:
+            KnowledgeBaseNotFoundError: If the category is not visible in that knowledge base.
+        """
+        snapshot = self._kb_snapshot()
+        answers = list(_scoped(snapshot.answers, kb_id).values())
+        if category_id is None:
+            return answers
+        _lookup(_scoped(snapshot.categories, kb_id), category_id, "Category")
+        return [a for a in answers if a["category_id"] == category_id]
+
+    def search_kb_answers(self, kb_id: int, query: str) -> list[dict[str, Any]]:
+        """Find visible answers whose title contains ``query`` (case-insensitive)."""
+        needle = query.lower()
+        return [a for a in _scoped(self._kb_snapshot().answers, kb_id).values() if needle in a["title"].lower()]
+
+    def get_kb_answer(self, kb_id: int, answer_id: int) -> dict[str, Any]:
+        """Get one answer together with its primary-locale body.
+
+        Raises:
+            KnowledgeBaseNotFoundError: If the answer is not visible in that knowledge base.
+            KnowledgeBaseResponseError: If Zammad omits the requested content.
+        """
+        snapshot = self._kb_snapshot()
+        answer = dict(_lookup(_scoped(snapshot.answers, kb_id), answer_id, "Answer"))
+        content_id = snapshot.content_ids[answer_id]
+        payload = self.api.knowledge_bases_answers.find_answer(kb_id, answer_id, include_content_id=content_id)
+        answer["body"] = extract_answer_body(payload, content_id)
+        return answer
+
+
+def _scoped(items: dict[int, dict[str, Any]], kb_id: int) -> dict[int, dict[str, Any]]:
+    """Return only the items that belong to ``kb_id``."""
+    return {item_id: item for item_id, item in items.items() if item["knowledge_base_id"] == kb_id}
+
+
+def _lookup(items: dict[int, dict[str, Any]], item_id: int, kind: str) -> dict[str, Any]:
+    """Return ``items[item_id]`` or raise a loud not-found error."""
+    if item_id not in items:
+        raise KnowledgeBaseNotFoundError(f"{kind} {item_id} not found or not visible to the current user")
+    return items[item_id]
