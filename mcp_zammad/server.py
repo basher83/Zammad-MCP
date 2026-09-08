@@ -1175,7 +1175,7 @@ class ZammadMCPServer:
             except Exception as e:
                 _handle_ticket_not_found_error(params.ticket_id, e)
 
-        @self.mcp.tool(annotations=_write_annotations("Merge Tickets"))
+        @self.mcp.tool(annotations=_destructive_write_annotations("Merge Tickets"))
         def zammad_merge_tickets(params: TicketMergeParams) -> TicketMergeResult:
             """Merge a duplicate ticket into another ticket (irreversible).
 
