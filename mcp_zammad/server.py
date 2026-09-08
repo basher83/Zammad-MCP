@@ -57,6 +57,7 @@ from .models import (
     UserBrief,
     UserCreate,
 )
+from .resilience import CircuitOpenError, RetryExhaustedError
 
 
 class AttachmentDeletionError(Exception):
@@ -753,6 +754,37 @@ def _format_organization_detail_markdown(org: Organization) -> str:
     return "\n".join(lines)
 
 
+_API_ERROR_GUIDANCE: tuple[tuple[tuple[str, ...], str], ...] = (
+    (
+        ("not found", "404"),
+        "Error: Resource not found during {context}. Please verify the ID is correct and you have access.",
+    ),
+    (("forbidden", "403"), "Error: Permission denied for {context}. Your credentials lack access to this resource."),
+    (("unauthorized", "401"), "Error: Authentication failed for {context}. Check ZAMMAD_HTTP_TOKEN is valid."),
+    (
+        ("timeout",),
+        "Error: Request timeout during {context}. The server may be slow - try again or reduce the scope.",
+    ),
+    (
+        ("connection", "network"),
+        "Error: Network issue during {context}. Check ZAMMAD_URL is correct and the server is reachable.",
+    ),
+)
+
+
+def _resilience_error_message(e: Exception, context: str) -> str | None:
+    """Return guidance for retry-exhaustion or open-circuit errors, else None."""
+    if isinstance(e, RetryExhaustedError):
+        return (
+            f"Error: Zammad rate limit reached during {context} ({e}). "
+            "Wait before retrying, reduce request frequency or page size, or enable client-side "
+            "throttling with ZAMMAD_RATE_LIMIT_ENABLED=true."
+        )
+    if isinstance(e, CircuitOpenError):
+        return f"Error: Zammad is temporarily unavailable during {context} ({e}). Wait for the recovery timeout."
+    return None
+
+
 def _handle_api_error(e: Exception, context: str = "operation") -> str:
     """Format errors with actionable guidance for LLM agents.
 
@@ -763,23 +795,16 @@ def _handle_api_error(e: Exception, context: str = "operation") -> str:
     Returns:
         Formatted error message with guidance
     """
+    resilience_message = _resilience_error_message(e, context)
+    if resilience_message is not None:
+        return resilience_message
+
     error_msg = str(e).lower()
 
-    # Check for specific error patterns
-    if "not found" in error_msg or "404" in error_msg:
-        return f"Error: Resource not found during {context}. Please verify the ID is correct and you have access."
-
-    if "forbidden" in error_msg or "403" in error_msg:
-        return f"Error: Permission denied for {context}. Your credentials lack access to this resource."
-
-    if "unauthorized" in error_msg or "401" in error_msg:
-        return f"Error: Authentication failed for {context}. Check ZAMMAD_HTTP_TOKEN is valid."
-
-    if "timeout" in error_msg:
-        return f"Error: Request timeout during {context}. The server may be slow - try again or reduce the scope."
-
-    if "connection" in error_msg or "network" in error_msg:
-        return f"Error: Network issue during {context}. Check ZAMMAD_URL is correct and the server is reachable."
+    # First matching pattern wins; order mirrors the original precedence.
+    for patterns, template in _API_ERROR_GUIDANCE:
+        if any(pattern in error_msg for pattern in patterns):
+            return template.format(context=context)
 
     # Generic error with type information
     return f"Error during {context}: {type(e).__name__} - {e}"

@@ -176,6 +176,15 @@ The server requires Zammad API credentials. Use a `.env` file:
    # Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
    # LOG_LEVEL=INFO
 
+   # Optional: Resilience (see "Rate Limiting" under Troubleshooting)
+   # ZAMMAD_RATE_LIMIT_ENABLED=false
+   # ZAMMAD_RATE_LIMIT_REQUESTS=60
+   # ZAMMAD_RATE_LIMIT_WINDOW=60
+   # ZAMMAD_MAX_RETRIES=3
+   # ZAMMAD_RETRY_BACKOFF_BASE=1.0
+   # ZAMMAD_CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+   # ZAMMAD_CIRCUIT_BREAKER_RECOVERY_TIMEOUT=30
+
    # Optional: Transport Configuration
    # MCP_TRANSPORT=stdio  # Transport type: stdio (default) or http
    # MCP_HOST=127.0.0.1   # Host address for HTTP transport
@@ -553,11 +562,26 @@ To generate an API token in Zammad:
 
 ### Rate Limiting
 
-The server respects Zammad's rate limits. If you hit rate limits:
+The client wraps every Zammad request with retries, an optional client-side throttle, and a circuit breaker.
 
-- Reduce request frequency
-- Paginate large result sets
-- Cache frequently accessed data
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ZAMMAD_RATE_LIMIT_ENABLED` | `false` | Opt in to client-side throttling |
+| `ZAMMAD_RATE_LIMIT_REQUESTS` | `60` | Max requests per window (>= 1) |
+| `ZAMMAD_RATE_LIMIT_WINDOW` | `60` | Window length in seconds (> 0) |
+| `ZAMMAD_MAX_RETRIES` | `3` | Retries for safe reads; `0` disables |
+| `ZAMMAD_RETRY_BACKOFF_BASE` | `1.0` | Backoff seconds: `base * 2^attempt` |
+| `ZAMMAD_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Consecutive failures before failing fast |
+| `ZAMMAD_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `30` | Seconds before a single probe request is allowed |
+
+Behavior to be aware of:
+
+- Only `GET`/`HEAD`/`OPTIONS` are retried, on HTTP 429/500/502/503/504, connection errors, and timeouts.
+  Writes (`POST`/`PUT`/`PATCH`/`DELETE`) are sent exactly once so a slow Zammad never duplicates a ticket or article.
+- A `Retry-After` header expressed in seconds overrides the backoff (capped at 60s); other formats fall back to backoff.
+- Throttling and circuit state are per process. Multiple server instances do not share a budget.
+- When retries are exhausted or the circuit is open, tools return an `Error:` message naming the cause and the
+  relevant variable. Reduce request frequency, paginate, or enable throttling if you keep hitting Zammad's limits.
 
 ## Security
 

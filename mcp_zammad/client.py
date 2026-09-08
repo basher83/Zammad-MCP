@@ -8,6 +8,9 @@ from urllib.parse import urlparse
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
+from mcp_zammad.resilience import ResilientSession
+from mcp_zammad.resilience_config import ResilienceConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,6 +50,7 @@ class ZammadClient:
             oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
         )
         self.insecure = insecure if insecure is not None else ZammadClient._parse_bool_env("ZAMMAD_INSECURE")
+        self.resilience = ResilienceConfig.from_env()
 
         if not self.url:
             raise ConfigException("Zammad URL is required. Set ZAMMAD_URL environment variable.")
@@ -90,6 +94,9 @@ class ZammadClient:
                 "TLS certificate verification is disabled (ZAMMAD_INSECURE=true). "
                 "urllib3 may emit InsecureRequestWarning on requests; fix or trust the server certificate when possible."
             )
+        # zammad-py routes every resource call through this session, so wrapping it once
+        # gives rate limiting, retries, and circuit breaking to all API operations.
+        self.api.session = ResilientSession(self.api.session, self.resilience)
 
     def _validate_url(self, url: str) -> None:
         """Validate URL format to prevent SSRF attacks."""
