@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import date
 from typing import Any
 from urllib.parse import urlparse
 
@@ -160,10 +161,16 @@ class ZammadClient:
         group: str | None = None,
         owner: str | None = None,
         customer: str | None = None,
+        created_after: date | str | None = None,
+        created_before: date | str | None = None,
         page: int = 1,
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
-        """Search tickets with various filters."""
+        """Search tickets with various filters.
+
+        created_after and created_before bound the search by creation date, inclusive
+        on both ends. Dates are passed to Zammad in ISO YYYY-MM-DD form.
+        """
         filters = {"page": page, "per_page": per_page, "expand": "true"}
 
         # Build search query
@@ -180,6 +187,10 @@ class ZammadClient:
             search_parts.append(f"owner.login:{owner}")
         if customer:
             search_parts.append(f"customer.email:{customer}")
+        if created_after:
+            search_parts.append(f"created_at:>={created_after}")
+        if created_before:
+            search_parts.append(f"created_at:<={created_before}")
 
         if search_parts:
             search_query = " AND ".join(search_parts)
