@@ -68,6 +68,14 @@ def test_rejects_empty_tag_list_as_operation():
         BulkTicketUpdateParams(ticket_ids=[1], add_tags=[])
 
 
+@pytest.mark.parametrize("field", ["add_tags", "remove_tags"])
+@pytest.mark.parametrize("tag", ["", "x" * 101])
+def test_rejects_invalid_tag_names(field, tag):
+    """Tag names follow the same bounds as the single-tag tools."""
+    with pytest.raises(ValidationError, match=r"at (least|most)"):
+        BulkTicketUpdateParams(ticket_ids=[1], **{field: [tag]})
+
+
 def test_escapes_html_in_title_and_note():
     """Title and note follow the single-ticket sanitization rules."""
     params = BulkTicketUpdateParams(ticket_ids=[1], title="<b>x</b>", note="<script>y</script>")
