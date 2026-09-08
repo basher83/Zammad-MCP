@@ -97,11 +97,13 @@ run_build() {
   uv build --quiet
 }
 
+# Each gate runs as a plain statement so `set -e` aborts on the first failure.
+# (`a && b` lists are exempt from errexit and would print a false "passed".)
 case "${1:-dev}" in
   lint) run_lint ;;
   test) run_affected_tests ;;
-  dev) run_lint && run_affected_tests ;;
-  release) run_lint && run_full_tests && run_build ;;
+  dev) run_lint; run_affected_tests ;;
+  release) run_lint; run_full_tests; run_build ;;
   *) echo "usage: $0 {lint|test|dev|release}" >&2; exit 2 ;;
 esac
 echo "✅ validate ${1:-dev}: passed"
