@@ -46,6 +46,9 @@
 - *(codacy)* Strip non-Python tools, sync versions from codacy-cli init
 - *(codex)* Add repo-local Codex plugin and drop stale repomix xml
 - Replace CLAUDE instructions with AGENTS link
+- Update changelog generation
+- Align automation with uv and coverage rules
+- *(triage)* Remove repo-local codex digest automation
 
 ## [1.1.0] - 2025-12-09
 
