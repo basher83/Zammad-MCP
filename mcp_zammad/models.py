@@ -662,6 +662,13 @@ class TicketStats(BaseModel):
     escalated_count: int = Field(description="Number of escalated tickets")
     avg_first_response_time: float | None = Field(None, description="Average first response time in minutes")
     avg_resolution_time: float | None = Field(None, description="Average resolution time in minutes")
+    counts_truncated: bool = Field(
+        default=False,
+        description=(
+            "True when the scan hit the search backend's result cap, so the counts are "
+            "lower bounds rather than exact totals."
+        ),
+    )
 
 
 class TagOperationResult(BaseModel):
