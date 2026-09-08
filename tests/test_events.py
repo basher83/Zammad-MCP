@@ -43,12 +43,16 @@ def test_list_since_excludes_events_at_or_before_cursor() -> None:
     assert [e.ticket_id for e in result] == [3]
 
 
-def test_list_limit_returns_most_recent_events() -> None:
+def test_list_limit_returns_oldest_events_first_so_cursor_walks_backlog() -> None:
     store = EventStore(capacity=5)
     for seq in (1, 2, 3):
         store.append(event(seq))
 
-    assert [e.ticket_id for e in store.list(limit=2)] == [2, 3]
+    first_page = store.list(limit=2)
+    second_page = store.list(since=first_page[-1].received_at, limit=2)
+
+    assert [e.ticket_id for e in first_page] == [1, 2]
+    assert [e.ticket_id for e in second_page] == [3]
 
 
 def test_list_since_accepts_naive_cursor_as_utc() -> None:

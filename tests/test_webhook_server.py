@@ -126,9 +126,31 @@ async def test_list_events_tool_filters_since_and_limit(server_with_secret: Zamm
         result = await client.call_tool("zammad_list_events", {"params": {"since": "2026-09-08T12:01:00Z", "limit": 1}})
 
     data = result.structured_content
-    assert [e["ticket_id"] for e in data["events"]] == [3]
+    assert [e["ticket_id"] for e in data["events"]] == [2]
     assert data["retained_total"] == 3
-    assert data["next_since"].startswith("2026-09-08T12:03:00")
+    assert data["next_since"].startswith("2026-09-08T12:02:00")
+
+
+@pytest.mark.asyncio
+async def test_list_events_cursor_pages_backlog_larger_than_limit_to_completion(
+    server_with_secret: ZammadMCPServer,
+) -> None:
+    store = server_with_secret.event_store
+    base = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
+    for seq in (1, 2, 3):
+        store.append(WebhookEvent(event_type="ticket.update", ticket_id=seq, received_at=base.replace(minute=seq)))
+
+    seen: list[int] = []
+    params: dict = {"limit": 2}
+    async with Client(server_with_secret.mcp) as client:
+        for _ in range(5):
+            data = (await client.call_tool("zammad_list_events", {"params": params})).structured_content
+            if not data["events"]:
+                break
+            seen.extend(e["ticket_id"] for e in data["events"])
+            params = {"limit": 2, "since": data["next_since"]}
+
+    assert seen == [1, 2, 3]
 
 
 @pytest.mark.asyncio

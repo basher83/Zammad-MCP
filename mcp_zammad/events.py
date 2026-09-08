@@ -73,11 +73,15 @@ class EventStore:
         self._events.append(event)
 
     def list(self, *, since: datetime | None = None, limit: int | None = None) -> list[WebhookEvent]:
-        """Return retained events in receipt order, newest ``limit`` after ``since``."""
+        """Return the oldest ``limit`` retained events received after ``since``, in receipt order.
+
+        Taking the oldest page (not the newest) lets a client pass the last ``received_at``
+        back as ``since`` and walk a backlog larger than ``limit`` without skipping events.
+        """
         events = list(self._events)
         if since is not None:
             cutoff = _as_utc(since)
             events = [e for e in events if _as_utc(e.received_at) > cutoff]
         if limit is not None:
-            events = events[-limit:]
+            events = events[:limit]
         return events

@@ -412,7 +412,8 @@ The server maps deliveries to `ticket.create` (first article), `ticket.article.c
 malformed payloads return `400`. Only identifiers and timestamps are retained — never article bodies.
 
 Retention is process-local and bounded (1000 events, oldest evicted first) and is lost on restart. Poll with
-`zammad_list_events`, pass the returned `next_since` as `since` on the next call, then fetch details with
+`zammad_list_events`, which returns the oldest events after `since` first (up to `limit`); pass the returned
+`next_since` as `since` on the next call and repeat until `events` is empty, then fetch details with
 `zammad_get_ticket`.
 
 ## Examples

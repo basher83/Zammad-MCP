@@ -905,12 +905,15 @@ class ZammadMCPServer:
             Args:
                 params (ListEventsParams): Validated parameters containing:
                     - since (datetime | None): Only events received strictly after this timestamp
-                    - limit (int): Maximum events to return, 1-100 (default: 50)
+                    - limit (int): Maximum events per page, 1-100 (default: 50); the oldest
+                      matching events are returned first
 
             Returns:
                 ListEventsResult: `events` (event_type, ticket_id, ticket_number, article_id,
                 trigger, source_timestamp, received_at), `count`, `capacity`, `retained_total`,
-                and `next_since` (pass back as `since` on the next poll; null when no events).
+                and `next_since` (pass back as `since` on the next call; null when no events).
+                Keep calling with `next_since` until `events` is empty to drain a backlog
+                larger than `limit` without skipping anything.
 
             Examples:
                 - Use when: "Any new ticket activity?" -> poll with since=<last next_since>
