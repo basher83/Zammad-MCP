@@ -664,6 +664,35 @@ class TicketStats(BaseModel):
     avg_resolution_time: float | None = Field(None, description="Average resolution time in minutes")
 
 
+class TicketExportParams(StrictBaseModel):
+    """Parameters for bulk ticket export to JSONL."""
+
+    output_path: str = Field(description="Path to output JSONL file (must end in .jsonl)")
+    query: str | None = Field(None, description="Free text search filter")
+    group: str | None = Field(None, description="Filter by group name")
+    state: str | None = Field(None, description="Filter by state name")
+    created_after: str | None = Field(None, description="Filter tickets created on or after this date (YYYY-MM-DD)")
+    created_before: str | None = Field(None, description="Filter tickets created on or before this date (YYYY-MM-DD)")
+    delay_seconds: float = Field(default=0.5, ge=0.0, le=10.0, description="Delay between API calls in seconds")
+    per_page: int = Field(default=50, ge=1, le=100, description="Number of tickets per page/batch")
+    include_internal_articles: bool = Field(default=False, description="Include internal notes in export")
+    resume_from_page: int = Field(default=1, ge=1, description="Page to resume export from (for interrupted exports)")
+    max_tickets: int | None = Field(default=None, ge=1, description="Maximum number of tickets to export")
+    include_tags: bool = Field(
+        default=False,
+        description="Fetch tags for each ticket. Tags are not part of the ticket payload, "
+        "so this costs one extra API call per ticket.",
+    )
+
+    @field_validator("output_path")
+    @classmethod
+    def validate_output_path(cls, v: str) -> str:
+        """Validate that output path ends with .jsonl."""
+        if not v.endswith(".jsonl"):
+            raise ValueError("output_path must end with .jsonl")
+        return v
+
+
 class TagOperationResult(BaseModel):
     """Result of a tag operation (add/remove)."""
 
