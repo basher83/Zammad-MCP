@@ -15,14 +15,7 @@ class CaseInsensitiveStrEnum(str, Enum):
 
     @classmethod
     def _missing_(cls, value: object) -> "CaseInsensitiveStrEnum | None":
-        """Return the member whose value matches ``value`` ignoring case, or None to trigger a normal error.
-
-        Args:
-            value: The raw lookup value that did not match a member exactly.
-
-        Returns:
-            The matching canonical member, or None when no member matches or ``value`` is not a string.
-        """
+        """Return the member matching ``value`` case-insensitively, or None so Enum raises its usual error."""
         if not isinstance(value, str):
             return None
         folded = value.casefold()
