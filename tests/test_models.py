@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from mcp_zammad.models import (
+    Article,
     ArticleCreate,
     AttachmentUpload,
     DeleteAttachmentParams,
@@ -13,6 +14,41 @@ from mcp_zammad.models import (
     TicketCreate,
     TicketUpdate,
 )
+
+_BASE_ARTICLE = {
+    "id": 456,
+    "ticket_id": 123,
+    "type": "email",
+    "sender": "Customer",
+    "body": "See attached.",
+    "created_by_id": 2,
+    "updated_by_id": 2,
+    "created_at": "2026-05-30T10:00:00Z",
+    "updated_at": "2026-05-30T10:00:00Z",
+}
+
+
+class TestArticleAttachments:
+    """Tests for attachment metadata on read Article models."""
+
+    def test_article_parses_attachments(self):
+        """Article exposes attachment metadata returned by the Zammad API."""
+        article = Article(
+            **_BASE_ARTICLE,
+            attachments=[
+                {"id": 1, "filename": "kaufanfrage.pdf", "size": 20480},
+                {"id": 2, "filename": "logo.png", "size": 2048},
+            ],
+        )
+        assert article.attachments is not None
+        assert [a.id for a in article.attachments] == [1, 2]
+        assert article.attachments[0].filename == "kaufanfrage.pdf"
+        assert article.attachments[0].size == 20480
+
+    def test_article_without_attachments_defaults_none(self):
+        """Articles with no attachments key default to None."""
+        article = Article(**_BASE_ARTICLE)
+        assert article.attachments is None
 
 
 class TestTicketCreate:
