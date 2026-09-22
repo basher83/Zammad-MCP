@@ -2194,8 +2194,8 @@ class ZammadMCPServer:
 
                 - **new** (ID: 1)
                 - **open** (ID: 2)
-                - **closed** (ID: 5)
                 - **pending reminder** (ID: 3)
+                - **closed** (ID: 5)
                 ```
 
                 JSON format:
@@ -2204,8 +2204,8 @@ class ZammadMCPServer:
                     "items": [
                         {"id": 1, "name": "new", "state_type_id": 1},
                         {"id": 2, "name": "open", "state_type_id": 2},
-                        {"id": 5, "name": "closed", "state_type_id": 5},
-                        {"id": 3, "name": "pending reminder", "state_type_id": 3}
+                        {"id": 3, "name": "pending reminder", "state_type_id": 3},
+                        {"id": 5, "name": "closed", "state_type_id": 5}
                     ],
                     "total": 4,
                     "count": 4,
