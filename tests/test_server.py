@@ -1328,19 +1328,19 @@ def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
     # Set up paginated responses - page 1, page 2, then empty page
     mock_instance.search_tickets.side_effect = [page1_tickets, page2_tickets, []]
 
-    # Mock ticket states for state type mapping
+    # Mock ticket states for state type mapping (stock Zammad seed values)
     mock_instance.get_ticket_states.return_value = [
         {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
-        {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 5, "name": "closed", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {
-            "id": 4,
+            "id": 3,
             "name": "pending reminder",
-            "state_type_id": 4,
+            "state_type_id": 3,
             "created_at": "2024-01-01",
             "updated_at": "2024-01-01",
         },
-        {"id": 5, "name": "pending close", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 4, "name": "pending close", "state_type_id": 4, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
     ]
 
     server_inst = ZammadMCPServer()
@@ -1398,56 +1398,58 @@ def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
         mock_logger.warning.assert_called_with("Date filtering not yet implemented - ignoring date parameters")
 
 
-def test_categorize_ticket_state_uses_name_not_type_id():
-    """Categorize by state name, not numeric state_type_id (per-instance and unstable)."""
-    # Regression guard: on instances with renumbered built-in states or custom
-    # states, the numeric state_type_id does not line up with the defaults, so
-    # only the semantic name can be trusted.
+def test_categorize_ticket_state_uses_state_type_id():
+    """Categorize by state_type_id (seeded and stable), not the state name."""
+    # Regression guard: the built-in state_type_id values are seeded and fixed
+    # by Zammad (new=1, open=2, pending reminder=3, pending action=4, closed=5,
+    # merged=6). A custom state typed as pending must still land in the pending
+    # bucket even when its *name* does not look pending -- the case name-based
+    # matching gets wrong.
     server_inst = ZammadMCPServer()
+    server_inst._state_type_mapping = {
+        "new": 1,
+        "open": 2,
+        "closed": 5,
+        "pending reminder": 3,
+        "pending close": 4,
+        "merged": 6,
+        "waiting for customer": 3,  # custom name, pending-reminder type
+    }
 
     assert server_inst._categorize_ticket_state("new") == (1, 0, 0)
     assert server_inst._categorize_ticket_state("open") == (1, 0, 0)
     assert server_inst._categorize_ticket_state("closed") == (0, 1, 0)
     assert server_inst._categorize_ticket_state("pending reminder") == (0, 0, 1)
     assert server_inst._categorize_ticket_state("pending close") == (0, 0, 1)
-    # The bare "pending" state (exact match) is pending.
-    assert server_inst._categorize_ticket_state("pending") == (0, 0, 1)
-    # Custom "pending " states fall into pending via the space-terminated
-    # word fallback, so user-defined states (e.g. "pending refund") are not
-    # silently dropped.
-    assert server_inst._categorize_ticket_state("pending refund") == (0, 0, 1)
-    # The fallback is deliberately narrow: near-miss names are NOT auto-
-    # pending (a bare prefix or substring would miscount these).
-    assert server_inst._categorize_ticket_state("pendingly") == (0, 0, 0)
-    assert server_inst._categorize_ticket_state("pending-approval") == (0, 0, 0)
-    assert server_inst._categorize_ticket_state("PENDING") == (0, 0, 1)
-    assert server_inst._categorize_ticket_state("PENDING APPROVAL") == (0, 0, 1)
-    # A state that merely *contains* "pending" elsewhere is NOT auto-pending.
-    assert server_inst._categorize_ticket_state("reviewed pending approval") == (0, 0, 0)
-    # Other custom states: counted in the total, excluded from every bucket.
+    # A custom state whose *name* is not pending but whose type is
+    # pending-reminder (3) must still be counted as pending.
+    assert server_inst._categorize_ticket_state("waiting for customer") == (0, 0, 1)
+    # A state not in the mapping (e.g. removed or renamed) is counted in the
+    # total only, never in a bucket.
+    assert server_inst._categorize_ticket_state("unknown state") == (0, 0, 0)
+    # "merged" (type 6) is in the total but in no bucket.
     assert server_inst._categorize_ticket_state("merged") == (0, 0, 0)
-    # Case-insensitive, tolerant of surrounding whitespace.
-    assert server_inst._categorize_ticket_state("  Closed ") == (0, 1, 0)
 
 
-def test_get_ticket_stats_uses_state_name_not_state_type_id(mock_zammad_client, decorator_capturer):
-    """Ticket stats stay correct when state_type_id values are non-default."""
-    # Replicates a real Zammad instance where the built-in states are renumbered
-    # (closed=5, pending reminder=3) and a custom "merged" state (id 6) exists.
-    # The old implementation compared state_type_id against hardcoded defaults
-    # (1-5), which scrambled the counts on such an instance.
+def test_get_ticket_stats_uses_state_type_id(mock_zammad_client, decorator_capturer):
+    """Ticket stats categorize by state_type_id (seeded and stable)."""
+    # Stock Zammad seed values: new=1, open=2, pending reminder=3,
+    # pending action=4, closed=5, merged=6. "pending close" is a built-in state
+    # whose type is "pending action" (4). A custom "waiting for customer" state
+    # is typed pending reminder (3) so it must count as pending even though its
+    # name is not "pending" -- the case name-based matching gets wrong.
     mock_instance, _ = mock_zammad_client
 
     tickets = [
         {"id": 1, "state": {"id": 1, "name": "new", "state_type_id": 1}},
         {"id": 2, "state": {"id": 2, "name": "open", "state_type_id": 2}},
-        # Non-default: "pending reminder" is state_type_id 3 here (not 4).
         {"id": 3, "state": {"id": 3, "name": "pending reminder", "state_type_id": 3}},
-        # Non-default: "closed" is state_type_id 5 here (not 3).
         {"id": 4, "state": {"id": 5, "name": "closed", "state_type_id": 5}},
         {"id": 5, "state": {"id": 4, "name": "pending close", "state_type_id": 4}},
         # Custom state: counted in total, excluded from every bucket.
         {"id": 6, "state": {"id": 6, "name": "merged", "state_type_id": 6}},
+        # Custom state: name is not "pending", but its type is pending reminder (3).
+        {"id": 7, "state": {"id": 7, "name": "waiting for customer", "state_type_id": 3}},
     ]
     mock_instance.search_tickets.side_effect = [tickets, []]
     mock_instance.get_ticket_states.return_value = [
@@ -1463,6 +1465,13 @@ def test_get_ticket_stats_uses_state_name_not_state_type_id(mock_zammad_client, 
         {"id": 5, "name": "closed", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 4, "name": "pending close", "state_type_id": 4, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 6, "name": "merged", "state_type_id": 6, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {
+            "id": 7,
+            "name": "waiting for customer",
+            "state_type_id": 3,
+            "created_at": "2024-01-01",
+            "updated_at": "2024-01-01",
+        },
     ]
 
     server_inst = ZammadMCPServer()
@@ -1474,11 +1483,11 @@ def test_get_ticket_stats_uses_state_name_not_state_type_id(mock_zammad_client, 
 
     stats = test_tools["zammad_get_ticket_stats"](GetTicketStatsParams())
 
-    assert stats.total_count == 6
+    assert stats.total_count == 7
     assert stats.open_count == 2  # new + open
-    assert stats.closed_count == 1  # closed (state_type_id 5, not 3)
-    assert stats.pending_count == 2  # pending reminder (id 3) + pending close (id 4)
-    # "merged" is in the total but in no bucket: 2 + 1 + 2 = 5, + 1 custom = 6.
+    assert stats.closed_count == 1  # closed (state_type_id 5)
+    assert stats.pending_count == 3  # pending reminder (3) + pending close (4) + waiting for customer (3)
+    # "merged" (type 6) is in the total but in no bucket: 2 + 1 + 3 = 6, + 1 = 7.
 
 
 def test_resource_handlers(decorator_capturer):
@@ -1885,15 +1894,15 @@ def test_get_ticket_stats_pagination(decorator_capturer):
     server.client.get_ticket_states.return_value = [
         {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
-        {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 5, "name": "closed", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {
-            "id": 4,
+            "id": 3,
             "name": "pending reminder",
-            "state_type_id": 4,
+            "state_type_id": 3,
             "created_at": "2024-01-01",
             "updated_at": "2024-01-01",
         },
-        {"id": 5, "name": "pending close", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 4, "name": "pending close", "state_type_id": 4, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
     ]
 
     # Capture tools as they're registered
