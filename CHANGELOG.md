@@ -29,6 +29,10 @@
 
 - Address PR review feedback (#213)
 
+### 📚 Documentation
+
+- *(changelog)* Record removal of codex digest automation
+
 ### ⚙️ Miscellaneous Tasks
 
 - Update tooling and add documentation

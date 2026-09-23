@@ -18,9 +18,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        exclude: ^(scripts/|plugins/[^/]+/references/|\.claude/skills/)
+        exclude: ^(scripts/|\.claude/skills/)
       - id: ruff-format
-        exclude: ^(scripts/|plugins/[^/]+/references/|\.claude/skills/)
+        exclude: ^(scripts/|\.claude/skills/)
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: "fc0f09a29bb495f4a91f00266155d6282d52485d"  # v1.20.2
@@ -28,14 +28,14 @@ repos:
       - id: mypy
         additional_dependencies: [types-python-dateutil, types-requests]
         files: ^mcp_zammad/
-        exclude: ^(scripts/|plugins/[^/]+/references/|\.claude/skills/)
+        exclude: ^(scripts/|\.claude/skills/)
 
   - repo: https://github.com/PyCQA/bandit
     rev: "92ae8b82fb422a639f0ed8d99e96cea769594e08"  # 1.9.4
     hooks:
       - id: bandit
         args: ["-f", "json"]
-        exclude: ^(tests/|scripts/|plugins/[^/]+/references/|\.claude/skills/)
+        exclude: ^(tests/|scripts/|\.claude/skills/)
         # Note: Removed pass_filenames: false to only scan changed files
         # This improves commit speed while still maintaining security checks
         # Full tree scan still happens in CI/CD via 'bandit -r mcp_zammad/'
@@ -54,7 +54,7 @@ repos:
           - "--exclude-rule=package_managers.renovate.renovate-missing-minimum-release-age.renovate-missing-minimum-release-age"
           # A global uv cooldown can delay newly released vulnerability fixes.
           - "--exclude-rule=package_managers.uv.uv-missing-dependency-cooldown.uv-missing-dependency-cooldown"
-        exclude: ^(scripts/|plugins/[^/]+/references/|\.claude/skills/)
+        exclude: ^(scripts/|\.claude/skills/)
 
   - repo: https://github.com/rvben/rumdl-pre-commit
     rev: "8f5dd7416d031646aa5607fc56092723650fd873"  # v0.2.30
@@ -62,14 +62,12 @@ repos:
       - id: rumdl
         name: rumdl
         description: "Lint Markdown files with rumdl"
-        exclude: ^plugins/
         # Configuration in .rumdl.toml
         # Exclusions handled in .rumdl.toml via exclude patterns
       - id: rumdl-fmt
         name: rumdl format
         description: "Format Markdown files with rumdl"
         stages: [manual]
-        exclude: ^plugins/
 
   - repo: local
     hooks:
@@ -101,5 +99,5 @@ repos:
           bash -c 'found=0; for file in "$@"; do inside_fence=0; line_num=0; while IFS= read -r line; do line_num=$((line_num+1)); if [[ "$line" =~ ^[[:space:]]*\`\`\` ]]; then inside_fence=$((1-inside_fence)); fi; if [[ $inside_fence -eq 0 && "$line" =~ ^[[:space:]]*([2-9]|[0-9]{2,})\. ]]; then echo "❌ $file:$line_num Use '\''1.'\'' for all numbered list items to reduce diff churn"; found=1; fi; done < "$file"; done; exit $found' --
         language: system
         files: '\.md$'
-        exclude: ^(docs/|plugins/|\.claude/|SECURITY\.md|CONTRIBUTING\.md|README\.md)
+        exclude: ^(docs/|\.claude/|SECURITY\.md|CONTRIBUTING\.md|README\.md)
         pass_filenames: true
