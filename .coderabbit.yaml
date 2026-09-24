@@ -28,32 +28,6 @@ reviews:
   auto_assign_reviewers: true
   poem: false
 
-  labeling_instructions:
-    - label: "⚡ api"
-      instructions: "Apply when PR modifies mcp_zammad/server.py, client.py, or any MCP/Zammad API integration"
-    - label: "👨‍🚀 crew-backend"
-      instructions: "Apply when PR modifies backend Python code in mcp_zammad/ directory"
-    - label: "💾 database"
-      instructions: "Apply when PR modifies mcp_zammad/models.py or data models"
-    - label: "⚡ performance"
-      instructions: "Apply when PR includes caching, pagination, or optimization improvements"
-    - label: "📚 documentation"
-      instructions: "Apply when PR updates README.md, ARCHITECTURE.md, CHANGELOG.md, or other docs"
-    - label: "📝 crew-docs"
-      instructions: "Apply when PR significantly updates documentation or adds new docs"
-    - label: "🐛 bug"
-      instructions: "Apply when PR fixes bugs or resolves issues"
-    - label: "✨ enhancement"
-      instructions: "Apply when PR adds new features, tools, or capabilities"
-    - label: "💎 breaking-change"
-      instructions: "Apply when PR introduces breaking changes to the MCP server API or tool signatures"
-    - label: "🏷️ auto-labeled"
-      instructions: "Apply to all PRs to indicate CodeRabbit has reviewed and labeled"
-    - label: "🔧 ci/cd"
-      instructions: "Apply when PR modifies CI/CD workflows or pipeline configuration"
-    - label: "🔒 security"
-      instructions: "Apply when PR addresses security vulnerabilities or improves security"
-
   path_filters:
     - "**/*" # Include all files by default
     - "!**/.claude/**" # Exclude .claude directory
