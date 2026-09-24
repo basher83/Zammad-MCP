@@ -24,7 +24,7 @@ classifiers = [
 
 dependencies = [
     "fastmcp>=3.0.0",
-    "mcp>=1.23.0",
+    "mcp>=1.28.1",
     "zammad-py>=3.2.0",
     "pydantic>=2.11.7",
     "python-dotenv>=1.2.2",
@@ -40,7 +40,6 @@ dev = [
     "mypy>=1.20.1",
     "pip-audit>=2.6.0",
     "bandit[sarif]>=1.9.4",
-    "safety>=3.7.0",
     "defusedxml>=0.7.1",
     "pre-commit>=4.5.1",
 ]
@@ -114,7 +113,6 @@ dev = [
     "mypy>=1.20.1",
     "pip-audit>=2.6.0",
     "bandit[sarif]>=1.9.4",
-    "safety>=3.7.0",
     "defusedxml>=0.7.1",
     "pre-commit>=4.5.1",
 ]
@@ -149,15 +147,20 @@ show_missing = true
 directory = "htmlcov"
 
 [tool.uv]
+# Enforce security floors without replacing upstream dependency constraints.
+constraint-dependencies = [
+    "anyio>=4.14.2",
+    "click>=8.3.3",
+    "setuptools>=83.0.0",
+]
 # Force transitive dependencies above known-vulnerable ranges.
 override-dependencies = [
     "authlib>=1.7.1",
-    "cryptography>=48.0.1",
+    "cryptography>=50.0.0",
     "idna>=3.15",
     "joserfc>=1.6.8",
     "msgpack>=1.2.1",
-    "nltk>=3.10.0",
-    "pip>=26.1.2",
+    "pip>=26.2",
     "pydantic-settings>=2.14.2",
     "pyjwt>=2.13.0",
     "python-multipart>=0.0.31",

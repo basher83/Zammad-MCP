@@ -131,7 +131,6 @@ Unified security scanner that consolidates multiple security tools into a single
 - Runs multiple security scanners:
   - **pip-audit**: Vulnerability scanning for Python dependencies
   - **bandit**: Static security analysis for Python code
-  - **safety**: Additional dependency vulnerability checking
   - **semgrep**: Advanced static analysis with security rules
 - Unified reporting with consistent severity levels (Critical/High/Medium/Low/Info)
 - Multiple output formats:
