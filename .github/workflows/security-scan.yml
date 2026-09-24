@@ -57,12 +57,6 @@ jobs:
           sarif_file: bandit-sarif.json
           category: bandit
 
-      - name: Run safety scan
-        uses: pyupio/safety-action@2591cf2f3e67ba68b923f4c92f0d36e281c65023  # v1.0.1 tag target commit
-        continue-on-error: true
-        with:
-          api-key: ${{ github.repository == 'basher83/Zammad-MCP' && secrets.SAFETY_API_KEY || '' }}
-
       - name: Run pip-audit
         run: |
           echo "Running pip-audit dependency scan..."
@@ -94,33 +88,31 @@ jobs:
       - name: Generate Security Summary
         if: always()
         run: |
-          echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔒 Security Scan Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           
           # Check Bandit results
           if [ -f bandit-report.json ]; then
             HIGH_COUNT=$(jq '[.results[] | select(.issue_severity == "HIGH")] | length' bandit-report.json)
             MED_COUNT=$(jq '[.results[] | select(.issue_severity == "MEDIUM")] | length' bandit-report.json)
             LOW_COUNT=$(jq '[.results[] | select(.issue_severity == "LOW")] | length' bandit-report.json)
-            echo "### Bandit Static Analysis" >> $GITHUB_STEP_SUMMARY
+            echo "### Bandit Static Analysis" >> "$GITHUB_STEP_SUMMARY"
             if [ "$HIGH_COUNT" -gt 0 ]; then
-              echo "❌ **Failed**: Found $HIGH_COUNT HIGH severity issues" >> $GITHUB_STEP_SUMMARY
+              echo "❌ **Failed**: Found $HIGH_COUNT HIGH severity issues" >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "✅ **Passed**: No HIGH/CRITICAL issues (Medium: $MED_COUNT, Low: $LOW_COUNT)" >> $GITHUB_STEP_SUMMARY
+              echo "✅ **Passed**: No HIGH/CRITICAL issues (Medium: $MED_COUNT, Low: $LOW_COUNT)" >> "$GITHUB_STEP_SUMMARY"
             fi
-            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
           
-          # Check safety results
-          echo "### Dependency Vulnerability Scans" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **Safety**: Check performed via GitHub Action (see job output for details)" >> $GITHUB_STEP_SUMMARY
+          echo "### Dependency Vulnerability Scans" >> "$GITHUB_STEP_SUMMARY"
           
           # Check pip-audit results
           if [ -f pip-audit-report.json ]; then
             AUDIT_VULNS=$(jq '[.dependencies[]?.vulns[]?] | length' pip-audit-report.json)
             if [ "$AUDIT_VULNS" -gt 0 ]; then
-              echo "❌ **pip-audit**: Found $AUDIT_VULNS vulnerabilities" >> $GITHUB_STEP_SUMMARY
+              echo "❌ **pip-audit**: Found $AUDIT_VULNS vulnerabilities" >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "✅ **pip-audit**: No vulnerabilities" >> $GITHUB_STEP_SUMMARY
+              echo "✅ **pip-audit**: No vulnerabilities" >> "$GITHUB_STEP_SUMMARY"
             fi
           fi

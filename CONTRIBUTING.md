@@ -94,8 +94,7 @@ uv run ruff check mcp_zammad tests     # Lint code
 uv run mypy mcp_zammad                 # Type checking
 uv run bandit -r mcp_zammad/           # Security scanning
 uv run pre-commit run semgrep --all-files # Security & quality
-uv run safety scan --output json       # Dependency vulnerabilities
-uv run pip-audit                       # Additional dependency audit
+uv run pip-audit                       # Dependency vulnerabilities
 
 # Run tests
 uv run pytest --cov=mcp_zammad
@@ -153,7 +152,7 @@ The repository includes several GitHub Actions workflows that run automatically 
 | Workflow | Purpose | Triggers | Required Secrets |
 |----------|---------|----------|------------------|
 | **Tests and Coverage** | Runs tests and reports coverage | Push, PR to main | None |
-| **Security Scan** | Python security analysis | Push, PR to main, Weekly (Mon 9:00 UTC) | `SAFETY_API_KEY` |
+| **Security Scan** | Python security analysis | Push, PR to main, Weekly (Mon 9:00 UTC) | None |
 | **Codacy Security Scan** | Comprehensive code analysis | Push, PR to main, Weekly (Thu 5:28 UTC) | `CODACY_PROJECT_TOKEN`, `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` |
 | **Build and Publish Docker** | Builds and publishes Docker images | Push to main, tags, Manual | None (uses GITHUB_TOKEN) |
 | **Copilot Setup Steps** | Development environment setup | Manual only | None |
@@ -176,10 +175,9 @@ The repository includes several GitHub Actions workflows that run automatically 
 - **Purpose**: Identifies security vulnerabilities in code and dependencies
 - **Tools included**:
   - **Bandit**: Static security analysis for Python code (HIGH/CRITICAL only)
-  - **Safety**: Dependency vulnerability scanning (requires API key)
-  - **pip-audit**: Additional dependency security checks
+  - **pip-audit**: Dependency vulnerability scanning
 - **Reports**: Uploads security reports as artifacts and to GitHub Security tab
-- **Configuration**: Set `SAFETY_API_KEY` in repository secrets (get from <https://safetycli.com>)
+- **Configuration**: No additional secrets required
 - **Fork Compatibility**: Workflow automatically handles missing secrets in forked repositories without failing
 
 #### 3. Codacy Security Scan (`codacy.yml`)
