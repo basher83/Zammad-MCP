@@ -1,0 +1,1 @@
+No just exclude the .agents directory. All that stuff, that does not need to mess with the skills at all

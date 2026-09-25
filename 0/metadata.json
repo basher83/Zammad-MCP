@@ -1,0 +1,57 @@
+{
+  "cli_version": "0.11.2",
+  "checkpoint_id": "01M3BP2HCW093Z9MKNTMHP77V6",
+  "session_id": "01a0d6d7-1e25-7330-82ef-7e2523e7b75c",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-25T07:04:31.9828Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".agents/skills/technical-documentation/SKILL.md",
+    ".agents/skills/technical-documentation/references/build.md",
+    ".agents/skills/technical-documentation/references/large-docs-audit.md",
+    ".agents/skills/technical-documentation/references/preservation.md",
+    ".agents/skills/technical-documentation/references/review.md",
+    ".agents/skills/technical-documentation/references/simplified-technical-english.md",
+    ".agents/skills/technical-documentation/references/third-party-notices.md",
+    ".agents/skills/technical-documentation/references/zammad.md",
+    ".pre-commit-config.yaml"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "165f0de2b309",
+  "checkpoint_transcript_start": 229,
+  "transcript_lines_at_start": 229,
+  "compact_transcript_start": 28,
+  "token_usage": {
+    "input_tokens": 2687,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 511360,
+    "output_tokens": 1012,
+    "api_call_count": 5
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-25T07:04:31.949177Z",
+    "agent_lines": 71,
+    "agent_removed": 68,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 71,
+    "total_lines_changed": 139,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

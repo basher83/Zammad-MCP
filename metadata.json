@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.11.2",
+  "checkpoint_id": "01M3BP2HCW093Z9MKNTMHP77V6",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".agents/skills/technical-documentation/SKILL.md",
+    ".agents/skills/technical-documentation/references/build.md",
+    ".agents/skills/technical-documentation/references/large-docs-audit.md",
+    ".agents/skills/technical-documentation/references/preservation.md",
+    ".agents/skills/technical-documentation/references/review.md",
+    ".agents/skills/technical-documentation/references/simplified-technical-english.md",
+    ".agents/skills/technical-documentation/references/third-party-notices.md",
+    ".agents/skills/technical-documentation/references/zammad.md",
+    ".pre-commit-config.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2687,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 511360,
+    "output_tokens": 1012,
+    "api_call_count": 5
+  }
+}
