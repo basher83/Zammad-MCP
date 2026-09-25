@@ -160,6 +160,8 @@ class ZammadClient:
         group: str | None = None,
         owner: str | None = None,
         customer: str | None = None,
+        created_after: str | None = None,
+        created_before: str | None = None,
         page: int = 1,
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
@@ -180,6 +182,10 @@ class ZammadClient:
             search_parts.append(f"owner.login:{owner}")
         if customer:
             search_parts.append(f"customer.email:{customer}")
+        if created_after:
+            search_parts.append(f"created_at:>={created_after}")
+        if created_before:
+            search_parts.append(f"created_at:<={created_before}")
 
         if search_parts:
             search_query = " AND ".join(search_parts)
@@ -187,6 +193,16 @@ class ZammadClient:
         else:
             result = self.api.ticket.all(filters=filters)
 
+        return list(result)
+
+    def list_tickets(self, page: int = 1, per_page: int = 50) -> list[dict[str, Any]]:
+        """List tickets with pagination (no 10K search limit).
+
+        Uses the list endpoint which has no result cap, unlike the search endpoint
+        which is limited to 10,000 results.
+        """
+        filters = {"page": page, "per_page": per_page, "expand": True}
+        result = self.api.ticket.all(filters=filters)
         return list(result)
 
     def get_ticket(
