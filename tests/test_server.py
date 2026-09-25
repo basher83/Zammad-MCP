@@ -627,6 +627,9 @@ def test_add_article_content_type_validation() -> None:
     plain_article = ArticleCreate(ticket_id=1, body="<p>plain</p>", content_type="text/plain")
     assert plain_article.body == "&lt;p&gt;plain&lt;/p&gt;"
 
+    apostrophe_article = ArticleCreate(ticket_id=1, body="we've got it, you'd agree", content_type="text/plain")
+    assert apostrophe_article.body == "we've got it, you'd agree"
+
     with pytest.raises(ValidationError, match="content_type"):
         ArticleCreate(ticket_id=1, body="test", content_type="application/json")  # type: ignore[arg-type]
 

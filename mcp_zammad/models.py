@@ -269,8 +269,12 @@ class TicketCreate(StrictBaseModel):
     @field_validator("title", "article_body")
     @classmethod
     def sanitize_html(cls, v: str) -> str:
-        """Escape HTML to prevent XSS attacks."""
-        return html.escape(v)
+        """Escape HTML to prevent XSS attacks.
+
+        quote=False: title and the initial article are plain text (no content_type choice here),
+        sent/stored verbatim, so quotes and apostrophes must not become &#x27;/&quot; entities.
+        """
+        return html.escape(v, quote=False)
 
 
 class TicketUpdate(StrictBaseModel):
@@ -341,7 +345,10 @@ class ArticleCreate(StrictBaseModel):
     def sanitize_body(self) -> "ArticleCreate":
         """Sanitize body content according to content type."""
         if self.content_type == "text/plain":
-            self.body = html.escape(self.body)
+            # quote=False: plain text is sent/stored verbatim (e.g. in outbound emails), so quotes
+            # and apostrophes must not be turned into &#x27;/&quot; entities. Still neutralize
+            # <, >, & in case a downstream renderer treats the body as HTML despite the content type.
+            self.body = html.escape(self.body, quote=False)
         else:
             self.body = self._sanitize_html_body(self.body)
         return self
