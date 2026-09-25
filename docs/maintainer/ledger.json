@@ -6037,7 +6037,7 @@
       "route": "decision",
       "maintainer_comment_needed": "yes",
       "comment_basis": "Contributor explicitly asks maintainer to deconflict Codacy D203/D211 and D212/D213 rules. This is an explicit request for maintainer action, not literally a demand for a new comment. Successor-selection/comment recommendation is ours.",
-      "next_action": "Compare updated candidate first: historical probe/payload/type blockers have response changes. Decide against #344, resolve Codacy policy request, then delta-review selected route.",
+      "next_action": "Compare updated candidate first: historical probe/payload/type blockers have response changes. Choose between this updated head and #344, resolve Codacy policy request, then delta-review selected route.",
       "relationship_summary": "Alternative to #344; #200 is split predecessor, not prerequisite; title/body/subtree search differs.",
       "url": "https://github.com/basher83/Zammad-MCP/pull/267",
       "author": "snizzleorg",

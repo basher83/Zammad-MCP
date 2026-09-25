@@ -1,0 +1,625 @@
+{
+  "verified_at": "2026-09-25T08:05:38.952807+00:00",
+  "repository": "basher83/Zammad-MCP",
+  "commands": [
+    "gh api --paginate --slurp repos/basher83/Zammad-MCP/issues?state=open&per_page=100",
+    "gitcrawl sync basher83/Zammad-MCP --state all --numbers <56 discovered IDs> --include-comments --with pr-details --force --json",
+    "gitcrawl sync basher83/Zammad-MCP --numbers 257 --state all --include-comments --force --json",
+    "gitcrawl threads basher83/Zammad-MCP --limit 10000 --json",
+    "gh api graphql <open issues and pullRequests totalCount/pageInfo query>"
+  ],
+  "gitcrawl_listing": {
+    "rows_returned": 339,
+    "sqlite_total_rows": 339,
+    "limit": 10000,
+    "truncated": false,
+    "pagination_note": "threads has a limit but no page/cursor flag; returned all rows, verified against read-only database total, then filtered exact state=open.",
+    "open_prs": 41,
+    "open_issues": 16,
+    "open_total": 57
+  },
+  "github_graphql": {
+    "issues": {
+      "totalCount": 16,
+      "received": 16,
+      "hasNextPage": false
+    },
+    "pullRequests": {
+      "totalCount": 41,
+      "received": 41,
+      "hasNextPage": false
+    }
+  },
+  "rest_discrepancy": "REST aggregate returned 56, omitting #257. Targeted REST/gh issue lookup and Gitcrawl refresh confirm #257 OPEN; complete GraphQL connection includes it. No gap remains after reconciliation.",
+  "missing_items": [],
+  "extra_items": [],
+  "duplicate_items": [],
+  "changed_pr_discussions": [],
+  "changed_pr_heads": [],
+  "per_pr_comment_classification_checks": [
+    {
+      "number": 332,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": "No explicit statement that a new maintainer comment is needed or unnecessary; flag is a ledger recommendation, not a quoted review instruction.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "8de7659b1f21e08bafe751a66bb0e22e7a01015c",
+      "comment_review_records_checked": 22,
+      "discussion_digest_sha256": "e0c3cad863c4dba86626379244574c5a842bde458badf24b01ac576fbe50774a",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/332#issuecomment-5579569984"
+      ]
+    },
+    {
+      "number": 342,
+      "comment_classification": "needed",
+      "classification_basis": "No explicit comment-needed or comment-not-needed statement found; comment disposition is a pre-triage recommendation, not a quoted verdict.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "a07b044389268586475639cd361a0787f5d45ded",
+      "comment_review_records_checked": 8,
+      "discussion_digest_sha256": "2c61fd3fdbe84d5ffd55ee8791297f9964d71de867701ada247fc53b394f3fda",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/342#issuecomment-5579848558",
+        "https://github.com/basher83/Zammad-MCP/pull/342#issuecomment-5789463529"
+      ]
+    },
+    {
+      "number": 291,
+      "comment_classification": "needed",
+      "classification_basis": "No explicit comment-needed or comment-not-needed statement found; comment disposition is a pre-triage recommendation, not a quoted verdict.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "4447daea866a2f259d0b7584210824b2043a0cfd",
+      "comment_review_records_checked": 4,
+      "discussion_digest_sha256": "b79878e95eaed75fdbaf455e7fe32f04d1562636c8580b9a28979cce95807d06",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/291#pullrequestreview-5137739620"
+      ]
+    },
+    {
+      "number": 306,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": "No explicit comment-needed or comment-not-needed statement found; comment disposition is a pre-triage recommendation, not a quoted verdict.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "8173302e418e45e1c69fd6ef6fbb60ccc414ba5b",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "40d85675f0cf1703e513b015f5da19624100274e2a41556799961e8584f83f66",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/306#pullrequestreview-5130199234"
+      ]
+    },
+    {
+      "number": 276,
+      "comment_classification": "not_needed",
+      "classification_basis": "No explicit comment-needed or comment-not-needed statement found; comment disposition is a pre-triage recommendation, not a quoted verdict.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "b42e2ab42c7bd3b59133c0227ebc4558297c2a27",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "58cb611f6a5ea9ecc5a1d37fde6f7909cd48439e52b1ef0c3c3b554087f7f177",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/276#pullrequestreview-5130200417"
+      ]
+    },
+    {
+      "number": 323,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": "Earlier review explicitly says \u201cNone requiring a human before the author can act\u201d; no explicit request for a new maintainer comment after the fixes. Re-review recommendation is ledger inference.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "e6398c5ebfe81a79502fc76b3697a4f7214bab80",
+      "comment_review_records_checked": 30,
+      "discussion_digest_sha256": "668852e46834ad399f7d18bed7474a8ca1cc853f205a8d196b1ccf29354ade4d",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/323#pullrequestreview-5131328246",
+        "https://github.com/basher83/Zammad-MCP/pull/323#issuecomment-5792973451"
+      ]
+    },
+    {
+      "number": 311,
+      "comment_classification": "needed",
+      "classification_basis": "Explicit author request: \u201cDoes this contract work for you? I\u2019d rather get your ack on the shape before rewriting than guess.\u201d September 8.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "31edfd60c4c6fce7af0a114d86cdd5f62fd57948",
+      "comment_review_records_checked": 7,
+      "discussion_digest_sha256": "4cfcdcf20ce3544edbd8775a0d347b9915954bd04d3d08cc1fa8ba1a6e6bedf8",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/311#pullrequestreview-5130214434",
+        "https://github.com/basher83/Zammad-MCP/pull/311#issuecomment-5589759396"
+      ]
+    },
+    {
+      "number": 327,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": {
+        "statement": "Review explicitly states No pre-merge action is required for this change; this is broader action wording, not literal no-comment-needed.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "d08362e9121d7a31291aea24242430321a6a9e27",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "d890fbaf5f4f1b9abfdccb3c628399ed7b02d9dfcff2c82e6120af39a70338c4",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/327#issuecomment-5569977822"
+      ]
+    },
+    {
+      "number": 321,
+      "comment_classification": "needed",
+      "classification_basis": {
+        "statement": "Review asks maintainer what to do with competing #313; author offers Codacy options. Neither expressly requires a comment.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "5b529fd8789f8f6a8672ea6d7cb13d8db09569b0",
+      "comment_review_records_checked": 6,
+      "discussion_digest_sha256": "9e7f5545b06b8added898c1c6858f12b83fb9f4a92b69015122135b0316737ff",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/321#pullrequestreview-5130215418",
+        "https://github.com/basher83/Zammad-MCP/pull/321#issuecomment-5568383126"
+      ]
+    },
+    {
+      "number": 313,
+      "comment_classification": "needed",
+      "classification_basis": {
+        "statement": "Review explicitly says One maintainer decision is needed before merge and #313 vs #321 are mutually exclusive. It does not explicitly demand a comment.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "54d04ea6c45e94b4381e50219addb7d9cf06c490",
+      "comment_review_records_checked": 8,
+      "discussion_digest_sha256": "9eac847485c91aeab93b792ce8329e2a97e8003abc7baba3b62afe3abd02f03e",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/313#pullrequestreview-5130216718"
+      ]
+    },
+    {
+      "number": 328,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": {
+        "statement": "Requested changes explicitly require timeout and controlled mock/DI coverage; no explicit demand for a maintainer comment.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "e8625997ffecb724a1490ba2f515c231c874d04a",
+      "comment_review_records_checked": 6,
+      "discussion_digest_sha256": "61a44d7cda5b7a9d5c80a6d8c0196489972a79d00704fa7d375bf0a5b87f8682",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/328#issuecomment-5569977569"
+      ]
+    },
+    {
+      "number": 322,
+      "comment_classification": "needed",
+      "classification_basis": {
+        "statement": "Explicit maintainer question: confirm removal over NotSupportedError stub. No explicit comment-required statement.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "cec2851984fb67544ef021921dfcb38b570cd745",
+      "comment_review_records_checked": 6,
+      "discussion_digest_sha256": "0e0304f90e69c0829afbd25dec1254a7bb5aeb88a6b71a66744909265c8567e2",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/322#pullrequestreview-5130191300",
+        "https://github.com/basher83/Zammad-MCP/pull/322#issuecomment-5568339497"
+      ]
+    },
+    {
+      "number": 330,
+      "comment_classification": "needed",
+      "classification_basis": {
+        "statement": "No explicit maintainer-comment requirement. Author follow-up describes checks, not approval.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "99224d2bfdb6a672ae744f2a3146d008da0e7cdb",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "f75e8af4acb4cea42c5330e3dc8180fa2ff7889d7b66b118ee104314a151bde9",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/330"
+      ]
+    },
+    {
+      "number": 325,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": {
+        "statement": "No explicit maintainer-comment requirement. Bot says Resolve these test gaps before merge; that is a test-change request, not a human comment-needed statement.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "ef2caa3a425cba375267cfca8e6641ae1f5ccf2a",
+      "comment_review_records_checked": 5,
+      "discussion_digest_sha256": "0243cf8f4bbc823f99b91d7d6605f954207e56f1ecdc0a519c38e1394972fc39",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/325"
+      ]
+    },
+    {
+      "number": 310,
+      "comment_classification": "not_needed",
+      "classification_basis": {
+        "statement": "No explicit comment-needed/not-needed statement. Review says Requested changes: None; maintainer must approve pending Actions workflows.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "e7003087ba3fcc48e2577ac33e64132890cb0246",
+      "comment_review_records_checked": 8,
+      "discussion_digest_sha256": "81c692b8bc53038bbe5f555dd7974c411d013a48872b909dc15988cf8ea20dc6",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/310#pullrequestreview-5130226791"
+      ]
+    },
+    {
+      "number": 318,
+      "comment_classification": "not_needed",
+      "classification_basis": {
+        "statement": "No explicit comment-needed/not-needed statement. Requested changes: None. Maintainer asked to approve pending Actions runs.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "57bba97321d0385e3c795df8d0163e6086f1b3ea",
+      "comment_review_records_checked": 11,
+      "discussion_digest_sha256": "f2f9769d62c75a15d85a781a6ac4edc4c3b1f3c36766ec54930cceff5e763c66",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/318#pullrequestreview-5130212896"
+      ]
+    },
+    {
+      "number": 326,
+      "comment_classification": "not_needed",
+      "classification_basis": {
+        "statement": "No literal no-comment-needed statement. Existing review says Requested changes: None; Open questions: None.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "80daf3adbc9f702c1f71b911da9d38db085eee30",
+      "comment_review_records_checked": 7,
+      "discussion_digest_sha256": "7d7943cd5e23dc0443c6b2375d4483abd68d5a4bec774ae3200bc50f23a8059d",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/326#issuecomment-5569990553"
+      ]
+    },
+    {
+      "number": 287,
+      "comment_classification": "not_needed",
+      "classification_basis": {
+        "statement": "No explicit comment-needed/not-needed statement. Latest review says Requested changes: None; Open questions: None.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "6350eef5c76dbeb7284bad94a4474b4463fdb5cd",
+      "comment_review_records_checked": 10,
+      "discussion_digest_sha256": "b7818d5d07a703a46945e8f08e485dd0a6ff838d79f47de7aa5fdd29ed46104b",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/287#pullrequestreview-5137776976"
+      ]
+    },
+    {
+      "number": 329,
+      "comment_classification": "not_needed",
+      "classification_basis": {
+        "statement": "No literal comment-not-needed statement. Requested change is already specific README resolution; merge ordering question already documented.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "329e60480901033d2d87bb569159f380202fd487",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "91ef95ed7e93793efc8ac39624971022b7a89bc31e2b624f578cbdca9e6c6eb2",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/329#issuecomment-5569974915"
+      ]
+    },
+    {
+      "number": 307,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": {
+        "statement": "No explicit requirement to post a maintainer comment. Existing requested change is the TicketUpdate fix; bot suggests basher83 as reviewer.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "f9d98358d56ed254e85ac1c9c379c5a2bdefb5e6",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "7a2a6ea669e55ba15dcccfe2dfdb883be0ee4b7d4530dc9d837ab4847f9a21b2",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/307#pullrequestreview-5130203584"
+      ]
+    },
+    {
+      "number": 324,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": {
+        "statement": "Comment explicitly says do not merge before #307, then rebase; no literal comment-needed statement.",
+        "distinction": "Comment-needed value is a pre-triage recommendation, not an explicit requirement unless the statement expressly says so. Approval/request-changes wording is preserved separately from formal GitHub review state."
+      },
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "d94d0b7e885d57f20a8cea2a14154ed1bcedee7b",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "79ab36f6d1951f1dc2812b20ed344e1bac4fdf4c4eb16d9d3e6e7e2817db2d34",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/324#issuecomment-5568437862"
+      ]
+    },
+    {
+      "number": 314,
+      "comment_classification": "not_needed",
+      "classification_basis": "No explicit comment-needed/not-needed statement. Review says \u201cOpen questions: None\u201d; no-extra-comment is this ledger recommendation, not a quoted directive.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "106ab7b222a30fad4ba4c6df77eed5b76509d921",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "35d90c85b69f9fe7ba67ee2ef684823104a86d9698876cb0f0a7edfa97167bcc",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/314#pullrequestreview-5131485279"
+      ]
+    },
+    {
+      "number": 333,
+      "comment_classification": "not_needed",
+      "classification_basis": "No explicit statement that a new maintainer comment is needed or unnecessary; flag is a ledger recommendation, not a quoted review instruction.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "1064ad403fa6cf4216da30c3baec67e24c66c969",
+      "comment_review_records_checked": 6,
+      "discussion_digest_sha256": "ed889d23a73242030acd6055bc85413457781ff785ae8888e7fc3c8e9ef3db6f",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/333#issuecomment-5579772220",
+        "https://github.com/basher83/Zammad-MCP/pull/333#issuecomment-5579778874"
+      ]
+    },
+    {
+      "number": 340,
+      "comment_classification": "not_needed",
+      "classification_basis": "No explicit statement that a new maintainer comment is needed or unnecessary; flag is a ledger recommendation, not a quoted review instruction.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "0357fae8615246054d5ba32901fdd4ba2a6ff6fe",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "7b04b7986bb93cd96ac988ec1bf2ed29e3130fe260ebb87b38dc0814aed2e6a3",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/340#issuecomment-5579863828"
+      ]
+    },
+    {
+      "number": 343,
+      "comment_classification": "not_needed",
+      "classification_basis": "No explicit statement that a new maintainer comment is needed or unnecessary; flag is a ledger recommendation, not a quoted review instruction.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "2c4223925ce1fed084df7dd466e4dd962aa0a29e",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "60f665421c107022dd8fce3a73279c9903ab8e4b7f23164e1149abc00779565f",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/343#issuecomment-5579895172"
+      ]
+    },
+    {
+      "number": 335,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": "No explicit statement that a new maintainer comment is needed or unnecessary; flag is a ledger recommendation, not a quoted review instruction.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "c5b6f0f49ce10720eef25a7aec2307f9c97d0f6f",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "26ae58426301b4b93ffa3a0434e1bfb3e4319e57555eadbe858ad0e880a4cba1",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/335#pullrequestreview-5137658610"
+      ]
+    },
+    {
+      "number": 336,
+      "comment_classification": "needed",
+      "classification_basis": "Explicit open question in latest re-review: \u201cFate of PR #312 (close with credit, or supersede explicitly).\u201d This requests a decision, not verbatim \u201ccomment required\u201d; ledger recommends recording it.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "808f7ba31b29070dac9ca649a7e4fd679c8135ce",
+      "comment_review_records_checked": 7,
+      "discussion_digest_sha256": "125252643dbcd02931781bae68410e2304049b8cc837d9f3ad8dce3c91b2b4e6",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/336#issuecomment-5579927079"
+      ]
+    },
+    {
+      "number": 312,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": "No direct request for another comment on #312. Existing review says \u201cNo other changes needed\u201d and \u201cOpen questions: None.\u201d Choice/credit communication is recommended due to #336\u2019s explicit open question.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "3d28c0fc8d8477f1d9d3ec06d976ba23a4eb73fd",
+      "comment_review_records_checked": 13,
+      "discussion_digest_sha256": "8b7d0e771db42ab2ccca66a5f196109080954823796b77550f7ef2cab884856a",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/312#pullrequestreview-5130249534"
+      ]
+    },
+    {
+      "number": 334,
+      "comment_classification": "needed",
+      "classification_basis": "Explicit decision request: \u201cIssue 15 still carries status: needs approval \u2014 maintainer to confirm the feature is approved before merge.\u201d This requests confirmation, not literally a new comment. Comment recommendation comes from that unresolved statement, not label alone.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "a9910a3e2db0f1aca2ba8d3cb92ca07d00c9dc5b",
+      "comment_review_records_checked": 4,
+      "discussion_digest_sha256": "81b71f3f13ccb979ad9207d29d3477a85bf089fbdbbe7be12a5c5cb4d2fca29e",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/334#issuecomment-5579761798",
+        "https://github.com/basher83/Zammad-MCP/pull/334#issuecomment-5579776029"
+      ]
+    },
+    {
+      "number": 339,
+      "comment_classification": "not_needed",
+      "classification_basis": "No explicit comment-needed statement. Explicit \u201cno action required\u201d applies only to not reusing TagName in the sibling single-tag model; not a global no-comment declaration.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "c5b425694f82c5872e12793b7b2a67cc82dad5a6",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "5def73df79c32e045cde2a3a6073e3024e83334e2a6ac240a68e4ec5bbc4e195",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/339#issuecomment-5579830399"
+      ]
+    },
+    {
+      "number": 315,
+      "comment_classification": "not_needed",
+      "classification_basis": "Review explicitly says \u201cNone requiring a human decision\u201d; no literal comment-not-needed instruction. No extra comment is ledger recommendation.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "69d3cfd285b7d69706472963f5c88a2dddb8ebec",
+      "comment_review_records_checked": 4,
+      "discussion_digest_sha256": "8ccc3976fafcecec7b9686a6ccbe4e7f3291d63faf13c6e74dc66a6ba65ec77f",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/315#pullrequestreview-5130242450",
+        "https://github.com/basher83/Zammad-MCP/pull/315#issuecomment-5568439034"
+      ]
+    },
+    {
+      "number": 331,
+      "comment_classification": "not_needed",
+      "classification_basis": "No explicit comment-needed/not-needed statement; review says requested changes and open questions are None.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "13222f4f028d3251c59748d37cdc8e06aab91a7e",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "44b33e504d79fdfe4ad7f1b058bc79f1987134e5150c20cb108d3ba665602c84",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/331#issuecomment-5570020672"
+      ]
+    },
+    {
+      "number": 316,
+      "comment_classification": "not_needed",
+      "classification_basis": "No explicit comment-needed/not-needed statement; review has no open questions. Body welcomes a direction veto, but existing review already establishes changes needed.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "743b0ae5774233bd1962ed7f9c79ffab39990943",
+      "comment_review_records_checked": 3,
+      "discussion_digest_sha256": "5446256e3bce72806efe9f8439c10fbd8db71dc9b12a2cfca645d55d1ec5b481",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/316#pullrequestreview-5131496270"
+      ]
+    },
+    {
+      "number": 338,
+      "comment_classification": "not_needed",
+      "classification_basis": "No literal comment-needed/not-needed statement. Latest review explicitly says \u201cNo prior blocking finding is open\u201d and \u201cRequested changes: None\u201d; \u201cNo action required\u201d refers to specified non-blocking CI findings.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "65313d4f975b0afe197ad807d5a0d085f4b269bd",
+      "comment_review_records_checked": 10,
+      "discussion_digest_sha256": "60eecca89d54657f2d9813578035c79a60f4a29ff34df808da2d96397b7484ed",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/338#issuecomment-5579939548"
+      ]
+    },
+    {
+      "number": 341,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": "No explicit statement that a new maintainer comment is needed or unnecessary; flag is a ledger recommendation, not a quoted review instruction.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "e5a0e7a4fb4cf42656cbfc16ddceb301a9b93a26",
+      "comment_review_records_checked": 5,
+      "discussion_digest_sha256": "1f2b81f1f9670ad6439393296b4418f9e26d82ea682fc5aa618a916642a7e323",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/341#issuecomment-5579892612",
+        "https://github.com/basher83/Zammad-MCP/pull/341#issuecomment-5579938141"
+      ]
+    },
+    {
+      "number": 337,
+      "comment_classification": "not_needed",
+      "classification_basis": "No explicit statement that a new maintainer comment is needed or unnecessary; flag is a ledger recommendation, not a quoted review instruction.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "6cbc840fd34deda3d93c8bba84c6a437eae42600",
+      "comment_review_records_checked": 4,
+      "discussion_digest_sha256": "18e6614e6e237521795af02f0765af34b8a916ca3fd80d4919655ff5ac4b8b69",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/337#pullrequestreview-5137670420"
+      ]
+    },
+    {
+      "number": 267,
+      "comment_classification": "needed",
+      "classification_basis": "Contributor explicitly asks maintainer to deconflict Codacy D203/D211 and D212/D213 rules. This is an explicit request for maintainer action, not literally a demand for a new comment. Successor-selection/comment recommendation is ours.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "2b7d13a079c28ae40bfe99c99d3c172d5cf76fd1",
+      "comment_review_records_checked": 19,
+      "discussion_digest_sha256": "c7ddf26fec67732db31bcef241016dac62c5efbce5bc708ae8415efb99d43a63",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/267#pullrequestreview-5130226654"
+      ]
+    },
+    {
+      "number": 344,
+      "comment_classification": "needed",
+      "classification_basis": "No explicit comment-needed or comment-not-needed statement found; comment disposition is a pre-triage recommendation, not a quoted verdict.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "06b3ec1033d1d5d015886169dfb5f4de371baf81",
+      "comment_review_records_checked": 2,
+      "discussion_digest_sha256": "90bef6731446f41286608fe3fd233af11c4f2ec7a44180126578c2d57907d84c",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/344"
+      ]
+    },
+    {
+      "number": 200,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": "No explicit comment-needed or comment-not-needed statement found; comment disposition is a pre-triage recommendation, not a quoted verdict.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "64324d8fff6412d9d35c5ce4516eb6176a630ebf",
+      "comment_review_records_checked": 33,
+      "discussion_digest_sha256": "806ab877a3475505794b0de1c1a18b701ffc4f431fb3260c7a508af02c31d24e",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/200#pullrequestreview-5130247102"
+      ]
+    },
+    {
+      "number": 264,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": "No explicit comment-needed or comment-not-needed statement found; comment disposition is a pre-triage recommendation, not a quoted verdict.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "d7fd3466707fcbec4968b9d279d4443c6dd36435",
+      "comment_review_records_checked": 2,
+      "discussion_digest_sha256": "5ab0e8c27a50cbe9bf521c5f91e3a712a9cf86f771ec0661e9a0e8e8d905a1d2",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/264#pullrequestreview-5130186682"
+      ]
+    },
+    {
+      "number": 317,
+      "comment_classification": "unclear_conditional",
+      "classification_basis": "No explicit comment-needed or comment-not-needed statement found; comment disposition is a pre-triage recommendation, not a quoted verdict.",
+      "discussion_unchanged_since_analyzed_snapshot": true,
+      "head_unchanged": true,
+      "head_sha": "a97daf5093d2235fc65474fa5335a898b0a34f98",
+      "comment_review_records_checked": 5,
+      "discussion_digest_sha256": "1db738710f961fd72d6fb4dd05256242fc3a1a6e7e92f9cdb9ad8142cd9419c6",
+      "evidence_urls": [
+        "https://github.com/basher83/Zammad-MCP/pull/317#pullrequestreview-5130178192"
+      ]
+    }
+  ]
+}

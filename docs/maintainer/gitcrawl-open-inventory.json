@@ -1,0 +1,405 @@
+{
+  "observed_at": "2026-09-25T08:05:38.952807+00:00",
+  "command": "gitcrawl threads basher83/Zammad-MCP --limit 10000 --json; filter state=open",
+  "items": [
+    {
+      "number": 3,
+      "kind": "issue",
+      "state": "open",
+      "title": "Dependency Dashboard",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/3"
+    },
+    {
+      "number": 15,
+      "kind": "issue",
+      "state": "open",
+      "title": "Feature: Implement bulk operations for tickets",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/15"
+    },
+    {
+      "number": 16,
+      "kind": "issue",
+      "state": "open",
+      "title": "Feature: Add webhook/real-time update support",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/16"
+    },
+    {
+      "number": 120,
+      "kind": "issue",
+      "state": "open",
+      "title": "Feature: Implement rate limiting for API requests",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/120"
+    },
+    {
+      "number": 121,
+      "kind": "issue",
+      "state": "open",
+      "title": "Feature: Implement audit logging for security and compliance",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/121"
+    },
+    {
+      "number": 198,
+      "kind": "issue",
+      "state": "open",
+      "title": "zammad knowledgebase",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/198"
+    },
+    {
+      "number": 200,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "Feature/knowledge base crud",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/200"
+    },
+    {
+      "number": 201,
+      "kind": "issue",
+      "state": "open",
+      "title": "Make all constants case-insensitive if they can be",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/201"
+    },
+    {
+      "number": 212,
+      "kind": "issue",
+      "state": "open",
+      "title": "Flatten tool `params` into `arguments` to fix arg/param validation failures",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/212"
+    },
+    {
+      "number": 257,
+      "kind": "issue",
+      "state": "open",
+      "title": "[triage] Zammad-MCP maintainer digest",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/257"
+    },
+    {
+      "number": 260,
+      "kind": "issue",
+      "state": "open",
+      "title": "fix: uv run semgrep broken on Python 3.13 (pkg_resources missing)",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/260"
+    },
+    {
+      "number": 264,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "chore(deps): bump urllib3 from 2.6.3 to 2.7.0 in the uv group across 1 directory",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/264"
+    },
+    {
+      "number": 267,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat(kb): add read-only Knowledge Base support",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/267"
+    },
+    {
+      "number": 276,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "chore(deps): Update GitHub Actions",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/276"
+    },
+    {
+      "number": 278,
+      "kind": "issue",
+      "state": "open",
+      "title": "Support custom Zammad Ticket object attributes in MCP",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/278"
+    },
+    {
+      "number": 287,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix: add pending_time to update_ticket and surface article attachments",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/287"
+    },
+    {
+      "number": 289,
+      "kind": "issue",
+      "state": "open",
+      "title": "[triage] Zammad-MCP maintainer digest",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/289"
+    },
+    {
+      "number": 291,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "chore(deps): Lock file maintenance",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/291"
+    },
+    {
+      "number": 306,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "chore(deps): Update mise tools",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/306"
+    },
+    {
+      "number": 307,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix: don't HTML-escape quotes/apostrophes in plain-text article/ticket content",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/307"
+    },
+    {
+      "number": 309,
+      "kind": "issue",
+      "state": "open",
+      "title": "Feature request: ticket merge tool (PUT /api/v1/ticket_merge)",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/309"
+    },
+    {
+      "number": 310,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix(prompts): accept string arguments for ticket_id",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/310"
+    },
+    {
+      "number": 311,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat: fast GraphQL-based ticket stats (ticketOverviews) with paginated fallback",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/311"
+    },
+    {
+      "number": 312,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat: add zammad_merge_tickets tool via legacy ticket_merge REST endpoint",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/312"
+    },
+    {
+      "number": 313,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix(client): request expanded fields in get_ticket",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/313"
+    },
+    {
+      "number": 314,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix(stats): flag group-filtered counts truncated at the search cap",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/314"
+    },
+    {
+      "number": 315,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat(search): add creation date range filters to ticket search",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/315"
+    },
+    {
+      "number": 316,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat(export): add bulk ticket export to JSONL",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/316"
+    },
+    {
+      "number": 317,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix: fix: uv run semgrep broken on Python 3.13 (pkg_resources missing)",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/317"
+    },
+    {
+      "number": 318,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix: add customer field to zammad_update_ticket",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/318"
+    },
+    {
+      "number": 319,
+      "kind": "issue",
+      "state": "open",
+      "title": "zammad_get_ticket returns \"Unknown\" for State, Priority, Group, Owner and Customer",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/319"
+    },
+    {
+      "number": 320,
+      "kind": "issue",
+      "state": "open",
+      "title": "zammad_delete_attachment always fails: Resource.destroy() takes 2 positional arguments but 4 were given",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/320"
+    },
+    {
+      "number": 321,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix(client): request expand=true when fetching a single ticket",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/321"
+    },
+    {
+      "number": 322,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix!: remove zammad_delete_attachment, Zammad has no such endpoint",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/322"
+    },
+    {
+      "number": 323,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix(stats): categorize ticket stats by state name, not state_type_id",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/323"
+    },
+    {
+      "number": 324,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "test: cover double quotes in plain-text sanitization (follow-up to #307)",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/324"
+    },
+    {
+      "number": 325,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "refactor: drop orphaned _destructive_write_annotations and harden guard test (follow-up to #322)",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/325"
+    },
+    {
+      "number": 326,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "test: cover customer forwarding through zammad_update_ticket tool (follow-up to #318)",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/326"
+    },
+    {
+      "number": 327,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix: populate state/priority/group/owner/customer in zammad_get_ticket",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/327"
+    },
+    {
+      "number": 328,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix(client): build get_ticket URL from zammad_py's normalised base (follow-up to #321)",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/328"
+    },
+    {
+      "number": 329,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "test: cover ticket resource attachments and document pending_time (follow-up to #287)",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/329"
+    },
+    {
+      "number": 330,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix!: remove zammad_delete_attachment, Zammad has no such endpoint",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/330"
+    },
+    {
+      "number": 331,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix(search): show date bounds in search results header (follow-ups to #315)",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/331"
+    },
+    {
+      "number": 332,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "Fix MCP tool schemas to accept flat agent arguments",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/332"
+    },
+    {
+      "number": 333,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat(models): accept case-insensitive constant inputs",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/333"
+    },
+    {
+      "number": 334,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat(tickets): add zammad_bulk_update_tickets tool",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/334"
+    },
+    {
+      "number": 335,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat(tickets): support custom Zammad object attributes on read and update",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/335"
+    },
+    {
+      "number": 336,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat: add zammad_merge_tickets tool for merging duplicate tickets",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/336"
+    },
+    {
+      "number": 337,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat(audit): add opt-in JSON Lines audit logging for security events",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/337"
+    },
+    {
+      "number": 338,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat: receive Zammad webhook events and expose them via zammad_list_events",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/338"
+    },
+    {
+      "number": 339,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "fix(tickets): bound bulk tag names like the single-tag tools",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/339"
+    },
+    {
+      "number": 340,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "Review follow-ups for #333: lowercase docstring values and enum rejection tests",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/340"
+    },
+    {
+      "number": 341,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat(client): add rate limiting, retries, and circuit breaker for Zammad requests",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/341"
+    },
+    {
+      "number": 342,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "Remove repo-local Codex triage and digest automation",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/342"
+    },
+    {
+      "number": 343,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "Review follow-ups for #340: add_article docstring default and example casing",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/343"
+    },
+    {
+      "number": 344,
+      "kind": "pull_request",
+      "state": "open",
+      "title": "feat(kb): add read-only Knowledge Base tools and resources",
+      "url": "https://github.com/basher83/Zammad-MCP/pull/344"
+    },
+    {
+      "number": 345,
+      "kind": "issue",
+      "state": "open",
+      "title": "get_ticket_stats: escalated_count counts future SLA deadlines, not escalated tickets",
+      "url": "https://github.com/basher83/Zammad-MCP/issues/345"
+    }
+  ]
+}
