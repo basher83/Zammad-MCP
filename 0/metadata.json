@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.11.2",
+  "checkpoint_id": "01M3B5JGTQS6MXDT16Y77HVYVX",
+  "session_id": "01a0d656-3569-7ab1-a556-3bef142a2ed4",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-25T02:16:09.925708Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "pyproject.toml",
+    "scripts/uv/README.md"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6-astra",
+  "turn_id": "85ca7ff121db",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 70192,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 907008,
+    "output_tokens": 2937,
+    "api_call_count": 18
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-25T02:16:09.910009Z",
+    "agent_lines": 0,
+    "agent_removed": 4,
+    "human_added": 53,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 53,
+    "total_lines_changed": 535,
+    "agent_percentage": 0.7476635514018692,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 332,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.json": 90,
+        ".codex/hooks.json": 88,
+        ".pi/extensions/entire/index.ts": 147,
+        "IDEA.md": 7
+      }
+    }
+  ]
+}
