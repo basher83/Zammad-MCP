@@ -1,0 +1,5 @@
+I need to compare and contrast the in repo technical-documentation skill to the version here: [https://github.com/openclaw/openclaw/tree/main/.agents/skills/technical-documentation](https://github.com/openclaw/openclaw/tree/main/.agents/skills/technical-documentation) I am wondering what is different
+
+---
+
+lets adapt OpenClaw’s explicit preservation mapping and repository-overlay pattern. I ported the skill from `vincentkoc/dotskills`. Zammad lacks some strong docs guidance which is why. I grabbed it to try and improve this repo.
