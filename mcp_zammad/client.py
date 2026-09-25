@@ -3,7 +3,7 @@
 import logging
 import os
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
@@ -481,3 +481,44 @@ class ZammadClient:
         response = self.api.session.get(f"{self.url}/tag_list")
         response.raise_for_status()
         return list(response.json())
+
+    def merge_tickets(
+        self,
+        source_ticket_id: int,
+        target_ticket_number: str | None = None,
+        target_ticket_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Merge a source ticket into a target ticket via the legacy ticket_merge endpoint.
+
+        The endpoint identifies the source by internal ID and the target by
+        display number, so a target given by ID is resolved to its number first.
+
+        Args:
+            source_ticket_id: Internal ID of the ticket that will be merged away.
+            target_ticket_number: Optional. Display number of the surviving ticket.
+            target_ticket_id: Optional. Internal ID of the surviving ticket.
+
+        Returns:
+            Raw merge response with ``result`` and ``target_ticket`` keys.
+
+        Raises:
+            ValueError: If not exactly one target is given, or Zammad reports failure in-band.
+            requests.HTTPError: If the API request fails (e.g., 403 Forbidden, 404 Not Found).
+
+        """
+        if (target_ticket_number is None) == (target_ticket_id is None):
+            msg = "Provide exactly one of target_ticket_number or target_ticket_id"
+            raise ValueError(msg)
+        if target_ticket_number is None:
+            target_ticket_number = str(self.api.ticket.find(target_ticket_id)["number"])
+
+        # Encode as a single path segment so "/" or "?" in a caller-supplied number
+        # cannot redirect the authenticated PUT to a different endpoint.
+        target_segment = quote(target_ticket_number, safe="")
+        response = self.api.session.put(f"{self.url}/ticket_merge/{source_ticket_id}/{target_segment}")
+        response.raise_for_status()
+        payload = dict(response.json())
+        if payload.get("result") != "success":
+            msg = f"Zammad refused to merge ticket {source_ticket_id} into #{target_ticket_number}: {payload.get('message', payload)}"
+            raise ValueError(msg)
+        return payload

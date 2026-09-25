@@ -103,6 +103,15 @@ run = "uv lock --upgrade"
 description = "Install Python dependencies"
 run = "uv sync"
 
+# === Validation tasks (non-mutating; same gates CI runs) ===
+[tasks.validate]
+description = "Fast developer gates: lint + affected tests"
+run = "./scripts/validate.sh dev"
+
+[tasks.validate-release]
+description = "Release gates: lint + full coverage suite + build"
+run = "./scripts/validate.sh release"
+
 # === Hooks tasks ===
 [tasks.hooks-install]
 description = "Install pre-commit and infisical hooks"

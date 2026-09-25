@@ -420,6 +420,38 @@ class DeleteAttachmentResult(StrictBaseModel):
     message: str = Field(description="Human-readable result message")
 
 
+class TicketMergeParams(StrictBaseModel):
+    """Ticket merge request parameters.
+
+    The target may be given by its display number (as shown in the Zammad UI)
+    or by its internal ID, but not both.
+    """
+
+    source_ticket_id: int = Field(gt=0, description="Internal ID of the ticket to merge (it becomes closed/merged)")
+    target_ticket_number: str | None = Field(
+        default=None, min_length=1, max_length=100, description="Display number of the ticket to merge into"
+    )
+    target_ticket_id: int | None = Field(
+        default=None, gt=0, description="Internal ID of the ticket to merge into (alternative to number)"
+    )
+
+    @model_validator(mode="after")
+    def require_exactly_one_target(self) -> "TicketMergeParams":
+        """Ensure exactly one target identifier is supplied."""
+        provided = [v for v in (self.target_ticket_number, self.target_ticket_id) if v is not None]
+        if len(provided) != 1:
+            msg = "Provide exactly one of target_ticket_number or target_ticket_id"
+            raise ValueError(msg)
+        return self
+
+
+class TicketMergeResult(StrictBaseModel):
+    """Result of a ticket merge operation."""
+
+    result: str = Field(description="Zammad merge result, 'success' when the merge completed")
+    target_ticket: Ticket = Field(description="The surviving target ticket after the merge")
+
+
 class TagOperationParams(StrictBaseModel):
     """Tag operation (add/remove) request parameters."""
 
