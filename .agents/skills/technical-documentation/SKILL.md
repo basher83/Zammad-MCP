@@ -38,12 +38,14 @@ Produce, review, and audit technical documentation that is clear, unambiguous, a
 3. Detect multilingual scope and define the required parity level.
 4. Read `references/agent-and-contributing.md` for agent instruction and `CONTRIBUTING.md` rules.
 5. Read `references/principles.md` for the governing ruleset (Matt Palmer, OpenAI, and ASD-STE100).
+   For Zammad MCP work, read [the repository overlay](references/zammad.md) before the build/review playbook. Other repositories use their own overlay when available.
+   For content rewrites, moves, splits, or deletions, apply [preservation mapping](references/preservation.md). A spelling-only edit does not need a map.
 6. Read `references/simplified-technical-english.md` before writing or rewriting any prose. Pick Strict or STE-flavored mode per file.
 7. Use `sub-agent-assisted` when delegation helps and the Agent tool exists, otherwise use `single-agent`. Read `references/workflows.md` when the scope needs sharding or the user requests a Workflow. Use `workflow` only with user opt-in and an available Workflow tool.
 8. For build tasks, follow `references/build.md`.
 9. For review tasks, follow `references/review.md` and detect issues proactively.
 10. When the requested audit scope needs sharding, follow `references/large-docs-audit.md`. Run the round-0 mechanical scans and the repo's native validators first, then shard by character budget and audit every page in scope in full. Batch adversarial checks per shard. Run further rounds until two add nothing new, and report the count each round added rather than claiming convergence. Never cut an audit short to fit a message.
-11. For rewrite tasks, run `scripts/ste-lint.py` first, rewrite per the STE process, and re-run the lint. Hard violations must not increase. Return the rewritten text alone unless the user asks for the rule table.
+11. For rewrite tasks, run `scripts/ste-lint.py` first, rewrite per the STE process, and re-run the lint. Hard violations must not increase. For standalone prose, return the rewritten text alone. For repository restructuring, include the preservation map and validation gaps in the handoff.
 12. For remediation at scale, group the ledger into PRs with `references/pr-program.md` before editing anything, then land them in phase order.
 13. Use `references/tooling.md` when platform/tooling choices affect recommendations.
 14. Run a proactive issue sweep within the requested scope. Fix high-confidence defects in the same pass unless asked for report-only mode.

@@ -41,3 +41,37 @@ SOFTWARE.
 ## ASD-STE100
 
 The ASD-STE100 specification itself is not reproduced. Only rule categories are paraphrased. The approved dictionary stays out of this repository by design. Obtain the standard from https://www.asd-ste100.org/
+
+## OpenClaw documentation overlay
+
+- Source: https://github.com/openclaw/openclaw/blob/26d1ec973edc2906284254027bf16385777d839e/.agents/skills/technical-documentation/references/openclaw.md
+- License: MIT License, Copyright (c) 2026 OpenClaw Foundation
+- Adapted into: `references/preservation.md`, `references/zammad.md`, and their build/review routing.
+- Changes: extracted general preservation mapping and replaced OpenClaw paths and validation commands with Zammad-specific guidance.
+- The skill retains its declared `vincentkoc/dotskills` origin. This adaptation adds a separate source.
+
+MIT permission notice for the adapted material:
+
+```text
+MIT License
+
+Copyright (c) 2026 OpenClaw Foundation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

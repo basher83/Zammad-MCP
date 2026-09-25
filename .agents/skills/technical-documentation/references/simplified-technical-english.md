@@ -78,6 +78,7 @@ Where the compound form carries information the simple form cannot, keep it and 
 
 ## Output contract for rewrites
 
+- For repository restructuring, include the [preservation map](preservation.md) and validation gaps in the handoff. The text-only default below applies to standalone prose.
 - Default: the rewritten text alone, ready to paste. No preamble, no mode announcement, no violation count.
 - One permitted addition: a single line prefixed `Kept as-is:` that names any phrase kept longer on purpose and the precision it protects.
 - On request ("show the diff", "which rules did it break"): output a table with columns `Rule violated | Original | Simplified`. Follow it with `Mode: <mode>. <n> violations found.` and one line on anything deliberately not simplified.

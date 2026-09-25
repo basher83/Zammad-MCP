@@ -72,6 +72,7 @@ Read `principles.md` first, then follow this execution flow.
 - Match existing terminology, navigation, and component patterns.
 - Preserve existing IA unless there is a documented migration plan.
 - For rewrites, include a migration note from old to new paths.
+- Before rewriting or moving content, apply [preservation mapping](preservation.md). Check each source unit against its final destination before handoff.
 - Prefer smallest safe change set that improves utility.
 
 ## 9. Evergreen build mode

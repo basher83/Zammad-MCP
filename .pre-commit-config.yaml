@@ -1,5 +1,8 @@
 minimum_pre_commit_version: "4.5.1"
 
+# Skills retain their upstream conventions and are outside repository hooks.
+exclude: ^\.agents/
+
 default_install_hook_types:
   - pre-commit
   - post-checkout

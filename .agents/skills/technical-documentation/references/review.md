@@ -25,6 +25,7 @@ Read `principles.md` first, then apply this checklist.
 ## 3. Governance surface review
 
 - Use `references/agent-and-contributing.md` as the source of truth for inventory, canonical/alias mapping, and precedence/conflict handling.
+
 For AGENTS.md:
 
 - confirm persona intent, scope, and command/tool boundaries are explicit.
@@ -60,6 +61,7 @@ For agent-platform awareness:
 - Review framework-native docs sources in scope (for example Fern, Mintlify, Sphinx, MkDocs) and ensure guidance matches actual source-of-truth files.
 - Check `.md/.mdx/.mdc/.rst/.rsc` for stale commands, missing prerequisites, and broken cross-links.
 - Confirm referenced doc paths and anchors exist.
+- For rewrites, moves, splits, or deletions, check [preservation mapping](preservation.md). An inventory or a passing link check does not prove content preservation.
 - Flag docs that should be split/merged to improve discoverability and maintenance.
 
 ## 5. Framework config and path mapping checks

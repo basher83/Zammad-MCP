@@ -88,6 +88,10 @@ Round 1 misses things in predictable places. Target round 2 at them:
 
 ## 7. Oversized page protocol
 
+Apply [preservation mapping](preservation.md) before splitting content. Anchor checks below supplement the content map.
+Use the repository overlay's renderer and HTML constraints when choosing an anchor strategy.
+If the proposed stubs violate those constraints, report the compatibility gap instead of changing policy or claiming preservation.
+
 For every page over 20k characters:
 
 1. Map its H2 sections with word counts and the Diataxis type of each section.
