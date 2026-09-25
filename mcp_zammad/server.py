@@ -884,6 +884,8 @@ class ZammadMCPServer:
                     - group (str | None): Filter by group name
                     - owner (str | None): Filter by owner email/login
                     - customer (str | None): Filter by customer email/login
+                    - created_after (date | None): Only tickets created on/after YYYY-MM-DD
+                    - created_before (date | None): Only tickets created on/before YYYY-MM-DD
                     - page (int): Page number (default: 1)
                     - per_page (int): Results per page, 1-100 (default: 25)
                     - response_format (ResponseFormat): Output format (default: MARKDOWN)
