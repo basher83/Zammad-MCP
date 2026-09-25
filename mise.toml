@@ -103,6 +103,15 @@ run = "uv lock --upgrade"
 description = "Install Python dependencies"
 run = "uv sync"
 
+# === Validation tasks ===
+[tasks.validate]
+description = "Run canonical developer validation (format, lint, types, tests)"
+run = "./scripts/validate.sh developer"
+
+[tasks.validate-release]
+description = "Run canonical release-readiness validation (developer gates + build)"
+run = "./scripts/validate.sh release"
+
 # === Hooks tasks ===
 [tasks.hooks-install]
 description = "Install pre-commit and infisical hooks"

@@ -560,6 +560,33 @@ def _format_list_json(items: list[T]) -> str:
     return json.dumps(response, indent=2, default=str)
 
 
+def _format_custom_attribute_value(value: Any) -> str:
+    """Render a custom attribute value for Markdown output."""
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value)
+    if isinstance(value, dict):
+        return json.dumps(value, default=str)
+    return str(value)
+
+
+def _format_custom_attributes_markdown(ticket: Ticket) -> list[str]:
+    """Render custom object attributes retained on the ticket as a Markdown section.
+
+    Args:
+        ticket: Ticket whose extra (non-schema) fields are custom attributes.
+
+    Returns:
+        Markdown lines for the section, or an empty list when there are no custom attributes.
+    """
+    extras = ticket.model_extra or {}
+    if not extras:
+        return []
+    lines = ["## Custom Attributes", ""]
+    lines.extend(f"**{name}**: {_format_custom_attribute_value(value)}" for name, value in sorted(extras.items()))
+    lines.append("")
+    return lines
+
+
 def _format_ticket_detail_markdown(ticket: Ticket) -> str:
     """Format single ticket with full details as markdown.
 
@@ -579,6 +606,8 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
     lines.append(f"**Created**: {ticket.created_at.isoformat()}")
     lines.append(f"**Updated**: {ticket.updated_at.isoformat()}")
     lines.append("")
+
+    lines.extend(_format_custom_attributes_markdown(ticket))
 
     # Tags
     if hasattr(ticket, "tags") and ticket.tags:
@@ -1130,6 +1159,8 @@ class ZammadMCPServer:
                     - owner (str | None): New owner email/login
                     - customer (str | None): New customer email/login
                     - time_unit (float | None): Time spent for time accounting
+                    - custom_fields (dict[str, Any] | None): Custom object attributes defined in
+                      Zammad Admin, keyed by attribute name (e.g. {"region": "north"})
 
             Returns:
                 Ticket: The updated ticket object with schema:
@@ -1149,6 +1180,7 @@ class ZammadMCPServer:
                 - Use when: "Change ticket 123 to high priority" -> ticket_id=123, priority="high"
                 - Use when: "Close ticket 123" -> ticket_id=123, state="closed"
                 - Use when: "Reassign ticket to Alice" -> ticket_id=123, owner="alice@company.com"
+                - Use when: "Set region to north on ticket 123" -> ticket_id=123, custom_fields={"region": "north"}
                 - Don't use when: Adding comments (use zammad_add_article)
                 - Don't use when: Adding tags (use zammad_add_ticket_tag)
 
