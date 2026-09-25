@@ -26,7 +26,7 @@ class TestTicketCreate:
             customer="test@example.com",
             article_body="Test body",
         )
-        assert ticket.title == "&lt;script&gt;alert(&#x27;XSS&#x27;)&lt;/script&gt;"
+        assert ticket.title == "&lt;script&gt;alert('XSS')&lt;/script&gt;"
 
     def test_html_sanitization_in_body(self):
         """Test that HTML is escaped in article body."""
@@ -36,7 +36,7 @@ class TestTicketCreate:
             customer="test@example.com",
             article_body="<b>Bold</b> and <script>alert('XSS')</script>",
         )
-        assert ticket.article_body == "&lt;b&gt;Bold&lt;/b&gt; and &lt;script&gt;alert(&#x27;XSS&#x27;)&lt;/script&gt;"
+        assert ticket.article_body == "&lt;b&gt;Bold&lt;/b&gt; and &lt;script&gt;alert('XSS')&lt;/script&gt;"
 
     def test_field_length_limits(self):
         """Test that field length limits are enforced."""
@@ -58,6 +58,11 @@ class TestTicketUpdate:
         update = TicketUpdate(title="<i>Important</i> Update")  # type: ignore[call-arg]
         assert update.title == "&lt;i&gt;Important&lt;/i&gt; Update"
 
+    def test_quotes_preserved_in_plain_text_title(self):
+        """Test that quotes remain literal while HTML-sensitive characters are escaped."""
+        update = TicketUpdate(title='<i>Say "hi", it\'s AT&T</i>')  # type: ignore[call-arg]
+        assert update.title == '&lt;i&gt;Say "hi", it\'s AT&amp;T&lt;/i&gt;'
+
     def test_none_title_not_sanitized(self):
         """Test that None title is not processed."""
         update = TicketUpdate(state="closed")  # type: ignore[call-arg]
@@ -74,12 +79,17 @@ class TestArticleCreate:
     """Test ArticleCreate model validation."""
 
     def test_html_sanitization_in_body(self):
-        """Test that HTML is escaped in article body."""
+        """Test that HTML is escaped in article body, but quotes/apostrophes are left intact.
+
+        text/plain bodies are sent verbatim (e.g. in outbound emails), so quotes must not
+        become &#x27;/&quot; entities. <, >, & are still escaped, which already neutralizes
+        the tag regardless of the quote style used inside it.
+        """
         article = ArticleCreate(
             ticket_id=123,
             body="<div onclick='alert()'>Click me</div>",
         )
-        assert article.body == "&lt;div onclick=&#x27;alert()&#x27;&gt;Click me&lt;/div&gt;"
+        assert article.body == "&lt;div onclick='alert()'&gt;Click me&lt;/div&gt;"
 
     def test_ticket_id_validation(self):
         """Test that ticket_id must be positive."""
