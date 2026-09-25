@@ -11,6 +11,7 @@
 
 ### 🐛 Bug Fixes
 
+- [**breaking**] Remove zammad_delete_attachment, Zammad has no such endpoint
 - Address CodeRabbit review feedback
 - Resolve Codacy D-series docstring violations in changed files
 - *(tests)* Add local fake Zammad server to HTTP integration fixture
