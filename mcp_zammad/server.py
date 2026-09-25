@@ -8,6 +8,7 @@ import os
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NoReturn, Protocol, TypeVar
 
@@ -20,6 +21,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .client import ZammadClient
+from .events import EventStore, ListEventsParams, ListEventsResult
 from .logging_config import configure_logging
 from .models import (
     Article,
@@ -57,6 +59,7 @@ from .models import (
     UserBrief,
     UserCreate,
 )
+from .webhooks import WebhookHandler
 
 
 class AttachmentDeletionError(Exception):
@@ -788,22 +791,27 @@ def _handle_api_error(e: Exception, context: str = "operation") -> str:
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
 
-    def __init__(self, host: str | None = None, port: int | None = None) -> None:
+    def __init__(
+        self, host: str | None = None, port: int | None = None, *, event_store: EventStore | None = None
+    ) -> None:
         """Initialize the server.
 
         Args:
             host: Deprecated. Pass host to mcp.run() instead.
             port: Deprecated. Pass port to mcp.run() instead.
+            event_store: Optional. Retention for accepted webhook events; defaults to a bounded in-memory store.
 
         """
         if host is not None or port is not None:
             logger.warning("ZammadMCPServer(host=..., port=...) is deprecated; pass host/port to mcp.run(...) instead.")
         self.client: ZammadClient | None = None
+        self.event_store = event_store if event_store is not None else EventStore()
         # Create FastMCP with lifespan configured
         self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
+        self._setup_webhooks()
 
     def _create_lifespan(self) -> Any:
         """Create the lifespan context manager for the server."""
@@ -868,6 +876,61 @@ class ZammadMCPServer:
         self._setup_ticket_tools()
         self._setup_user_org_tools()
         self._setup_system_tools()
+        self._setup_event_tools()
+
+    def _setup_webhooks(self) -> None:
+        """Expose the Zammad webhook ingress route (HTTP transport only)."""
+        handler = WebhookHandler(
+            secret_provider=lambda: os.getenv("ZAMMAD_WEBHOOK_SECRET"),
+            clock=lambda: datetime.now(timezone.utc),
+            sink=self.event_store,
+        )
+
+        @self.mcp.custom_route("/webhooks/zammad", methods=["POST"])
+        async def zammad_webhook(request: Request) -> JSONResponse:
+            result = handler.handle_delivery(await request.body(), request.headers)
+            return JSONResponse(result.body, status_code=result.status_code)
+
+    def _setup_event_tools(self) -> None:
+        """Register tools that read retained webhook events."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("List Webhook Events"))
+        def zammad_list_events(params: ListEventsParams) -> ListEventsResult:
+            """List Zammad ticket events received via webhook, oldest first.
+
+            Events arrive only when the server runs with HTTP transport and a Zammad
+            webhook + trigger POST to `/webhooks/zammad` with a valid HMAC-SHA1 signature.
+            Retention is process-local and bounded (`capacity`); events are lost on restart.
+
+            Args:
+                params (ListEventsParams): Validated parameters containing:
+                    - since (datetime | None): Only events received strictly after this timestamp
+                    - limit (int): Maximum events per page, 1-100 (default: 50); the oldest
+                      matching events are returned first
+
+            Returns:
+                ListEventsResult: `events` (event_type, ticket_id, ticket_number, article_id,
+                trigger, source_timestamp, received_at), `count`, `capacity`, `retained_total`,
+                and `next_since` (pass back as `since` on the next call; null when no events).
+                Keep calling with `next_since` until `events` is empty to drain a backlog
+                larger than `limit` without skipping anything.
+
+            Examples:
+                - Use when: "Any new ticket activity?" -> poll with since=<last next_since>
+                - Use when: "Which tickets changed recently?" -> then zammad_get_ticket per ticket_id
+                - Don't use when: You need ticket content (this returns identifiers only)
+
+            Error Handling:
+                - Returns a validation error if limit is outside 1-100 or since is not ISO 8601
+            """
+            events = self.event_store.list(since=params.since, limit=params.limit)
+            return ListEventsResult(
+                events=events,
+                count=len(events),
+                capacity=self.event_store.capacity,
+                retained_total=len(self.event_store),
+                next_since=events[-1].received_at if events else None,
+            )
 
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""

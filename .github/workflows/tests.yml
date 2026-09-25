@@ -8,6 +8,40 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint-and-types:
+    # Mirrors the non-mutating checks in scripts/quality-check.sh. Rules are
+    # defined once in pyproject.toml ([tool.ruff], [tool.mypy]).
+    runs-on: ubuntu-latest
+    if: github.repository == 'basher83/Zammad-MCP'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.28"
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install dependencies
+        run: uv sync --dev --frozen
+
+      - name: Check formatting
+        run: uv run ruff format --check mcp_zammad tests
+
+      - name: Lint
+        run: uv run ruff check mcp_zammad tests
+
+      - name: Type check
+        run: uv run mypy mcp_zammad
+
   test-and-coverage:
     runs-on: ubuntu-latest
     if: github.repository == 'basher83/Zammad-MCP'
