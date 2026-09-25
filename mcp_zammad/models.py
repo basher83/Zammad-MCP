@@ -671,3 +671,60 @@ class TagOperationResult(BaseModel):
 
     success: bool = Field(description="Whether the operation was successful")
     message: str | None = Field(None, description="Optional message about the operation")
+
+
+# --- KB read-only param models (StrictBaseModel) ---
+
+
+class GetKnowledgeBaseParams(StrictBaseModel):
+    """Parameters for retrieving a single knowledge base."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class ListKnowledgeBasesParams(StrictBaseModel):
+    """Parameters for listing knowledge bases."""
+
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class GetKBCategoryParams(StrictBaseModel):
+    """Parameters for retrieving a KB category."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    category_id: int = Field(gt=0, description="Category ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class GetKBAnswerParams(StrictBaseModel):
+    """Parameters for retrieving a KB answer."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    answer_id: int = Field(gt=0, description="Answer ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class ListKBAnswersParams(StrictBaseModel):
+    """Parameters for listing answers within a KB category."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    category_id: int = Field(gt=0, description="Category ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class SearchKBAnswersParams(StrictBaseModel):
+    """Parameters for searching KB answers by title or body keyword."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    query: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Search string (case-insensitive substring match on title and body)",
+    )
+    category_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Limit search to this category and its descendants (optional)",
+    )
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
