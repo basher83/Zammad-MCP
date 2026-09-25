@@ -8,6 +8,8 @@ from urllib.parse import urlparse
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
+from .audit import AuditLogger
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,6 +25,7 @@ class ZammadClient:
         oauth2_token: str | None = None,
         *,
         insecure: bool | None = None,
+        audit_logger: AuditLogger | None = None,
     ) -> None:
         """Initialize Zammad client with environment variables or provided credentials.
 
@@ -34,7 +37,10 @@ class ZammadClient:
         Set insecure=True, or set ZAMMAD_INSECURE to 1/true/yes/on, only for
         trusted self-signed/internal certificate chains. Defaults to secure TLS
         verification.
+
+        Pass audit_logger to receive security_validation events for URL checks.
         """
+        self._audit = audit_logger
         self.url = url or os.getenv("ZAMMAD_URL")
         self.username = username or os.getenv("ZAMMAD_USERNAME")
 
@@ -113,18 +119,32 @@ class ZammadClient:
             if not parsed.hostname:
                 _raise_config_error("Zammad URL must include a valid hostname")
 
-            # Block local/private networks (optional - adjust based on your security requirements)
-            hostname = parsed.hostname.lower() if parsed.hostname else ""
-            blocked_hosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"]  # nosec B104
-            if hostname in blocked_hosts:
-                logger.warning(f"Zammad URL points to local host: {hostname}")
-
-            # Check for private IP ranges (optional)
-            if hostname.startswith(("10.", "192.168.", "172.")):
-                logger.warning(f"Zammad URL points to private network: {hostname}")
+            self._check_host_network(parsed.hostname.lower() if parsed.hostname else "")
 
         except Exception as e:
             raise ConfigException(f"Invalid Zammad URL format: {e}") from e
+
+    def _check_host_network(self, hostname: str) -> None:
+        """Warn (and audit) when the Zammad host is local or on a private network."""
+        blocked_hosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"]  # nosec B104
+        if hostname in blocked_hosts:
+            logger.warning(f"Zammad URL points to local host: {hostname}")
+            self._audit_host("local_host", hostname)
+        elif hostname.startswith(("10.", "192.168.", "172.")):
+            logger.warning(f"Zammad URL points to private network: {hostname}")
+            self._audit_host("private_network", hostname)
+
+    def _audit_host(self, reason: str, hostname: str) -> None:
+        """Emit a security_validation audit event carrying only the hostname, never the full URL."""
+        if self._audit is None:
+            return
+        self._audit.log_event(
+            "security_validation",
+            "zammad_url_check",
+            success=False,
+            resource_type="zammad_url",
+            details={"reason": reason, "host": hostname},
+        )
 
     def _read_secret_file(self, env_var: str) -> str | None:
         """Read secret from file path specified in environment variable.
