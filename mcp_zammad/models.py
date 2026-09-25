@@ -384,6 +384,64 @@ class TicketUpdateParams(StrictBaseModel):
         return html.escape(v) if v else v
 
 
+class BulkTicketUpdateParams(StrictBaseModel):
+    """Bulk ticket update request parameters."""
+
+    ticket_ids: list[int] = Field(
+        min_length=1, max_length=100, description="Internal ticket IDs to update (1-100, no duplicates)"
+    )
+    title: str | None = Field(None, description="New ticket title", max_length=200)
+    state: str | None = Field(None, description="New state name", max_length=100)
+    priority: str | None = Field(None, description="New priority name", max_length=100)
+    owner: str | None = Field(None, description="New owner login/email", max_length=255)
+    group: str | None = Field(None, description="New group name", max_length=100)
+    time_unit: float | None = Field(None, description="Time spent per ticket for time accounting", gt=0)
+    add_tags: list[str] | None = Field(None, description="Tags to add to every ticket")
+    remove_tags: list[str] | None = Field(None, description="Tags to remove from every ticket")
+    note: str | None = Field(None, description="Internal note to add to every ticket", max_length=10000)
+    delay_seconds: float = Field(0, ge=0, description="Pause between tickets to reduce API pressure")
+
+    @field_validator("ticket_ids")
+    @classmethod
+    def validate_ticket_ids(cls, v: list[int]) -> list[int]:
+        """Require positive, unique ticket IDs."""
+        if any(ticket_id <= 0 for ticket_id in v):
+            raise ValueError("ticket_ids must be greater than 0")
+        if len(set(v)) != len(v):
+            raise ValueError("ticket_ids must be unique")
+        return v
+
+    @field_validator("title", "note")
+    @classmethod
+    def sanitize_text(cls, v: str | None) -> str | None:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v) if v else v
+
+    @model_validator(mode="after")
+    def require_operation(self) -> "BulkTicketUpdateParams":
+        """Reject requests that would change nothing."""
+        fields = (self.title, self.state, self.priority, self.owner, self.group, self.time_unit, self.note)
+        if any(value is not None for value in fields) or self.add_tags or self.remove_tags:
+            return self
+        raise ValueError("Specify at least one field, tag, or note to apply")
+
+
+class BulkUpdateFailure(StrictBaseModel):
+    """A single ticket that could not be fully updated."""
+
+    ticket_id: int = Field(description="Ticket ID that failed")
+    error: str = Field(description="Actionable error message")
+
+
+class BulkUpdateResult(StrictBaseModel):
+    """Outcome of a bulk ticket update."""
+
+    successful_ticket_ids: list[int] = Field(description="Tickets where every requested action succeeded")
+    failed: list[BulkUpdateFailure] = Field(description="Tickets that failed with their error")
+    total_processed: int = Field(description="Number of tickets attempted")
+    total_successful: int = Field(description="Number of tickets fully updated")
+
+
 class GetArticleAttachmentsParams(StrictBaseModel):
     """Get article attachments request parameters."""
 
