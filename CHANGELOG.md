@@ -4,6 +4,7 @@
 
 ### 🚀 Features
 
+- *(models)* Accept case-insensitive response_format, article type/sender, and content_type inputs (#201)
 - Add tag listing and retrieval tools (#174)
 - *(time-accounting)* Add time_unit support to update_ticket and add_article (#211)
 - *(deps)* Migrate from bundled FastMCP 1 to standalone FastMCP 3
