@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
 
@@ -247,6 +248,7 @@ class ZammadClient:
         priority: str | None = None,
         owner: str | None = None,
         group: str | None = None,
+        pending_time: datetime | str | None = None,
         time_unit: float | None = None,
     ) -> dict[str, Any]:
         """Update an existing ticket."""
@@ -264,6 +266,11 @@ class ZammadClient:
             update_data["owner"] = owner
         if group is not None:
             update_data["group"] = group
+        if pending_time is not None:
+            # Zammad expects an ISO 8601 string; serialize datetimes for the JSON body.
+            update_data["pending_time"] = (
+                pending_time.isoformat() if isinstance(pending_time, datetime) else pending_time
+            )
         if time_unit is not None:
             update_data["time_unit"] = time_unit
 

@@ -47,6 +47,7 @@ from mcp_zammad.server import (
     CHARACTER_LIMIT,
     AttachmentDeletionError,
     ZammadMCPServer,
+    _format_article_attachments,
     _format_ticket_detail_markdown,
     main,
     mcp,
@@ -1040,6 +1041,43 @@ def test_update_ticket_valid_time_unit():
 
     params_none = TicketUpdateParams(ticket_id=1)
     assert params_none.time_unit is None
+
+
+def test_update_ticket_pending_state_requires_pending_time():
+    """Moving to a pending state without pending_time is rejected up front."""
+    with pytest.raises(ValidationError, match="pending_time"):
+        TicketUpdateParams(ticket_id=1, state="pending reminder")
+
+    with pytest.raises(ValidationError, match="pending_time"):
+        TicketUpdateParams(ticket_id=1, state="pending close")
+
+
+def test_update_ticket_pending_state_with_pending_time():
+    """pending_time is accepted (and parsed) alongside a pending state."""
+    params = TicketUpdateParams(ticket_id=1, state="pending reminder", pending_time="2026-07-01T08:00:00Z")
+    assert params.pending_time == datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
+
+
+def test_update_ticket_forwards_pending_time_as_datetime(mock_zammad_client, sample_ticket_data, decorator_capturer):
+    """The tool forwards pending_time to the client as a datetime object."""
+    mock_instance, _ = mock_zammad_client
+    mock_instance.update_ticket.return_value = sample_ticket_data
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = TicketUpdateParams(ticket_id=1, state="pending reminder", pending_time="2026-07-01T08:00:00Z")
+    test_tools["zammad_update_ticket"](params)
+
+    _, kwargs = mock_instance.update_ticket.call_args
+    assert kwargs["ticket_id"] == 1
+    assert kwargs["state"] == "pending reminder"
+    assert kwargs["pending_time"] == datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
 
 
 def test_get_organization_tool(mock_zammad_client, sample_organization_data):
@@ -2985,6 +3023,61 @@ def test_format_ticket_detail_markdown_with_articles(sample_ticket_data, sample_
     assert "- **Created**:" in result
     assert "Test article" in result
     assert "Second article" in result
+
+
+def test_format_ticket_detail_markdown_with_attachments(sample_ticket_data, sample_article_data):
+    """Attachments are surfaced with id/filename so they can be downloaded."""
+    article = Article(
+        **{
+            **sample_article_data,
+            "attachments": [
+                {"id": 1, "filename": "kaufanfrage.pdf", "size": 20480},
+                {"id": 2, "filename": "logo.png", "size": 2048},
+            ],
+        }
+    )
+    ticket_with_attachments = Ticket(**sample_ticket_data, articles=[article])
+
+    result = _format_ticket_detail_markdown(ticket_with_attachments)
+
+    assert "**Attachments**" in result
+    assert "zammad_download_attachment" in result
+    assert f"article_id={article.id}" in result
+    assert "id=1: kaufanfrage.pdf, 20480 bytes" in result
+    assert "id=2: logo.png, 2048 bytes" in result
+
+
+def test_format_article_attachments_sanitizes_filename():
+    """Filenames with control characters or HTML are neutralized before rendering."""
+    attachments = [
+        Attachment(id=1, filename="evil\n- injected line", size=10),
+        Attachment(id=2, filename="<script>alert(1)</script>.txt", size=None),
+    ]
+
+    rendered = "\n".join(_format_article_attachments(attachments, article_id=5))
+
+    # A newline in the filename must not create an extra markdown line
+    assert "\n- injected line" not in rendered
+    assert "evil- injected line" in rendered
+    # HTML metacharacters are escaped
+    assert "<script>" not in rendered
+    assert "&lt;script&gt;" in rendered
+
+
+def test_format_article_attachments_handles_dict_with_invalid_size():
+    """Non-integer sizes (e.g. from raw dicts) are omitted rather than rendered."""
+    lines = _format_article_attachments([{"id": 7, "filename": "doc.pdf", "size": "big"}], article_id=5)
+
+    assert lines[-1] == "  - id=7: doc.pdf"
+
+
+def test_format_ticket_detail_markdown_without_attachments(sample_ticket_data, sample_article_data):
+    """Articles without attachments do not render an attachment section."""
+    ticket = Ticket(**sample_ticket_data, articles=[Article(**sample_article_data)])
+
+    result = _format_ticket_detail_markdown(ticket)
+
+    assert "**Attachments**" not in result
 
 
 def test_format_ticket_detail_markdown_with_tags(sample_ticket_data):
