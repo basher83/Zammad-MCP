@@ -155,6 +155,16 @@ def _idempotent_write_annotations(title: str) -> ToolAnnotations:
     )
 
 
+def _overview_counts(data: dict[str, Any]) -> dict[str, int]:
+    """Extract the overview link -> ticketCount mapping from a GraphQL payload."""
+    overviews = data.get("ticketOverviews") or []
+    return {
+        item["link"]: int(item.get("ticketCount") or 0)
+        for item in overviews
+        if isinstance(item, dict) and item.get("link")
+    }
+
+
 def _handle_ticket_not_found_error(ticket_id: int, error: Exception) -> NoReturn:
     """Check if an exception is a ticket not found error and raise TicketIdGuidanceError.
 
@@ -2041,6 +2051,83 @@ class ZammadMCPServer:
             avg_resolution_time=None,
         )
 
+    @staticmethod
+    def _validate_overview_counts(data: dict[str, Any]) -> tuple[int, int, int, int]:
+        """Extract and validate overview counters from a GraphQL payload.
+
+        Overviews are admin-configurable: any default overview can be
+        deleted or renamed, so every required link must be present.
+        Substituting 0 would yield inconsistent stats (e.g. open > total).
+
+        Returns (total, open, pending, escalated).
+
+        Raises:
+            ValueError: If a required overview link is missing or the
+                counters are inconsistent.
+        """
+        counts = _overview_counts(data)
+
+        required = ("all_tickets", "all_open", "all_pending_reached", "all_escalated")
+        missing = set(required) - counts.keys()
+        if missing:
+            raise ValueError(f"GraphQL overviews payload misses required links {sorted(missing)}: {counts!r}")
+
+        total = counts["all_tickets"]
+        open_count = counts["all_open"]
+        pending = counts["all_pending_reached"]
+        escalated = counts["all_escalated"]
+        if total < open_count + pending:
+            raise ValueError(
+                "Inconsistent GraphQL overview counters: "
+                f"total={total} < open+pending={open_count + pending}: {counts!r}"
+            )
+        return total, open_count, pending, escalated
+
+    def _collect_ticket_stats_graphql(self, client: ZammadClient) -> TicketStats:
+        """Collect ticket statistics via the Zammad GraphQL ticketOverviews query.
+
+        This is the fast path: a single GraphQL request returns the same
+        database-backed, real-time counters the modern Zammad web UI shows,
+        instead of scanning every ticket page by page. It is also unaffected
+        by a stale Elasticsearch index (unlike /tickets/search counts).
+
+        Count mapping (overview link -> stats field):
+            all_tickets         -> total_count
+            all_open            -> open_count
+            all_pending_reached -> pending_count (only tickets whose pending
+                                   time has been reached; Zammad exposes no
+                                   overview for all pending states)
+            all_escalated       -> escalated_count
+            closed_count        -> derived: total - open - pending (estimate;
+                                   also includes merged/removed states)
+
+        Raises:
+            ValueError: If the response does not contain the expected overview
+                links or the counters are inconsistent (in either case the
+                caller falls back to the paginated scan).
+        """
+        data = client.graphql("{ ticketOverviews(ignoreUserConditions: true) { link ticketCount } }")
+        total, open_count, pending, escalated = self._validate_overview_counts(data)
+        closed = total - open_count - pending
+
+        logger.info(
+            "Ticket statistics via GraphQL overviews: total=%s open=%s closed~=%s pending=%s escalated=%s",
+            total,
+            open_count,
+            closed,
+            pending,
+            escalated,
+        )
+        return TicketStats(
+            total_count=total,
+            open_count=open_count,
+            closed_count=closed,
+            pending_count=pending,
+            escalated_count=escalated,
+            avg_first_response_time=None,
+            avg_resolution_time=None,
+        )
+
     def _setup_system_tools(self) -> None:  # noqa: PLR0915
         """Register system information tools."""
 
@@ -2074,7 +2161,7 @@ class ZammadMCPServer:
                 - Use when: "Stats for Support group" -> group="Support"
                 - Use when: "How many escalated tickets?" -> check escalated_count
                 - Don't use when: Need individual ticket details (use zammad_search_tickets)
-                - Don't use when: Need real-time counts (this scans all tickets via pagination)
+                - Don't use when: You have the group filter set (falls back to slow scan)
 
             Error Handling:
                 - Returns counts with warning if max page limit reached (1000 pages)
@@ -2082,11 +2169,14 @@ class ZammadMCPServer:
                 - Returns "Error: Permission denied" if no access to tickets
 
             Note:
-                Uses pagination to scan tickets without loading all into memory.
-                May take several seconds for large ticket databases (>10k tickets).
-                State categorization uses state_type_id: new/open=open, closed=closed, pending=pending.
+                Fast path: a single GraphQL ticketOverviews query returns the same
+                real-time, database-backed counters the Zammad web UI shows.
+                Caveats of the fast path: pending_count covers only tickets whose
+                pending time has been reached, and closed_count is derived as
+                total - open - pending (includes merged/removed states).
+                Fallback: if GraphQL is unavailable or a group filter is given,
+                uses pagination to scan tickets (slow on large databases).
                 Date filtering (start_date, end_date) not yet implemented - shows warning if provided.
-                Processes up to 100,000 tickets (1000 pages x 100 per page).
             """
             start_time = time.time()
             client = self.get_client()
@@ -2096,6 +2186,15 @@ class ZammadMCPServer:
 
             group_filter_msg = f" for group '{params.group}'" if params.group else ""
             logger.info("Starting ticket statistics calculation%s", group_filter_msg)
+
+            if not params.group:
+                try:
+                    return self._collect_ticket_stats_graphql(client)
+                except Exception:
+                    logger.warning(
+                        "GraphQL ticket stats unavailable, falling back to paginated scan",
+                        exc_info=True,
+                    )
 
             total, open_count, closed, pending, escalated, pages = self._collect_ticket_stats_paginated(
                 client, params.group

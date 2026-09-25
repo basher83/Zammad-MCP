@@ -320,3 +320,52 @@ def test_delete_attachment_failure(mock_api: MagicMock) -> None:
         result = client.delete_attachment(ticket_id=123, article_id=456, attachment_id=789)
 
     assert result is False
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_graphql_uses_zammad_py_session(mock_api: MagicMock) -> None:
+    """Test that graphql() posts through zammad_py's internal session (auth + TLS included)."""
+    mock_instance = mock_api.return_value
+    mock_instance.session.post.return_value.json.return_value = {"data": {"ticketOverviews": []}}
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        result = client.graphql("{ ticketOverviews { link ticketCount } }")
+
+    mock_instance.session.post.assert_called_once_with(
+        "https://test.zammad.com/graphql",
+        json={"query": "{ ticketOverviews { link ticketCount } }", "variables": {}},
+        timeout=30.0,
+    )
+    assert result == {"ticketOverviews": []}
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_graphql_raises_on_graphql_errors(mock_api: MagicMock) -> None:
+    """Test that GraphQL errors in the payload raise ValueError."""
+    mock_instance = mock_api.return_value
+    mock_instance.session.post.return_value.json.return_value = {"errors": [{"message": "boom"}]}
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        with pytest.raises(ValueError, match="GraphQL query failed"):
+            client.graphql("{ ticketOverviews { link } }")
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_graphql_raises_without_session(mock_api: MagicMock) -> None:
+    """Test that a missing zammad-py session raises ConfigException."""
+    mock_instance = mock_api.return_value
+    mock_instance.session = None
+    mock_instance._connection = None
+
+    with patch.dict(
+        os.environ, {"ZAMMAD_URL": "https://test.zammad.com/api/v1", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True
+    ):
+        client = ZammadClient()
+        with pytest.raises(ConfigException, match="does not expose a requests session"):
+            client.graphql("{ ticketOverviews { link } }")

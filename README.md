@@ -37,7 +37,7 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_list_groups` - Get all available groups (cached for performance)
   - `zammad_list_ticket_states` - Get all ticket states (cached for performance)
   - `zammad_list_ticket_priorities` - Get all priority levels (cached for performance)
-  - `zammad_get_ticket_stats` - Get ticket statistics (optimized with pagination)
+  - `zammad_get_ticket_stats` - Get ticket statistics (fast GraphQL overview counters, paginated fallback)
 
 ### Resources
 
