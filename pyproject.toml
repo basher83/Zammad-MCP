@@ -40,7 +40,6 @@ dev = [
     "mypy>=1.20.1",
     "pip-audit>=2.6.0",
     "bandit[sarif]>=1.9.4",
-    "safety>=3.7.0",
     "defusedxml>=0.7.1",
     "pre-commit>=4.5.1",
 ]
@@ -114,7 +113,6 @@ dev = [
     "mypy>=1.20.1",
     "pip-audit>=2.6.0",
     "bandit[sarif]>=1.9.4",
-    "safety>=3.7.0",
     "defusedxml>=0.7.1",
     "pre-commit>=4.5.1",
 ]
@@ -156,7 +154,6 @@ override-dependencies = [
     "idna>=3.15",
     "joserfc>=1.6.8",
     "msgpack>=1.2.1",
-    "nltk>=3.10.0",
     "pip>=26.1.2",
     "pydantic-settings>=2.14.2",
     "pyjwt>=2.13.0",
