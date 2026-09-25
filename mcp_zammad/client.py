@@ -269,6 +269,45 @@ class ZammadClient:
 
         return dict(self.api.ticket.update(ticket_id, update_data))
 
+    def merge_tickets(
+        self,
+        source_ticket_id: int,
+        target_ticket_number: str | None = None,
+        target_ticket_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Merge a duplicate ticket into a target ticket (irreversible)."""
+        # The source ticket's articles are moved into the target ticket and the
+        # source ticket receives the state 'merged'. This operation cannot be undone.
+        #
+        # Uses the legacy REST endpoint PUT /api/v1/ticket_merge/{source_id}/{target_number}
+        # via zammad_py's internal session, since the library does not expose ticket
+        # merge and the newer PUT /tickets/{id}/merge route returns 404 on some instances.
+        #
+        # Exactly one of target_ticket_number / target_ticket_id must be provided.
+        # When only the target's internal ID is known, its display number is looked up first.
+        #
+        # Raises ValueError if both or neither target identifier is provided, if the
+        # target ticket number lookup fails (the error identifies the TARGET ticket), or
+        # if the API reports the merge as failed (the ticket_merge endpoint answers
+        # failures with HTTP 200 and {"result": "failed", "message": ...});
+        # requests.HTTPError if the API request itself fails.
+        if (target_ticket_number is None) == (target_ticket_id is None):
+            raise ValueError("Provide exactly one of target_ticket_number or target_ticket_id")
+
+        if target_ticket_number is None:
+            try:
+                target = self.api.ticket.find(target_ticket_id)
+            except Exception as e:
+                raise ValueError(f"Target ticket lookup failed for target_ticket_id={target_ticket_id}: {e}") from e
+            target_ticket_number = str(target["number"])
+
+        response = self.api.session.put(f"{self.url}/ticket_merge/{source_ticket_id}/{target_ticket_number}")
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("result") != "success":
+            raise ValueError(f"Ticket merge failed: {payload.get('message', payload)}")
+        return dict(payload)
+
     def add_article(
         self,
         ticket_id: int,

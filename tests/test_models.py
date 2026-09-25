@@ -11,6 +11,7 @@ from mcp_zammad.models import (
     GetTicketParams,
     ResponseFormat,
     TicketCreate,
+    TicketMergeParams,
     TicketUpdate,
 )
 
@@ -57,6 +58,49 @@ class TestTicketUpdate:
         """Test that HTML is escaped in title update."""
         update = TicketUpdate(title="<i>Important</i> Update")  # type: ignore[call-arg]
         assert update.title == "&lt;i&gt;Important&lt;/i&gt; Update"
+
+
+class TestTicketMergeParams:
+    """Test TicketMergeParams model validation."""
+
+    def test_valid_with_target_number(self):
+        """Target by display number is accepted."""
+        params = TicketMergeParams(source_ticket_id=123, target_ticket_number="65004")  # type: ignore[call-arg]
+        assert params.source_ticket_id == 123
+        assert params.target_ticket_number == "65004"
+        assert params.target_ticket_id is None
+
+    def test_valid_with_target_id(self):
+        """Target by internal ID is accepted."""
+        params = TicketMergeParams(source_ticket_id=123, target_ticket_id=124)  # type: ignore[call-arg]
+        assert params.target_ticket_id == 124
+        assert params.target_ticket_number is None
+
+    def test_rejects_both_targets(self):
+        """Providing both target identifiers fails validation."""
+        with pytest.raises(ValidationError, match="exactly one"):
+            TicketMergeParams(source_ticket_id=123, target_ticket_number="65004", target_ticket_id=124)  # type: ignore[call-arg]
+
+    def test_rejects_no_target(self):
+        """Providing no target identifier fails validation."""
+        with pytest.raises(ValidationError, match="exactly one"):
+            TicketMergeParams(source_ticket_id=123)  # type: ignore[call-arg]
+
+    def test_rejects_invalid_source_id(self):
+        """Source ticket ID must be positive."""
+        with pytest.raises(ValidationError):
+            TicketMergeParams(source_ticket_id=0, target_ticket_number="65004")  # type: ignore[call-arg]
+
+    def test_rejects_empty_target_number(self):
+        """Target number must not be empty or whitespace-only."""
+        with pytest.raises(ValidationError):
+            TicketMergeParams(source_ticket_id=123, target_ticket_number="  ")  # type: ignore[call-arg]
+
+    @pytest.mark.parametrize("bad_number", ["65004/../tickets", "..", "abc", "12a34", "65 004"])
+    def test_rejects_non_digit_target_number(self, bad_number: str):
+        """Target number must be digits only (it is interpolated into a URL path)."""
+        with pytest.raises(ValidationError):
+            TicketMergeParams(source_ticket_id=123, target_ticket_number=bad_number)  # type: ignore[call-arg]
 
     def test_none_title_not_sanitized(self):
         """Test that None title is not processed."""
