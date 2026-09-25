@@ -98,16 +98,19 @@ logger = logging.getLogger(__name__)
 # Constants
 MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
+
+# Zammad state type IDs. These are seeded and fixed by Zammad (see
+# db/seeds/ticket_state_types.rb): create_if_not_exists with explicit ids, so
+# the built-in values are stable across versions and installations.
+STATE_TYPE_NEW = 1
+STATE_TYPE_OPEN = 2
+STATE_TYPE_PENDING_REMINDER = 3
+STATE_TYPE_PENDING_ACTION = 4
+STATE_TYPE_CLOSED = 5
+STATE_TYPE_MERGED = 6
 MAX_PER_PAGE = 100  # Maximum results per page for pagination
 CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
 ARTICLE_BODY_TRUNCATE_LENGTH = 500  # Maximum length for article body in markdown formatting
-
-# Zammad state type IDs (from Zammad API)
-STATE_TYPE_NEW = 1
-STATE_TYPE_OPEN = 2
-STATE_TYPE_CLOSED = 3
-STATE_TYPE_PENDING_REMINDER = 4
-STATE_TYPE_PENDING_CLOSE = 5
 
 
 # Tool annotation constants
@@ -1905,20 +1908,23 @@ class ZammadMCPServer:
             Tuple of (open_increment, closed_increment, pending_increment)
 
         Note:
-            Uses state_type_id from Zammad instead of string matching:
-            - 1 (new), 2 (open) -> open
-            - 3 (closed) -> closed
-            - 4 (pending reminder), 5 (pending close) -> pending
+            Categorizes by the state's state_type_id (seeded and stable), not
+            the state name, so a custom state typed as pending still lands in
+            the pending bucket:
+            - new (1), open (2) -> open
+            - closed (5) -> closed
+            - pending reminder (3), pending action (4) -> pending
+            Any other state (e.g. merged, 6) is counted in the total but not
+            in any bucket.
         """
         state_type_mapping = self._get_state_type_mapping()
         state_type_id = state_type_mapping.get(state_name, 0)
 
-        # Categorize based on state_type_id
-        if state_type_id in [STATE_TYPE_NEW, STATE_TYPE_OPEN]:
+        if state_type_id in (STATE_TYPE_NEW, STATE_TYPE_OPEN):
             return (1, 0, 0)
         if state_type_id == STATE_TYPE_CLOSED:
             return (0, 1, 0)
-        if state_type_id in [STATE_TYPE_PENDING_REMINDER, STATE_TYPE_PENDING_CLOSE]:
+        if state_type_id in (STATE_TYPE_PENDING_REMINDER, STATE_TYPE_PENDING_ACTION):
             return (0, 0, 1)
         return (0, 0, 0)
 
@@ -2084,7 +2090,8 @@ class ZammadMCPServer:
             Note:
                 Uses pagination to scan tickets without loading all into memory.
                 May take several seconds for large ticket databases (>10k tickets).
-                State categorization uses state_type_id: new/open=open, closed=closed, pending=pending.
+                State categorization is by semantic state name: new/open=open,
+                closed=closed, pending reminder/pending close=pending.
                 Date filtering (start_date, end_date) not yet implemented - shows warning if provided.
                 Processes up to 100,000 tickets (1000 pages x 100 per page).
             """
@@ -2187,8 +2194,8 @@ class ZammadMCPServer:
 
                 - **new** (ID: 1)
                 - **open** (ID: 2)
-                - **closed** (ID: 3)
-                - **pending reminder** (ID: 4)
+                - **pending reminder** (ID: 3)
+                - **closed** (ID: 5)
                 ```
 
                 JSON format:
@@ -2197,12 +2204,13 @@ class ZammadMCPServer:
                     "items": [
                         {"id": 1, "name": "new", "state_type_id": 1},
                         {"id": 2, "name": "open", "state_type_id": 2},
-                        {"id": 3, "name": "closed", "state_type_id": 3}
+                        {"id": 3, "name": "pending reminder", "state_type_id": 3},
+                        {"id": 5, "name": "closed", "state_type_id": 5}
                     ],
-                    "total": 3,
-                    "count": 3,
+                    "total": 4,
+                    "count": 4,
                     "page": 1,
-                    "per_page": 3,
+                    "per_page": 4,
                     "has_more": false
                 }
                 ```
@@ -2222,7 +2230,10 @@ class ZammadMCPServer:
                 Results are cached in memory for performance (cleared on server restart).
                 All states are returned in a single response (no pagination needed).
                 Use state 'name' field when creating/updating tickets, not ID.
-                State types: 1=new, 2=open, 3=closed, 4=pending reminder, 5=pending close.
+                Built-in state_type_id values are seeded and stable across
+                Zammad installations (new=1, open=2, pending reminder=3,
+                pending action=4, closed=5, merged=6); custom states may add
+                further states that reuse these type ids.
             """
             states = self._get_cached_states()
 
