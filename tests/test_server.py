@@ -6,7 +6,7 @@ import os
 import pathlib
 import tempfile
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -45,6 +45,8 @@ from mcp_zammad.models import (
 )
 from mcp_zammad.server import (
     CHARACTER_LIMIT,
+    MAX_PER_PAGE,
+    SEARCH_RESULT_CAP,
     AttachmentDeletionError,
     ZammadMCPServer,
     _format_ticket_detail_markdown,
@@ -3223,3 +3225,68 @@ def test_get_organization_supports_json_format(decorator_capturer):
     assert parsed["id"] == 2
     assert parsed["name"] == "ACME Corp"
     assert parsed["domain"] == "acme.com"
+
+
+class TestTicketStatsSearchCap:
+    """Group-filtered stats must not report the search cap as an exact total."""
+
+    _STATES: ClassVar[list[dict[str, Any]]] = [
+        {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+    ]
+
+    def _server(self, mock_instance):
+        mock_instance.get_ticket_states.return_value = self._STATES
+        server_inst = ZammadMCPServer()
+        server_inst.client = mock_instance
+        server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+        return server_inst
+
+    def test_group_scan_flags_truncation_at_cap(self, mock_zammad_client):
+        """Hitting the cap marks the counts as lower bounds."""
+        mock_instance, _ = mock_zammad_client
+        full_page = [{"id": i, "state": "open"} for i in range(MAX_PER_PAGE)]
+        # Enough full pages to reach the cap, then the empty page the backend returns.
+        pages = [full_page] * (SEARCH_RESULT_CAP // MAX_PER_PAGE) + [[]]
+        mock_instance.search_tickets.side_effect = pages
+
+        server_inst = self._server(mock_instance)
+        *_, truncated = server_inst._collect_ticket_stats_paginated(mock_instance, "Support")
+
+        assert truncated is True
+
+    def test_small_group_scan_is_not_truncated(self, mock_zammad_client):
+        """A scan that ends before the cap reports exact counts."""
+        mock_instance, _ = mock_zammad_client
+        mock_instance.search_tickets.side_effect = [[{"id": 1, "state": "open"}], []]
+
+        server_inst = self._server(mock_instance)
+        total, *_, truncated = server_inst._collect_ticket_stats_paginated(mock_instance, "Support")
+
+        assert total == 1
+        assert truncated is False
+
+    def test_unfiltered_scan_is_not_capped(self, mock_zammad_client):
+        """Without a group filter the client uses the uncapped list endpoint."""
+        mock_instance, _ = mock_zammad_client
+        full_page = [{"id": i, "state": "open"} for i in range(MAX_PER_PAGE)]
+        pages = [full_page] * (SEARCH_RESULT_CAP // MAX_PER_PAGE) + [[]]
+        mock_instance.search_tickets.side_effect = pages
+
+        server_inst = self._server(mock_instance)
+        *_, truncated = server_inst._collect_ticket_stats_paginated(mock_instance, None)
+
+        assert truncated is False
+
+    def test_truncation_surfaces_on_the_model(self):
+        """The flag reaches TicketStats so callers can see it."""
+        server_inst = ZammadMCPServer()
+        stats = server_inst._build_stats_result(10000, 1, 2, 3, 4, 100, 1.0, True)
+        assert stats.counts_truncated is True
+
+    def test_default_stats_are_not_truncated(self):
+        """The flag defaults to False for exact scans."""
+        server_inst = ZammadMCPServer()
+        stats = server_inst._build_stats_result(5, 1, 2, 1, 1, 1, 1.0)
+        assert stats.counts_truncated is False
