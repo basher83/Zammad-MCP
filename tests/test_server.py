@@ -5,7 +5,7 @@ import json
 import os
 import pathlib
 import tempfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -1791,6 +1791,23 @@ async def test_tool_implementations_are_called():
     assert isinstance(result, str)
     assert "Ticket #12345" in result
     server.client.search_tickets.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_search_tickets_date_filters_in_header():
+    """Date bounds appear in the markdown results header alongside other filters."""
+    server = ZammadMCPServer()
+    server.client = Mock()
+    server.client.search_tickets.return_value = []
+
+    search_tickets_tool = await server.mcp.get_tool("zammad_search_tickets")
+    assert search_tickets_tool is not None
+    params = TicketSearchParams(created_after=date(2024, 1, 1), created_before=date(2024, 3, 31))
+    result = search_tickets_tool.fn(params)
+
+    assert "created_after='2024-01-01'" in result
+    assert "created_before='2024-03-31'" in result
+    assert "All tickets" not in result
 
 
 def test_get_ticket_stats_pagination(decorator_capturer):
