@@ -810,6 +810,8 @@ class ZammadMCPServer:
             logger.warning("ZammadMCPServer(host=..., port=...) is deprecated; pass host/port to mcp.run(...) instead.")
         self.client: ZammadClient | None = None
         self._connected_user_id: int | str | None = None
+        # Load .env before reading audit settings so .env-sourced audit config takes effect.
+        self._bootstrap_env()
         self.audit = audit_logger or AuditLogger(AuditConfig.from_env(os.environ))
         # Create FastMCP with lifespan configured
         self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
