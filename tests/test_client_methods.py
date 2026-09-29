@@ -10,7 +10,7 @@ import pytest
 import requests
 from pydantic import ValidationError
 
-from mcp_zammad.client import ZammadClient
+from mcp_zammad.client import REQUEST_TIMEOUT_SECONDS, ZammadClient
 from mcp_zammad.models import TicketSearchParams
 
 # Test constants to avoid magic numbers
@@ -442,7 +442,7 @@ class TestZammadClientMethods:
         result = client.get_ticket(1, include_articles=False)
 
         mock_instance.session.get.assert_called_once_with(
-            "https://test.zammad.com/api/v1/tickets/1", params={"expand": "true"}
+            "https://test.zammad.com/api/v1/tickets/1", params={"expand": "true"}, timeout=REQUEST_TIMEOUT_SECONDS
         )
         # The literal string "true" matters: requests serializes bool True as
         # "True", which Zammad ignores because the parameter is case-sensitive.
@@ -486,7 +486,9 @@ class TestZammadClientMethods:
 
         client.get_ticket(1, include_articles=False)
 
-        session.get.assert_called_once_with("https://test.zammad.com/api/v1/tickets/1", params={"expand": "true"})
+        session.get.assert_called_once_with(
+            "https://test.zammad.com/api/v1/tickets/1", params={"expand": "true"}, timeout=REQUEST_TIMEOUT_SECONDS
+        )
 
     def test_create_ticket(self, mock_zammad_api: Mock) -> None:
         """Test create_ticket method."""

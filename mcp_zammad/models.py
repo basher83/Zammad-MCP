@@ -407,13 +407,18 @@ class TicketUpdateParams(StrictBaseModel):
     @field_validator("title")
     @classmethod
     def sanitize_title(cls, v: str | None) -> str | None:
-        """Escape HTML to prevent XSS attacks."""
-        return html.escape(v) if v else v
+        """Escape HTML-sensitive characters while keeping quotes and apostrophes readable."""
+        return html.escape(v, quote=False) if v else v
 
     @model_validator(mode="after")
     def require_pending_time_for_pending_states(self) -> "TicketUpdateParams":
-        """Fail fast when moving to a pending state without a pending_time."""
-        if self.state is not None and "pending" in self.state.lower() and self.pending_time is None:
+        """Fail fast when moving to a seeded pending state without a pending_time.
+
+        Only Zammad's seeded state names are checked; custom states are left to
+        Zammad's own validation because their names say nothing about their type.
+        """
+        seeded_pending_states = {"pending reminder", "pending close"}
+        if self.state is not None and self.state.lower() in seeded_pending_states and self.pending_time is None:
             raise ValueError(f"state '{self.state}' requires 'pending_time' (the pending-until timestamp, ISO 8601).")
         return self
 

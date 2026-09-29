@@ -84,6 +84,18 @@ class TestTicketCreate:
         assert ticket.title == 'He said "we\'ve got it"'
         assert ticket.article_body == 'Quote: "you\'d agree" &amp; more'
 
+    def test_update_params_title_keeps_quotes(self):
+        """zammad_update_ticket titles must keep quotes and apostrophes like create/update models do."""
+        params = TicketUpdateParams(ticket_id=1, title='He said "we\'ve got it" & left')  # type: ignore[call-arg]
+        assert params.title == 'He said "we\'ve got it" &amp; left'
+
+    def test_update_params_pending_time_required_only_for_seeded_pending_states(self):
+        """Only the seeded pending states demand pending_time; custom names fall through to Zammad."""
+        accepted = TicketUpdateParams(ticket_id=1, state="pending review")  # type: ignore[call-arg]
+        assert accepted.state == "pending review"
+        with pytest.raises(ValidationError, match="pending_time"):
+            TicketUpdateParams(ticket_id=1, state="Pending Reminder")  # type: ignore[call-arg]
+
     def test_field_length_limits(self):
         """Test that field length limits are enforced."""
         with pytest.raises(ValidationError) as exc_info:

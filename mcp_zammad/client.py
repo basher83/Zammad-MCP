@@ -12,6 +12,10 @@ from zammad_py.exceptions import ConfigException
 
 logger = logging.getLogger(__name__)
 
+# Direct session calls bypass zammad_py, which sets no timeout; bound them so a
+# stalled Zammad server cannot hang a tool call indefinitely.
+REQUEST_TIMEOUT_SECONDS = 30.0
+
 
 class ZammadClient:
     """Wrapper around zammad_py ZammadAPI with additional functionality."""
@@ -208,7 +212,9 @@ class ZammadClient:
         """
         # self.api.url is zammad_py's normalised base (always ends in "/"), so a
         # trailing slash on ZAMMAD_URL cannot produce ".../api/v1//tickets/1".
-        response = self.api.session.get(f"{self.api.url}tickets/{ticket_id}", params={"expand": "true"})
+        response = self.api.session.get(
+            f"{self.api.url}tickets/{ticket_id}", params={"expand": "true"}, timeout=REQUEST_TIMEOUT_SECONDS
+        )
         if not response.ok:
             raise requests.HTTPError(response.text)
         return dict(response.json())

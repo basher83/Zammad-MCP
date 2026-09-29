@@ -2101,8 +2101,8 @@ class ZammadMCPServer:
             Note:
                 Uses pagination to scan tickets without loading all into memory.
                 May take several seconds for large ticket databases (>10k tickets).
-                State categorization is by semantic state name: new/open=open,
-                closed=closed, pending reminder/pending close=pending.
+                State categorization is by state_type_id: new(1)/open(2)=open,
+                closed(5)=closed, pending reminder(3)/pending action(4)=pending.
                 Date filtering (start_date, end_date) not yet implemented - shows warning if provided.
                 Processes up to 100,000 tickets (1000 pages x 100 per page).
                 counts_truncated is true when the scan stopped early. For a group-filtered

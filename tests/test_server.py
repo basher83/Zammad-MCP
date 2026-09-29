@@ -3446,7 +3446,7 @@ class TestTicketStatsSearchCap:
     _STATES: ClassVar[list[dict[str, Any]]] = [
         {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
-        {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 5, "name": "closed", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
     ]
 
     def _server(self, mock_instance):
