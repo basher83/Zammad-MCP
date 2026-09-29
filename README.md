@@ -176,6 +176,11 @@ The server requires Zammad API credentials. Use a `.env` file:
    # Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
    # LOG_LEVEL=INFO
 
+   # Optional: Audit logging (see "Audit Logging" below)
+   # ZAMMAD_AUDIT_LOG_ENABLED=true
+   # ZAMMAD_AUDIT_LOG_DESTINATION=stderr  # stderr (default), file, or syslog
+   # ZAMMAD_AUDIT_LOG_FILE=/var/log/mcp-zammad/audit.jsonl  # required for file
+
    # Optional: Transport Configuration
    # MCP_TRANSPORT=stdio  # Transport type: stdio (default) or http
    # MCP_HOST=127.0.0.1   # Host address for HTTP transport
@@ -191,6 +196,31 @@ The server requires Zammad API credentials. Use a `.env` file:
 | `MCP_TRANSPORT` | `stdio` | Transport type: `stdio` or `http` |
 | `MCP_HOST` | `127.0.0.1` | Host address for HTTP transport |
 | `MCP_PORT` | - | Port number for HTTP transport (required if `MCP_TRANSPORT=http`) |
+
+### Audit Logging (Optional)
+
+Audit logging is disabled by default. When enabled, the server writes one JSON object per line
+(JSON Lines) for every MCP tool call, each Zammad connection attempt at startup, and each URL
+security check that flags a local or private-network Zammad host.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZAMMAD_AUDIT_LOG_ENABLED` | unset | Enable with `1`, `true`, `yes`, or `on` |
+| `ZAMMAD_AUDIT_LOG_DESTINATION` | `stderr` | `stderr`, `file`, or `syslog` |
+| `ZAMMAD_AUDIT_LOG_FILE` | - | Append target, required if destination is `file` |
+
+Example record:
+
+```json
+{"timestamp": "2026-09-08T12:00:00+00:00", "event_type": "tool_call", "action": "zammad_get_ticket", "success": true, "duration_ms": 12.5, "details": {}}
+```
+
+Event types are `tool_call`, `authentication`, and `security_validation`. Records never contain
+tool arguments, Zammad responses, credentials, or full URLs; failures are recorded by exception
+type only, and any `details` key containing `password`, `token`, `secret`, `authorization`,
+`credential`, or `data` is redacted. Audit output never uses stdout, so the default `stderr`
+destination is safe for the stdio transport. Invalid enabled configuration (unknown destination or
+missing file path) fails at startup.
 
 **Important**: Keep your `.env` file out of version control (already in `.gitignore`).
 
@@ -575,6 +605,7 @@ Report via [GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/s
 - ⚠️ **URL Validation**: Rejects malformed and non-HTTP(S) URLs, but does not block private-network targets ([client.py](mcp_zammad/client.py))
 - ✅ **HTML Sanitization**: Sanitizes selected HTML-bearing fields ([models.py](mcp_zammad/models.py))
 - ✅ **Upstream Authentication**: Supports API tokens, OAuth2, and username/password for Zammad ([client.py](mcp_zammad/client.py))
+- ✅ **Audit Logging**: Opt-in JSON Lines records for tool calls, connection outcomes, and URL checks with secret redaction ([audit.py](mcp_zammad/audit.py))
 - ✅ **Dependency Scanning**: CI runs pip-audit; Dependabot security alerts are enabled separately in GitHub
 - ✅ **Security Testing**: CI runs Bandit, Safety, and pip-audit ([security-scan.yml](.github/workflows/security-scan.yml))
 
