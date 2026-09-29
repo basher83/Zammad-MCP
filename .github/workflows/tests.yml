@@ -8,7 +8,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    if: github.repository == 'basher83/Zammad-MCP'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.12.20"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev --frozen --python "3.13"
+
+      - name: Run canonical release validation
+        run: ./scripts/validate.sh release
+
   tests:
+    # Same gates as `scripts/validate.sh release` tests: full suite with the
+    # coverage floor from pyproject.toml, plus report artifacts.
     runs-on: ubuntu-latest
     if: github.repository == 'basher83/Zammad-MCP'
     strategy:
@@ -26,6 +49,7 @@ jobs:
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           version: "0.12.20"
+          enable-cache: true
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
@@ -104,16 +128,17 @@ jobs:
   test-and-coverage:
     # Aggregate check: the main ruleset requires this exact context, which the
     # matrix job names (tests (3.10), ...) never satisfy on their own.
-    needs: [tests]
+    needs: [tests, validate]
     if: always()
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - name: Require every matrix test job to succeed
+      - name: Require validate and every matrix test job to succeed
         env:
           TESTS_RESULT: ${{ needs.tests.result }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
         run: |
-          if [ "$TESTS_RESULT" != "success" ]; then
-            echo "tests result: $TESTS_RESULT" >&2
+          if [ "$TESTS_RESULT" != "success" ] || [ "$VALIDATE_RESULT" != "success" ]; then
+            echo "tests result: $TESTS_RESULT; validate result: $VALIDATE_RESULT" >&2
             exit 1
           fi

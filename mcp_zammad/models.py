@@ -5,9 +5,29 @@ import html
 import os
 from datetime import date, datetime
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+
+
+class CaseInsensitiveStrEnum(str, Enum):
+    """String enum that resolves members case-insensitively while keeping canonical values."""
+
+    @classmethod
+    def _missing_(cls, value: object) -> "CaseInsensitiveStrEnum | None":
+        """Return the member matching ``value`` case-insensitively, or None so Enum raises its usual error."""
+        if not isinstance(value, str):
+            return None
+        folded = value.casefold()
+        return next((member for member in cls if member.value.casefold() == folded), None)
+
+
+def _casefold_str(value: Any) -> Any:
+    """Lowercase string input so literal validation is case-insensitive; leave other types untouched."""
+    return value.casefold() if isinstance(value, str) else value
+
+
+ContentType = Annotated[Literal["text/plain", "text/html"], BeforeValidator(_casefold_str)]
 
 
 class StrictBaseModel(BaseModel):
@@ -21,7 +41,7 @@ class StrictBaseModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
-class ResponseFormat(str, Enum):
+class ResponseFormat(CaseInsensitiveStrEnum):
     """Output format for tool responses.
 
     Attributes:
@@ -33,7 +53,7 @@ class ResponseFormat(str, Enum):
     JSON = "json"
 
 
-class ArticleType(str, Enum):
+class ArticleType(CaseInsensitiveStrEnum):
     """Article type enumeration.
 
     Attributes:
@@ -47,7 +67,7 @@ class ArticleType(str, Enum):
     PHONE = "phone"
 
 
-class ArticleSender(str, Enum):
+class ArticleSender(CaseInsensitiveStrEnum):
     """Article sender type enumeration.
 
     Attributes:
@@ -217,7 +237,13 @@ class Article(BaseModel):
 
 
 class Ticket(BaseModel):
-    """Zammad ticket."""
+    """Zammad ticket.
+
+    Custom object attributes defined in Zammad Admin arrive as additional
+    top-level keys and are retained as extra fields.
+    """
+
+    model_config = ConfigDict(extra="allow")
 
     id: int
     number: str
@@ -345,7 +371,7 @@ class ArticleCreate(StrictBaseModel):
     subject: str | None = Field(default=None, max_length=500, description="Email subject")
     to: str | None = Field(default=None, max_length=1000, description="Email recipient")
     cc: str | None = Field(default=None, max_length=1000, description="Email CC recipient(s)")
-    content_type: Literal["text/plain", "text/html"] = Field(default="text/plain", description="Article content type")
+    content_type: ContentType = Field(default="text/plain", description="Article content type")
     time_unit: float | None = Field(
         default=None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
     )
@@ -403,6 +429,10 @@ class TicketUpdateParams(StrictBaseModel):
     time_unit: float | None = Field(
         None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
     )
+    custom_fields: dict[str, Any] | None = Field(
+        None,
+        description="Custom Zammad object attributes to set, keyed by attribute name (e.g. {'region': 'north'})",
+    )
 
     @field_validator("title")
     @classmethod
@@ -422,6 +452,82 @@ class TicketUpdateParams(StrictBaseModel):
             raise ValueError(f"state '{self.state}' requires 'pending_time' (the pending-until timestamp, ISO 8601).")
         return self
 
+    @field_validator("custom_fields")
+    @classmethod
+    def reject_reserved_custom_field_names(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Reject custom field names that are empty or shadow built-in update fields."""
+        if v is None:
+            return v
+        reserved = set(cls.model_fields) - {"custom_fields"}
+        for name in v:
+            if not name:
+                raise ValueError("custom_fields keys must be non-empty attribute names")
+            if name in reserved:
+                raise ValueError(f"custom_fields key '{name}' is a built-in field; pass it as a top-level parameter")
+        return v
+
+
+# Same bounds as TagOperationParams.tag so bulk and single-tag tools reject the same input.
+TagName = Annotated[str, Field(min_length=1, max_length=100)]
+
+
+class BulkTicketUpdateParams(StrictBaseModel):
+    """Bulk ticket update request parameters."""
+
+    ticket_ids: list[int] = Field(
+        min_length=1, max_length=100, description="Internal ticket IDs to update (1-100, no duplicates)"
+    )
+    title: str | None = Field(None, description="New ticket title", max_length=200)
+    state: str | None = Field(None, description="New state name", max_length=100)
+    priority: str | None = Field(None, description="New priority name", max_length=100)
+    owner: str | None = Field(None, description="New owner login/email", max_length=255)
+    group: str | None = Field(None, description="New group name", max_length=100)
+    time_unit: float | None = Field(None, description="Time spent per ticket for time accounting", gt=0)
+    add_tags: list[TagName] | None = Field(None, description="Tags to add to every ticket")
+    remove_tags: list[TagName] | None = Field(None, description="Tags to remove from every ticket")
+    note: str | None = Field(None, description="Internal note to add to every ticket", max_length=10000)
+    delay_seconds: float = Field(0, ge=0, le=10, description="Pause between tickets (max 10s) to reduce API pressure")
+
+    @field_validator("ticket_ids")
+    @classmethod
+    def validate_ticket_ids(cls, v: list[int]) -> list[int]:
+        """Require positive, unique ticket IDs."""
+        if any(ticket_id <= 0 for ticket_id in v):
+            raise ValueError("ticket_ids must be greater than 0")
+        if len(set(v)) != len(v):
+            raise ValueError("ticket_ids must be unique")
+        return v
+
+    @field_validator("title", "note")
+    @classmethod
+    def sanitize_text(cls, v: str | None) -> str | None:
+        """Escape HTML to prevent XSS attacks."""
+        return html.escape(v) if v else v
+
+    @model_validator(mode="after")
+    def require_operation(self) -> "BulkTicketUpdateParams":
+        """Reject requests that would change nothing."""
+        fields = (self.title, self.state, self.priority, self.owner, self.group, self.time_unit, self.note)
+        if any(value is not None for value in fields) or self.add_tags or self.remove_tags:
+            return self
+        raise ValueError("Specify at least one field, tag, or note to apply")
+
+
+class BulkUpdateFailure(StrictBaseModel):
+    """A single ticket that could not be fully updated."""
+
+    ticket_id: int = Field(description="Ticket ID that failed")
+    error: str = Field(description="Actionable error message")
+
+
+class BulkUpdateResult(StrictBaseModel):
+    """Outcome of a bulk ticket update."""
+
+    successful_ticket_ids: list[int] = Field(description="Tickets where every requested action succeeded")
+    failed: list[BulkUpdateFailure] = Field(description="Tickets that failed with their error")
+    total_processed: int = Field(description="Number of tickets attempted")
+    total_successful: int = Field(description="Number of tickets fully updated")
+
 
 class GetArticleAttachmentsParams(StrictBaseModel):
     """Get article attachments request parameters."""
@@ -439,6 +545,38 @@ class DownloadAttachmentParams(StrictBaseModel):
     max_bytes: int | None = Field(
         default=10_000_000, ge=1, description="Maximum attachment size in bytes (None for unlimited)"
     )
+
+
+class TicketMergeParams(StrictBaseModel):
+    """Ticket merge request parameters.
+
+    The target may be given by its display number (as shown in the Zammad UI)
+    or by its internal ID, but not both.
+    """
+
+    source_ticket_id: int = Field(gt=0, description="Internal ID of the ticket to merge (it becomes closed/merged)")
+    target_ticket_number: str | None = Field(
+        default=None, min_length=1, max_length=100, description="Display number of the ticket to merge into"
+    )
+    target_ticket_id: int | None = Field(
+        default=None, gt=0, description="Internal ID of the ticket to merge into (alternative to number)"
+    )
+
+    @model_validator(mode="after")
+    def require_exactly_one_target(self) -> "TicketMergeParams":
+        """Ensure exactly one target identifier is supplied."""
+        provided = [v for v in (self.target_ticket_number, self.target_ticket_id) if v is not None]
+        if len(provided) != 1:
+            msg = "Provide exactly one of target_ticket_number or target_ticket_id"
+            raise ValueError(msg)
+        return self
+
+
+class TicketMergeResult(StrictBaseModel):
+    """Result of a ticket merge operation."""
+
+    result: str = Field(description="Zammad merge result, 'success' when the merge completed")
+    target_ticket: Ticket = Field(description="The surviving target ticket after the merge")
 
 
 class TagOperationParams(StrictBaseModel):

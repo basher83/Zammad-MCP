@@ -125,3 +125,58 @@ async def test_add_article_exposes_field_name_and_sanitizes_body(harness: Harnes
     call_kwargs = harness.zammad.add_article.call_args.kwargs
     assert call_kwargs["article_type"] == "email"
     assert call_kwargs["body"] == "&lt;b&gt;hi&lt;/b&gt;"
+
+
+@pytest.mark.parametrize(
+    ("name", "required", "expected"),
+    [
+        ("zammad_merge_tickets", ["source_ticket_id"], {"target_ticket_number", "target_ticket_id"}),
+        ("zammad_bulk_update_tickets", ["ticket_ids"], {"state", "add_tags", "remove_tags", "note"}),
+        ("zammad_list_events", None, {"since", "limit"}),
+    ],
+)
+@pytest.mark.asyncio
+async def test_feature_tool_schemas_are_flat(
+    harness: Harness, name: str, required: list[str] | None, expected: set[str]
+) -> None:
+    schema = (await _tool_schemas(harness.server))[name]
+    assert set(schema["properties"]) >= expected | set(required or [])
+    assert schema.get("required") == required
+
+
+@pytest.mark.asyncio
+async def test_feature_tools_accept_flat_arguments(harness: Harness) -> None:
+    harness.zammad.merge_tickets.return_value = {"result": "success", "target_ticket": TICKET_DATA}
+    harness.zammad.update_ticket.return_value = TICKET_DATA
+    async with Client(harness.server.mcp) as client:
+        await client.call_tool("zammad_merge_tickets", {"source_ticket_id": 10, "target_ticket_number": "12345"})
+        bulk = await client.call_tool("zammad_bulk_update_tickets", {"ticket_ids": [1, 2], "state": "closed"})
+        events = await client.call_tool("zammad_list_events", {"limit": 5})
+    harness.zammad.merge_tickets.assert_called_once_with(
+        source_ticket_id=10, target_ticket_number="12345", target_ticket_id=None
+    )
+    assert bulk.structured_content["successful_ticket_ids"] == [1, 2]
+    assert events.structured_content["count"] == 0
+
+
+@pytest.mark.parametrize(
+    ("name", "arguments", "expected"),
+    [
+        (
+            "zammad_merge_tickets",
+            {"source_ticket_id": 10, "target_ticket_number": "1", "target_ticket_id": 2},
+            "exactly one",
+        ),
+        ("zammad_bulk_update_tickets", {"ticket_ids": [1], "state": "closed", "bogus": True}, "bogus"),
+        ("zammad_list_events", {"limit": 0}, "greater than or equal to 1"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_feature_tools_still_validate_flat_arguments(
+    harness: Harness, name: str, arguments: dict[str, Any], expected: str
+) -> None:
+    message = await _call_expecting_error(harness.server, name, arguments)
+    assert expected in message
+    assert "params" not in message
+    harness.zammad.merge_tickets.assert_not_called()
+    harness.zammad.update_ticket.assert_not_called()
