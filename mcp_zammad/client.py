@@ -2,13 +2,19 @@
 
 import logging
 import os
+from datetime import date, datetime
 from typing import Any
 from urllib.parse import urlparse
 
+import requests
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
 logger = logging.getLogger(__name__)
+
+# Direct session calls bypass zammad_py, which sets no timeout; bound them so a
+# stalled Zammad server cannot hang a tool call indefinitely.
+REQUEST_TIMEOUT_SECONDS = 30.0
 
 
 class ZammadClient:
@@ -160,26 +166,30 @@ class ZammadClient:
         group: str | None = None,
         owner: str | None = None,
         customer: str | None = None,
+        created_after: date | str | None = None,
+        created_before: date | str | None = None,
         page: int = 1,
         per_page: int = 25,
     ) -> list[dict[str, Any]]:
-        """Search tickets with various filters."""
+        """Search tickets with various filters.
+
+        created_after and created_before bound the search by creation date, inclusive
+        on both ends. Dates are passed to Zammad in ISO YYYY-MM-DD form.
+        """
         filters = {"page": page, "per_page": per_page, "expand": "true"}
 
-        # Build search query
-        search_parts = []
-        if query:
-            search_parts.append(query)
-        if state:
-            search_parts.append(f"state.name:{state}")
-        if priority:
-            search_parts.append(f"priority.name:{priority}")
-        if group:
-            search_parts.append(f"group.name:{group}")
-        if owner:
-            search_parts.append(f"owner.login:{owner}")
-        if customer:
-            search_parts.append(f"customer.email:{customer}")
+        # Build search query: each filter contributes one clause when set.
+        clauses = [
+            (query, "{}"),
+            (state, "state.name:{}"),
+            (priority, "priority.name:{}"),
+            (group, "group.name:{}"),
+            (owner, "owner.login:{}"),
+            (customer, "customer.email:{}"),
+            (created_after, "created_at:>={}"),
+            (created_before, "created_at:<={}"),
+        ]
+        search_parts = [template.format(value) for value, template in clauses if value]
 
         if search_parts:
             search_query = " AND ".join(search_parts)
@@ -189,11 +199,38 @@ class ZammadClient:
 
         return list(result)
 
+    def _find_ticket_expanded(self, ticket_id: int) -> dict[str, Any]:
+        """Fetch a single ticket with ``expand=true``.
+
+        The expand value must be the lowercase string ``"true"`` — Zammad is
+        case-sensitive here and ``requests`` serializes the bool ``True`` as
+        ``"True"``, which Zammad ignores.
+
+        Raises:
+            requests.HTTPError: If the API request fails, carrying Zammad's
+                response body so callers can detect "Couldn't find Ticket ..."
+        """
+        # self.api.url is zammad_py's normalised base (always ends in "/"), so a
+        # trailing slash on ZAMMAD_URL cannot produce ".../api/v1//tickets/1".
+        response = self.api.session.get(
+            f"{self.api.url}tickets/{ticket_id}", params={"expand": "true"}, timeout=REQUEST_TIMEOUT_SECONDS
+        )
+        if not response.ok:
+            raise requests.HTTPError(response.text)
+        return dict(response.json())
+
     def get_ticket(
         self, ticket_id: int, include_articles: bool = True, article_limit: int = 10, article_offset: int = 0
     ) -> dict[str, Any]:
-        """Get a single ticket by ID with optional article pagination."""
-        ticket = self.api.ticket.find(ticket_id)
+        """Get a single ticket by ID with optional article pagination.
+
+        Uses a direct HTTP call via zammad_py's internal session because
+        ``Resource.find()`` accepts no filters, so there is no way to pass
+        ``expand=true`` through it. Without expansion Zammad only returns the
+        ``*_id`` fields and the state/priority/group/owner/customer names all
+        render as "Unknown".
+        """
+        ticket = self._find_ticket_expanded(ticket_id)
 
         if include_articles:
             articles = self.api.ticket.articles(ticket_id)
@@ -247,25 +284,29 @@ class ZammadClient:
         priority: str | None = None,
         owner: str | None = None,
         group: str | None = None,
+        pending_time: datetime | str | None = None,
         time_unit: float | None = None,
+        customer: str | None = None,
     ) -> dict[str, Any]:
         """Update an existing ticket."""
         if time_unit is not None and time_unit <= 0:
             raise ValueError("time_unit must be greater than 0")
 
-        update_data: dict[str, Any] = {}
-        if title is not None:
-            update_data["title"] = title
-        if state is not None:
-            update_data["state"] = state
-        if priority is not None:
-            update_data["priority"] = priority
-        if owner is not None:
-            update_data["owner"] = owner
-        if group is not None:
-            update_data["group"] = group
-        if time_unit is not None:
-            update_data["time_unit"] = time_unit
+        # Zammad expects an ISO 8601 string; serialize datetimes for the JSON body.
+        if isinstance(pending_time, datetime):
+            pending_time = pending_time.isoformat()
+
+        fields = {
+            "title": title,
+            "state": state,
+            "priority": priority,
+            "owner": owner,
+            "group": group,
+            "customer": customer,
+            "pending_time": pending_time,
+            "time_unit": time_unit,
+        }
+        update_data: dict[str, Any] = {key: value for key, value in fields.items() if value is not None}
 
         return dict(self.api.ticket.update(ticket_id, update_data))
 
@@ -330,24 +371,6 @@ class ZammadClient:
             article_data["attachments"] = attachments
 
         return dict(self.api.ticket_article.create(article_data))
-
-    def delete_attachment(self, ticket_id: int, article_id: int, attachment_id: int) -> bool:
-        """Delete an attachment from a ticket article.
-
-        Args:
-            ticket_id: Ticket ID
-            article_id: Article ID
-            attachment_id: Attachment ID to delete
-
-        Returns:
-            True if deletion succeeded
-
-        Raises:
-            Exception if deletion fails
-        """
-        result = self.api.ticket_article_attachment.destroy(attachment_id, article_id, ticket_id)
-        # destroy() returns True on success, may return dict on error
-        return bool(result)
 
     def get_user(self, user_id: int) -> dict[str, Any]:
         """Get user information by ID."""
