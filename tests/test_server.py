@@ -34,7 +34,6 @@ from mcp_zammad.models import (
     SearchUsersParams,
     StateBrief,
     Ticket,
-    TicketCreate,
     TicketPriority,
     TicketSearchParams,
     TicketState,
@@ -478,22 +477,19 @@ def test_create_ticket_tool(mock_zammad_client, ticket_factory, decorator_captur
     )
 
 
-def test_create_ticket_customer_not_found_error(mock_zammad_client, decorator_capturer):
-    """Test that create_ticket gives helpful error when customer not found."""
+@pytest.mark.asyncio
+async def test_create_ticket_customer_not_found_error(mock_zammad_client):
+    """Test that the registered create-ticket tool gives a helpful error."""
     mock_instance, _ = mock_zammad_client
     mock_instance.create_ticket.side_effect = Exception("No lookup value found for 'customer'")
 
     server_inst = ZammadMCPServer()
     server_inst.client = mock_instance
-    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
-    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
-    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
-    server_inst._setup_tools()
-
-    params = TicketCreate(title="Test", group="Support", customer="new@example.com", article_body="Body")
+    tool = await server_inst.mcp.get_tool("zammad_create_ticket")
+    assert tool is not None
 
     with pytest.raises(ValueError) as exc_info:
-        test_tools["zammad_create_ticket"](params)
+        await tool.run({"title": "Test", "group": "Support", "customer": "new@example.com", "article_body": "Body"})
 
     assert "zammad_create_user" in str(exc_info.value)
 
@@ -515,7 +511,7 @@ def test_add_article_tool(mock_zammad_client, sample_article_data, decorator_cap
 
     # Test with ArticleCreate params using Enum values
     params = ArticleCreate(ticket_id=1, body="New comment", article_type=ArticleType.NOTE, sender=ArticleSender.AGENT)
-    result = test_tools["zammad_add_article"](params)
+    result = test_tools["zammad_add_article"](**params.model_dump())
 
     assert result.body == "Test article"
     assert result.type == "note"
@@ -551,7 +547,7 @@ def test_add_article_with_time_unit_tool(mock_zammad_client, sample_article_data
     server_inst._setup_tools()
 
     params = ArticleCreate(ticket_id=1, body="Worked on this issue", time_unit=30.5)
-    result = test_tools["zammad_add_article"](params)
+    result = test_tools["zammad_add_article"](**params.model_dump())
 
     assert result.body == "Test article"
 
@@ -582,7 +578,7 @@ def test_add_article_with_email_fields(mock_zammad_client, sample_article_data, 
         cc="manager@example.com",
         content_type="text/html",
     )
-    result = test_tools["zammad_add_article"](params)
+    result = test_tools["zammad_add_article"](**params.model_dump())
 
     assert result.body == "Test article"
     mock_instance.add_article.assert_called_once()
@@ -610,7 +606,7 @@ def test_add_article_without_time_unit_tool(mock_zammad_client, sample_article_d
     server_inst._setup_tools()
 
     params = ArticleCreate(ticket_id=1, body="Simple comment")
-    result = test_tools["zammad_add_article"](params)
+    result = test_tools["zammad_add_article"](**params.model_dump())
 
     assert result.body == "Test article"
 
@@ -704,7 +700,7 @@ def test_add_article_with_attachments_tool(mock_zammad_client, decorator_capture
     )
 
     # Call tool
-    result = test_tools["zammad_add_article"](params)
+    result = test_tools["zammad_add_article"](**params.model_dump())
 
     # Verify result
     assert result.id == 789
@@ -753,7 +749,7 @@ def test_add_article_without_attachments_backward_compat_tool(mock_zammad_client
     )
 
     # Call tool
-    result = test_tools["zammad_add_article"](params)
+    result = test_tools["zammad_add_article"](**params.model_dump())
 
     # Verify result
     assert result.id == 789
@@ -827,7 +823,7 @@ def test_list_tags_tool_markdown(mock_zammad_client, decorator_capturer):
 
     # Test with ListParams (default markdown format)
     params = ListParams()
-    result = test_tools["zammad_list_tags"](params)
+    result = test_tools["zammad_list_tags"](**params.model_dump())
 
     # Verify markdown output format
     assert "# Tag List" in result
@@ -858,7 +854,7 @@ def test_list_tags_tool_json(mock_zammad_client, decorator_capturer):
     server_inst._setup_tools()
 
     params = ListParams(response_format=ResponseFormat.JSON)
-    result = json.loads(test_tools["zammad_list_tags"](params))
+    result = json.loads(test_tools["zammad_list_tags"](**params.model_dump()))
 
     assert [tag["name"] for tag in result["items"]] == ["billing", "feature-request", "urgent"]
     assert result["total"] == 3
@@ -890,7 +886,7 @@ def test_list_tags_tool_empty(mock_zammad_client, decorator_capturer):
 
     # Test with ListParams (default markdown format)
     params = ListParams()
-    result = test_tools["zammad_list_tags"](params)
+    result = test_tools["zammad_list_tags"](**params.model_dump())
 
     # Verify empty list markdown output
     assert "# Tag List" in result
@@ -915,7 +911,7 @@ def test_get_ticket_tags_tool(mock_zammad_client, decorator_capturer):
 
     # Test with GetTicketTagsParams
     params = GetTicketTagsParams(ticket_id=123)
-    result = test_tools["zammad_get_ticket_tags"](params)
+    result = test_tools["zammad_get_ticket_tags"](**params.model_dump())
 
     # Verify markdown output format
     assert "## Tags for Ticket #123" in result
@@ -942,7 +938,7 @@ def test_get_ticket_tags_tool_empty(mock_zammad_client, decorator_capturer):
 
     # Test with GetTicketTagsParams
     params = GetTicketTagsParams(ticket_id=456)
-    result = test_tools["zammad_get_ticket_tags"](params)
+    result = test_tools["zammad_get_ticket_tags"](**params.model_dump())
 
     # Verify empty tags message
     assert result == "Ticket #456 has no tags."
@@ -998,7 +994,7 @@ def test_update_ticket_with_time_unit_tool(mock_zammad_client, sample_ticket_dat
     server_inst._setup_tools()
 
     params = TicketUpdateParams(ticket_id=1, title="Updated Title", time_unit=2.5)
-    result = test_tools["zammad_update_ticket"](params)
+    result = test_tools["zammad_update_ticket"](**params.model_dump())
 
     assert result.id == 1
     mock_instance.update_ticket.assert_called_once_with(ticket_id=1, title="Updated Title", time_unit=2.5)
@@ -1019,7 +1015,7 @@ def test_update_ticket_without_time_unit_tool(mock_zammad_client, sample_ticket_
     server_inst._setup_tools()
 
     params = TicketUpdateParams(ticket_id=1, title="Updated Title")
-    test_tools["zammad_update_ticket"](params)
+    test_tools["zammad_update_ticket"](**params.model_dump())
 
     mock_instance.update_ticket.assert_called_once_with(ticket_id=1, title="Updated Title")
 
@@ -1299,7 +1295,7 @@ def test_create_user_tool(mock_zammad_client, decorator_capturer):
     server_inst._setup_tools()
 
     params = UserCreate(email="new@example.com", firstname="New", lastname="User")
-    result = test_tools["zammad_create_user"](params)
+    result = test_tools["zammad_create_user"](**params.model_dump())
 
     assert result.id == 42
 
@@ -1356,7 +1352,7 @@ def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
     # Test basic stats
     assert "zammad_get_ticket_stats" in test_tools
     params = GetTicketStatsParams()
-    stats = test_tools["zammad_get_ticket_stats"](params)
+    stats = test_tools["zammad_get_ticket_stats"](**params.model_dump())
 
     assert stats.total_count == 6
     assert stats.open_count == 4  # new + open tickets
@@ -1375,7 +1371,7 @@ def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
     mock_instance.search_tickets.side_effect = [page1_tickets, []]  # One page then empty
 
     params_with_group = GetTicketStatsParams(group="Support")
-    stats = test_tools["zammad_get_ticket_stats"](params_with_group)
+    stats = test_tools["zammad_get_ticket_stats"](**params_with_group.model_dump())
 
     assert stats.total_count == 3
     assert stats.open_count == 3
@@ -1390,7 +1386,7 @@ def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
 
     with patch("mcp_zammad.server.logger") as mock_logger:
         params_with_dates = GetTicketStatsParams(start_date="2024-01-01", end_date="2024-12-31")
-        stats = test_tools["zammad_get_ticket_stats"](params_with_dates)
+        stats = test_tools["zammad_get_ticket_stats"](**params_with_dates.model_dump())
 
         assert stats.total_count == 6
         assert mock_instance.search_tickets.call_count == 2
@@ -1787,7 +1783,7 @@ async def test_tool_implementations_are_called():
     search_tickets_tool = await server.mcp.get_tool("zammad_search_tickets")
     assert search_tickets_tool is not None
     params = TicketSearchParams(query="test")
-    result = search_tickets_tool.fn(params)
+    result = search_tickets_tool.fn(**params.model_dump())
     assert isinstance(result, str)
     assert "Ticket #12345" in result
     server.client.search_tickets.assert_called_once()
@@ -1836,7 +1832,7 @@ def test_get_ticket_stats_pagination(decorator_capturer):
     # Get the captured tool and call it
     assert "zammad_get_ticket_stats" in test_tools
     params = GetTicketStatsParams()
-    result = test_tools["zammad_get_ticket_stats"](params)
+    result = test_tools["zammad_get_ticket_stats"](**params.model_dump())
 
     # Verify pagination calls
     assert server.client.search_tickets.call_count == 3
@@ -1870,7 +1866,7 @@ def test_get_ticket_stats_with_date_warning(decorator_capturer):
         # Get the captured tool
         assert "zammad_get_ticket_stats" in test_tools
         params = GetTicketStatsParams(start_date="2024-01-01", end_date="2024-12-31")
-        stats = test_tools["zammad_get_ticket_stats"](params)
+        stats = test_tools["zammad_get_ticket_stats"](**params.model_dump())
 
         assert stats.total_count == 0
         mock_logger.warning.assert_called_with("Date filtering not yet implemented - ignoring date parameters")
@@ -2613,7 +2609,7 @@ class TestAttachmentSupport:
         params = DeleteAttachmentParams(ticket_id=123, article_id=456, attachment_id=789)
 
         # Call tool
-        result = test_tools["zammad_delete_attachment"](params)
+        result = test_tools["zammad_delete_attachment"](**params.model_dump())
 
         # Verify result structure
         assert result.success is True
@@ -2648,7 +2644,7 @@ class TestAttachmentSupport:
 
         # Verify AttachmentDeletionError is raised
         with pytest.raises(AttachmentDeletionError) as exc_info:
-            test_tools["zammad_delete_attachment"](params)
+            test_tools["zammad_delete_attachment"](**params.model_dump())
 
         # Verify error details
         assert exc_info.value.attachment_id == 999
@@ -2690,7 +2686,7 @@ class TestJSONOutputAndTruncation:
 
         # Call with JSON format
         params = TicketSearchParams(query="test", response_format=ResponseFormat.JSON)
-        result = test_tools["zammad_search_tickets"](params)
+        result = test_tools["zammad_search_tickets"](**params.model_dump())
 
         # Verify it's valid JSON
         parsed = json.loads(result)
@@ -2730,7 +2726,7 @@ class TestJSONOutputAndTruncation:
 
         # Call with JSON format
         params = SearchUsersParams(query="test", response_format=ResponseFormat.JSON)
-        result = test_tools["zammad_search_users"](params)
+        result = test_tools["zammad_search_users"](**params.model_dump())
 
         # Verify it's valid JSON
         parsed = json.loads(result)
@@ -2843,7 +2839,7 @@ class TestJSONOutputAndTruncation:
 
         # Call with JSON format
         params = ListParams(response_format=ResponseFormat.JSON)
-        result = test_tools["zammad_list_groups"](params)
+        result = test_tools["zammad_list_groups"](**params.model_dump())
 
         # Verify it's valid JSON
         parsed = json.loads(result)
@@ -3031,7 +3027,7 @@ def test_get_ticket_supports_markdown_format(decorator_capturer):
 
     # Call with markdown format
     params = GetTicketParams(ticket_id=123, response_format=ResponseFormat.MARKDOWN)
-    result = test_tools["zammad_get_ticket"](params)
+    result = test_tools["zammad_get_ticket"](**params.model_dump())
 
     assert isinstance(result, str)
     assert "# Ticket #" in result
@@ -3071,7 +3067,7 @@ def test_get_ticket_supports_json_format(decorator_capturer):
 
     # Call with JSON format
     params = GetTicketParams(ticket_id=123, response_format=ResponseFormat.JSON)
-    result = test_tools["zammad_get_ticket"](params)
+    result = test_tools["zammad_get_ticket"](**params.model_dump())
 
     assert isinstance(result, str)
     parsed = json.loads(result)
@@ -3108,7 +3104,7 @@ def test_get_user_supports_markdown_format(decorator_capturer):
 
     # Call with markdown format (default)
     params = GetUserParams(user_id=5, response_format=ResponseFormat.MARKDOWN)
-    result = test_tools["zammad_get_user"](params)
+    result = test_tools["zammad_get_user"](**params.model_dump())
 
     assert isinstance(result, str)
     assert "# User: Jane Doe" in result
@@ -3146,7 +3142,7 @@ def test_get_user_supports_json_format(decorator_capturer):
 
     # Call with JSON format
     params = GetUserParams(user_id=5, response_format=ResponseFormat.JSON)
-    result = test_tools["zammad_get_user"](params)
+    result = test_tools["zammad_get_user"](**params.model_dump())
 
     assert isinstance(result, str)
     parsed = json.loads(result)
@@ -3181,7 +3177,7 @@ def test_get_organization_supports_markdown_format(decorator_capturer):
 
     # Call with markdown format (default)
     params = GetOrganizationParams(org_id=2, response_format=ResponseFormat.MARKDOWN)
-    result = test_tools["zammad_get_organization"](params)
+    result = test_tools["zammad_get_organization"](**params.model_dump())
 
     assert isinstance(result, str)
     assert "# Organization: ACME Corp" in result
@@ -3216,7 +3212,7 @@ def test_get_organization_supports_json_format(decorator_capturer):
 
     # Call with JSON format
     params = GetOrganizationParams(org_id=2, response_format=ResponseFormat.JSON)
-    result = test_tools["zammad_get_organization"](params)
+    result = test_tools["zammad_get_organization"](**params.model_dump())
 
     assert isinstance(result, str)
     parsed = json.loads(result)
