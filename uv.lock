@@ -3,13 +3,20 @@ revision = 3
 requires-python = ">=3.10, <3.14"
 
 [manifest]
+constraints = [
+    { name = "anyio", specifier = ">=4.14.2" },
+    { name = "click", specifier = ">=8.3.3" },
+    { name = "fastmcp", specifier = ">=3.0.0,<4" },
+    { name = "mcp", specifier = ">=1.28.1,<2" },
+    { name = "setuptools", specifier = ">=83.0.0" },
+]
 overrides = [
     { name = "authlib", specifier = ">=1.7.1" },
-    { name = "cryptography", specifier = ">=48.0.1" },
+    { name = "cryptography", specifier = ">=50.0.0" },
     { name = "idna", specifier = ">=3.15" },
     { name = "joserfc", specifier = ">=1.6.8" },
     { name = "msgpack", specifier = ">=1.2.1" },
-    { name = "pip", specifier = ">=26.1.2" },
+    { name = "pip", specifier = ">=26.2" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pyjwt", specifier = ">=2.14.0" },
     { name = "python-multipart", specifier = ">=0.0.31" },
@@ -1035,7 +1042,7 @@ requires-dist = [
     { name = "defusedxml", marker = "extra == 'dev'", specifier = ">=0.7.1" },
     { name = "fastmcp", specifier = ">=3.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "mcp", specifier = ">=1.23.0" },
+    { name = "mcp", specifier = ">=1.28.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20.1" },
     { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.6.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.5.1" },
