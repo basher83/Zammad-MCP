@@ -720,6 +720,10 @@ class ZammadClient:
             body = (t.get("content_attributes") or {}).get("body") or ""
             if body:
                 return self._strip_html(body)
+        for translation in translations.values():
+            body = ((translation or {}).get("content_attributes") or {}).get("body") or ""
+            if body:
+                return self._strip_html(body)
         return ""
 
     def _extract_kb_answer_body(self, raw_payload: dict[str, Any], answer: dict[str, Any]) -> str:
