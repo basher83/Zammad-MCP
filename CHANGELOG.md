@@ -4,16 +4,26 @@
 
 ### 🚀 Features
 
-- *(models)* Accept case-insensitive response_format, article type/sender, and content_type inputs (#201)
-- *(client)* Add rate limiting, retries, and circuit breaker for Zammad requests (#120)
 - Add tag listing and retrieval tools (#174)
-- *(time-accounting)* Add time_unit support to update_ticket and add_article (#211)
+- *(time-accounting)* Add `time_unit` support to `update_ticket` and `add_article` (#211)
 - *(deps)* Migrate from bundled FastMCP 1 to standalone FastMCP 3
 - *(triage)* Add repo triage skills
+- *(audit)* Add opt-in JSON Lines audit logging for security events
+- *(export)* Add bulk ticket export to JSONL
+- *(kb)* Add read-only Knowledge Base support
+- *(search)* Add creation date range filters to ticket search
+- Add `pending_time` to `update_ticket` for pending states
+- *(models)* Accept case-insensitive constant inputs
+- *(tickets)* Add `zammad_bulk_update_tickets` tool
+- *(tickets)* Support custom Zammad object attributes on read and update
+- *(webhooks)* Receive Zammad webhook events and expose `zammad_list_events`
+- *(models)* Add ticket merge request and result models
+- *(client)* Wrap the legacy Zammad `ticket_merge` endpoint
+- *(server)* Add `zammad_merge_tickets` destructive tool
+- *(client)* Add rate limiting, retries, and circuit breaker for Zammad requests
 
 ### 🐛 Bug Fixes
 
-- Expose MCP tool arguments at the top level for AI agent compatibility (#212)
 - Address CodeRabbit review feedback
 - Resolve Codacy D-series docstring violations in changed files
 - *(tests)* Add local fake Zammad server to HTTP integration fixture
@@ -27,14 +37,99 @@
 - *(codex)* Address plugin review blockers
 - *(codacy)* Ignore plugin bundle in static analysis
 - *(deps)* Remediate dependency alerts
+- *(deps)* Clear dependency audit commit blocker
+- *(audit)* Load .env before building audit logger
+- *(kb)* Address Codacy pydocstyle and ruff findings
+- *(kb)* Address CodeRabbit review findings
+- *(kb)* Address remaining Codacy pydocstyle minor findings
+- Align docstring formatting with Codacy D203/D212/D213 rules
+- *(kb)* Address PR review — use init bootstrap, typed shape errors, mypy clean
+- *(kb)* Fall back to any legacy translation body when ids are stale
+- *(export)* Annotate `zammad_export_tickets` as a write tool
+- Address review findings on export paging, syslog, host checks, redaction
+- *(deps)* Remediate audit failures and remove vulnerable Safety tooling
+- Expose flat MCP tool arguments
+- Resolve audited dependency vulnerabilities
+- Preserve dependency requirements during audit updates
+- Align module docstrings with Codacy
+- Satisfy Codacy docstring rules
+- *(prompts)* Accept string arguments for `ticket_id`
+- Don't HTML-escape quotes/apostrophes in plain-text article/ticket content
+- Preserve quotes when updating ticket titles
+- *(stats)* Categorize ticket stats by state name, not `state_type_id`
+- *(stats)* Add pending-prefix fallback for custom states in name-based categorization
+- *(stats)* Restrict pending fallback to space-terminated word match
+- *(stats)* Categorize by `state_type_id` (seeded and stable), not state name
+- *(client)* Request expand=true when fetching a single ticket
+- *(client)* Build `get_ticket` URL from `zammad_py`'s normalised base
+- *(stats)* Flag group-filtered counts truncated at the search cap
+- [**breaking**] Remove `zammad_delete_attachment`, Zammad has no such endpoint
+- Add customer field to `zammad_update_ticket`
+- Address CodeRabbit review on `zammad_update_ticket`
+- *(search)* Show date bounds in search results header
+- Surface article attachments when reading tickets
+- Sanitize attachment metadata in ticket markdown
+- Sanitize `article_id` in attachments header too
+- *(models)* Keep quotes in update-ticket titles and bound the expanded GET
+- *(tickets)* Bound bulk tag names like the single-tag tools
+- *(events)* Return oldest page first so `next_since` cursor never skips events
+- *(client)* Percent-encode the merge target number path segment
+- *(server)* Give accurate guidance for 5xx exhaustion and throttled writes
+- *(tools)* Expose flat arguments for merge, bulk update, and list events
+- Address review findings on resilience, webhooks, events and CI aggregate
+- *(deps)* Cap fastmcp <4 and mcp <2 in project dependencies
 
 ### 💼 Other
 
 - Address PR review feedback (#213)
+- Constrain mcp and fastmcp below their next majors
+- Declare requests as a direct dependency with type stubs
+- Relock for the requests and types-requests declarations
+
+### 🚜 Refactor
+
+- *(export)* Split `zammad_export_tickets` into focused helpers
+- *(client)* Build ticket search clauses declaratively
+- *(client)* Pick the legacy translation body from one candidate list
+- Drop orphaned _destructive_write_annotations and harden guard test
+- Split attachment formatting to cut cyclomatic complexity
+- *(client)* Build search clauses and update payloads declaratively
+- *(webhooks)* Address Codacy static analysis findings
 
 ### 📚 Documentation
 
+- *(skills)* Add Zammad documentation guidance
+- Add maintainer pre-triage PR and issue ledger
+- Verify complete triage coverage and add canonical ledger
+- *(maintainer)* Add execution attack plan for the open PR board
+- *(audit)* Add Google-style docstrings and split middleware module
+- *(export)* Document `zammad_export_tickets` and `ZAMMAD_EXPORT_DIR`
 - *(changelog)* Record removal of codex digest automation
+- Document `flat_params` helpers and drop the stale `SAFETY_API_KEY` step
+- *(tests)* Use single-line docstrings for state-name regression tests
+- Order `list_ticket_states` example numerically by id
+- *(stats)* Document `counts_truncated` in the tool contract
+- *(server)* Advertise lowercase values for `response_format` and `article_type`
+- *(server)* Correct `article_type` default and example casing in `add_article`
+- *(webhooks)* Document the payload extraction helpers
+- Record rate limiting feature in unreleased changelog
+
+### 🎨 Styling
+
+- *(tests)* Annotate shared state fixture as ClassVar (RUF012)
+- *(models)* Collapse `_missing_` docstring to one line
+- *(server)* Sort merge model imports
+
+### 🧪 Testing
+
+- *(export)* Include `zammad_export_tickets` in tool inventory
+- Exercise registered create-ticket tool
+- Use tuple form for parametrize argument names
+- Cover double quotes in plain-text sanitization
+- Cover customer forwarding through `zammad_update_ticket` tool
+- Cover attachments in ticket resource and document `pending_time`
+- *(models)* Cover non-string enum rejection and ArticleType schema
+- *(merge)* Drive `merge_tickets` doubles through the resilient session transport
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -55,7 +150,34 @@
 - Replace CLAUDE instructions with AGENTS link
 - Update changelog generation
 - Align automation with uv and coverage rules
+- *(ci)* Delete .github/workflows/sync-labels.yml, stop fighting the factory labels
+- Remove obsolete workspace tooling
+- Remove legacy Claude commit skill
+- *(ci)* Remove CodeRabbit label instructions
+- Update mise tool configuration
+- Add technical documentation skill
+- Enable Entire integrations and record project idea
+- Drop accidentally-committed vendor/llm-anon-core gitlink
+- Ignore vendor/ and drop accidentally committed gitlink
+- Flip docstring layout to satisfy Codacy rule set
+- Satisfy Codacy docstring rules (D211/D212/D213/D203)
+- Adjust docstring formatting for Codacy
+- Satisfy Codacy docstring rules
+- Align docstrings with Codacy checks
+- Flip docstrings for Codacy
+- Report an aggregate test-and-coverage check for the ruleset
 - *(triage)* Remove repo-local codex digest automation
+- *(plugins)* Complete repo-local plugin retirement
+- *(mise)* Pin uv 0.12.20 to match the workflow setup-uv version
+- *(codacy)* Exclude tests from the active .codacy.yaml
+- Add lint and type-check job to mirror local gates
+- Add canonical non-mutating validation script shared by local and CI
+- Make validate.sh abort on the first failing gate
+- Keep one canonical validation job and flatten new tool docstrings
+
+### 🛡️ Security
+
+- Raise pyjwt floor to 2.14.0 for GHSA-w6j9-cwv2-h6wq
 
 ## [1.1.0] - 2025-12-09
 
