@@ -830,6 +830,35 @@ class TicketStats(BaseModel):
     )
 
 
+class TicketExportParams(StrictBaseModel):
+    """Parameters for bulk ticket export to JSONL."""
+
+    output_path: str = Field(description="Path to output JSONL file (must end in .jsonl)")
+    query: str | None = Field(None, description="Free text search filter")
+    group: str | None = Field(None, description="Filter by group name")
+    state: str | None = Field(None, description="Filter by state name")
+    created_after: date | None = Field(None, description="Filter tickets created on or after this date (YYYY-MM-DD)")
+    created_before: date | None = Field(None, description="Filter tickets created on or before this date (YYYY-MM-DD)")
+    delay_seconds: float = Field(default=0.5, ge=0.0, le=10.0, description="Delay between API calls in seconds")
+    per_page: int = Field(default=50, ge=1, le=100, description="Number of tickets per page/batch")
+    include_internal_articles: bool = Field(default=False, description="Include internal notes in export")
+    resume_from_page: int = Field(default=1, ge=1, description="Page to resume export from (for interrupted exports)")
+    max_tickets: int | None = Field(default=None, ge=1, description="Maximum number of tickets to export")
+    include_tags: bool = Field(
+        default=False,
+        description="Fetch tags for each ticket. Tags are not part of the ticket payload, "
+        "so this costs one extra API call per ticket.",
+    )
+
+    @field_validator("output_path")
+    @classmethod
+    def validate_output_path(cls, v: str) -> str:
+        """Validate that output path ends with .jsonl."""
+        if not v.endswith(".jsonl"):
+            raise ValueError("output_path must end with .jsonl")
+        return v
+
+
 class TagOperationResult(BaseModel):
     """Result of a tag operation (add/remove)."""
 
@@ -837,3 +866,60 @@ class TagOperationResult(BaseModel):
 
     success: bool = Field(description="Whether the operation was successful")
     message: str | None = Field(None, description="Optional message about the operation")
+
+
+# --- KB read-only param models (StrictBaseModel) ---
+
+
+class GetKnowledgeBaseParams(StrictBaseModel):
+    """Parameters for retrieving a single knowledge base."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class ListKnowledgeBasesParams(StrictBaseModel):
+    """Parameters for listing knowledge bases."""
+
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class GetKBCategoryParams(StrictBaseModel):
+    """Parameters for retrieving a KB category."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    category_id: int = Field(gt=0, description="Category ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class GetKBAnswerParams(StrictBaseModel):
+    """Parameters for retrieving a KB answer."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    answer_id: int = Field(gt=0, description="Answer ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class ListKBAnswersParams(StrictBaseModel):
+    """Parameters for listing answers within a KB category."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    category_id: int = Field(gt=0, description="Category ID")
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class SearchKBAnswersParams(StrictBaseModel):
+    """Parameters for searching KB answers by title or body keyword."""
+
+    kb_id: int = Field(gt=0, description="Knowledge base ID")
+    query: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Search string (case-insensitive substring match on title and body)",
+    )
+    category_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Limit search to this category and its descendants (optional)",
+    )
+    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")

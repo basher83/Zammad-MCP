@@ -5,13 +5,15 @@ import html
 import json
 import logging
 import os
+import re
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, NoReturn, Protocol, TypeVar
+from typing import Any, NoReturn, Protocol, TextIO, TypeVar
 
 import requests  # type: ignore[import-untyped]
 from dotenv import load_dotenv
@@ -21,6 +23,8 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from .audit import AuditConfig, AuditLogger, error_details
+from .audit_middleware import AuditMiddleware
 from .client import ZammadClient
 from .events import EventStore, ListEventsParams, ListEventsResult
 from .logging_config import configure_logging
@@ -34,16 +38,22 @@ from .models import (
     BulkUpdateResult,
     DownloadAttachmentParams,
     GetArticleAttachmentsParams,
+    GetKBAnswerParams,
+    GetKBCategoryParams,
+    GetKnowledgeBaseParams,
     GetOrganizationParams,
     GetTicketParams,
     GetTicketStatsParams,
     GetTicketTagsParams,
     GetUserParams,
     Group,
+    ListKBAnswersParams,
+    ListKnowledgeBasesParams,
     ListParams,
     Organization,
     PriorityBrief,
     ResponseFormat,
+    SearchKBAnswersParams,
     SearchOrganizationsParams,
     SearchUsersParams,
     StateBrief,
@@ -51,6 +61,7 @@ from .models import (
     TagOperationResult,
     Ticket,
     TicketCreate,
+    TicketExportParams,
     TicketIdGuidanceError,
     TicketMergeParams,
     TicketMergeResult,
@@ -103,6 +114,7 @@ MAX_PER_PAGE = 100  # Maximum results per page for pagination
 SEARCH_RESULT_CAP = 10000
 CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
 ARTICLE_BODY_TRUNCATE_LENGTH = 500  # Maximum length for article body in markdown formatting
+MAX_EXPORT_ERRORS_LOGGED = 100  # Maximum number of per-ticket errors to log during export
 
 
 # Tool annotation constants
@@ -185,6 +197,19 @@ def _brief_field(value: object, attr: str) -> str:
     if isinstance(value, str):
         return value
     return "Unknown"
+
+
+def _strip_html_tags(text: str) -> str:
+    """Strip HTML tags and unescape HTML entities from text.
+
+    Args:
+        text: HTML or plain text string
+
+    Returns:
+        Plain text with HTML tags removed and entities decoded
+    """
+    clean = re.sub(r"<[^>]+>", "", text)
+    return html.unescape(clean).strip()
 
 
 def _escape_article_body(article: Article) -> str:
@@ -835,6 +860,299 @@ def _format_organization_detail_markdown(org: Organization) -> str:
     return "\n".join(lines)
 
 
+def _extract_expanded_field_name(value: object) -> str:
+    """Extract name from an expanded field (dict or string)."""
+    if isinstance(value, dict):
+        return str(value.get("name", ""))
+    return str(value) if value else ""
+
+
+def _build_export_article(article: dict[str, Any]) -> dict[str, Any]:
+    """Build a single export article record with HTML stripped."""
+    body = article.get("body", "")
+    content_type = (article.get("content_type") or "").lower()
+    if "html" in content_type:
+        body = _strip_html_tags(body)
+
+    return {
+        "sender": article.get("sender", "Unknown"),
+        "type": article.get("type", "note"),
+        "from": article.get("from", ""),
+        "subject": article.get("subject", ""),
+        "body": body,
+        "internal": article.get("internal", False),
+        "created_at": article.get("created_at", ""),
+    }
+
+
+def _resolve_export_path(output_path: str) -> Path:
+    """Resolve and validate an export output path against the configured export directory.
+
+    Export writes to the host filesystem, so the destination is confined to the directory
+    named by ZAMMAD_EXPORT_DIR. The variable is required: without it the export tool is
+    unavailable rather than defaulting to a writable location.
+
+    Symlinks are resolved before the containment check, so a symlink inside the export
+    directory cannot be used to escape it.
+
+    Args:
+        output_path: Requested output path, absolute or relative to the export directory.
+
+    Returns:
+        Path: The resolved, validated absolute path.
+
+    Raises:
+        ValueError: If ZAMMAD_EXPORT_DIR is unset, is not a directory, or the resolved
+            path would fall outside it.
+    """
+    export_dir_raw = os.environ.get("ZAMMAD_EXPORT_DIR")
+    if not export_dir_raw:
+        raise ValueError(
+            "Ticket export is disabled: ZAMMAD_EXPORT_DIR is not set. "
+            "Set it to a directory the server may write exports into."
+        )
+
+    export_dir = Path(export_dir_raw).expanduser().resolve()
+    if not export_dir.is_dir():
+        raise ValueError(f"ZAMMAD_EXPORT_DIR does not exist or is not a directory: {export_dir}")
+
+    candidate = Path(output_path).expanduser()
+    resolved = (export_dir / candidate).resolve() if not candidate.is_absolute() else candidate.resolve()
+
+    if resolved != export_dir and export_dir not in resolved.parents:
+        raise ValueError(
+            f"Refusing to write outside the export directory. "
+            f"Resolved path {resolved} is not contained in ZAMMAD_EXPORT_DIR {export_dir}."
+        )
+
+    return resolved
+
+
+def _build_export_record(
+    ticket_data: dict[str, Any],
+    include_internal: bool,
+    summary: dict[str, Any] | None = None,
+    tags: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build a JSONL export record from ticket data.
+
+    The per-ticket detail fetch uses the Zammad ticket find endpoint, which does not
+    support expansion, so group/state/priority arrive as numeric *_id fields only. The
+    list and search endpoints do expand those names, so the batch summary the ticket
+    came from is used as a fallback for the human-readable values.
+
+    Args:
+        ticket_data: Full ticket detail, including articles.
+        include_internal: Whether internal articles are included in the conversation.
+        summary: The batch entry this ticket came from, used to recover expanded names.
+        tags: Tags fetched separately; the ticket payload never carries them.
+    """
+    conversation = []
+    for article in ticket_data.get("articles", []):
+        if not include_internal and article.get("internal", False):
+            continue
+        conversation.append(_build_export_article(article))
+
+    summary = summary or {}
+
+    def expanded(field: str) -> str:
+        """Prefer the detail payload, falling back to the expanded batch summary."""
+        value = _extract_expanded_field_name(ticket_data.get(field, ""))
+        if value:
+            return value
+        return _extract_expanded_field_name(summary.get(field, ""))
+
+    raw_tags = tags if tags is not None else ticket_data.get("tags")
+    resolved_tags = raw_tags if isinstance(raw_tags, list) else []
+
+    return {
+        "ticket_id": ticket_data.get("id"),
+        "ticket_number": str(ticket_data.get("number", "")),
+        "title": ticket_data.get("title", ""),
+        "group": expanded("group"),
+        "state": expanded("state"),
+        "priority": expanded("priority"),
+        "tags": resolved_tags,
+        "created_at": str(ticket_data.get("created_at", "")),
+        "updated_at": str(ticket_data.get("updated_at", "")),
+        "conversation": conversation,
+    }
+
+
+def _format_export_summary(
+    params: "TicketExportParams",
+    exported_count: int,
+    error_count: int,
+    errors: list[str],
+    elapsed: float,
+    use_search: bool,
+    export_path: Path | None = None,
+) -> str:
+    """Format export summary as markdown."""
+    lines = ["# Ticket Export Complete", ""]
+    lines.append(f"- **File**: `{export_path if export_path is not None else params.output_path}`")
+    lines.append(f"- **Tickets exported**: {exported_count}")
+    lines.append(f"- **Errors**: {error_count}")
+    lines.append(f"- **Elapsed time**: {elapsed:.1f}s")
+    lines.append(f"- **Mode**: {'search (10K limit)' if use_search else 'list (no limit)'}")
+    if params.resume_from_page > 1:
+        lines.append(f"- **Resumed from page**: {params.resume_from_page}")
+    lines.append("")
+
+    if use_search:
+        lines.append(
+            "> **Note**: Filtered export uses the search endpoint, which is capped at 10,000 results by Zammad."
+        )
+        lines.append("")
+
+    if errors:
+        lines.append("## Errors (first 100)")
+        lines.append("")
+        for err in errors:
+            lines.append(f"- {err}")
+
+    return "\n".join(lines)
+
+
+def _fetch_export_batch(
+    client: "ZammadClient",
+    params: "TicketExportParams",
+    use_search: bool,
+    page: int,
+) -> list[dict[str, Any]]:
+    """Fetch a batch of tickets for export using search or list endpoint."""
+    if use_search:
+        return client.search_tickets(
+            query=params.query,
+            group=params.group,
+            state=params.state,
+            created_after=params.created_after.isoformat() if params.created_after else None,
+            created_before=params.created_before.isoformat() if params.created_before else None,
+            page=page,
+            per_page=params.per_page,
+        )
+    return client.list_tickets(page=page, per_page=params.per_page)
+
+
+@dataclass
+class _ExportProgress:
+    """Running totals for a ticket export."""
+
+    exported: int = 0
+    error_count: int = 0
+    errors: list[str] = field(default_factory=list)
+
+    def record_error(self, ticket_id: Any, exc: Exception) -> None:
+        """Count a per-ticket failure, keeping at most MAX_EXPORT_ERRORS_LOGGED messages.
+
+        Args:
+            ticket_id: ID of the ticket that failed.
+            exc: The exception raised while exporting it.
+        """
+        self.error_count += 1
+        if len(self.errors) < MAX_EXPORT_ERRORS_LOGGED:
+            self.errors.append(f"Ticket {ticket_id}: {type(exc).__name__} - {exc}")
+
+    def limit_reached(self, max_tickets: int | None) -> bool:
+        """Return whether the optional max_tickets cap has been reached.
+
+        Args:
+            max_tickets: Optional. Export cap; None or 0 means unlimited.
+
+        Returns:
+            bool: True when the cap is set and met.
+        """
+        return bool(max_tickets and self.exported >= max_tickets)
+
+
+def _iter_export_batches(
+    client: "ZammadClient", params: "TicketExportParams", use_search: bool
+) -> Iterator[list[dict[str, Any]]]:
+    """Yield non-empty ticket batches from resume_from_page until the first empty page.
+
+    The search endpoint is capped at MAX_PAGES_FOR_TICKET_SCAN pages, matching the
+    ticket statistics scan; the list endpoint has no result cap, so list-mode
+    exports page until Zammad returns nothing.
+
+    Args:
+        client: Zammad client used to fetch pages.
+        params: Export parameters (filters, page size, resume page).
+        use_search: Whether to use the search endpoint instead of the list endpoint.
+
+    Returns:
+        Iterator[list[dict[str, Any]]]: Batches in page order; stops at the first empty page.
+    """
+    last_page = MAX_PAGES_FOR_TICKET_SCAN if use_search else None
+    page = params.resume_from_page
+    while last_page is None or page <= last_page:
+        batch = _fetch_export_batch(client, params, use_search, page)
+        if not batch:
+            return
+        yield batch
+        page += 1
+
+
+def _fetch_export_record(
+    client: "ZammadClient", params: "TicketExportParams", ticket_summary: dict[str, Any]
+) -> dict[str, Any]:
+    """Fetch one ticket's details (and optional tags) and build its export record.
+
+    Args:
+        client: Zammad client used for the detail and tag requests.
+        params: Export parameters (delay, tag and internal-article options).
+        ticket_summary: Batch entry for the ticket; must carry an ``id``.
+
+    Returns:
+        dict[str, Any]: The JSONL export record.
+    """
+    ticket_id = ticket_summary["id"]
+    time.sleep(params.delay_seconds)
+    ticket_data = client.get_ticket(ticket_id=ticket_id, include_articles=True, article_limit=-1)
+    tags = client.get_ticket_tags(ticket_id) if params.include_tags else None
+    return _build_export_record(ticket_data, params.include_internal_articles, summary=ticket_summary, tags=tags)
+
+
+def _write_export_line(f: TextIO, record: dict[str, Any]) -> None:
+    """Append one JSON record as a line and flush so progress survives crashes.
+
+    Args:
+        f: Open text file in append mode.
+        record: Export record to serialize.
+    """
+    f.write(json.dumps(record, default=str) + "\n")
+    f.flush()
+
+
+def _export_batch(
+    client: "ZammadClient",
+    params: "TicketExportParams",
+    batch: list[dict[str, Any]],
+    f: TextIO,
+    progress: _ExportProgress,
+) -> None:
+    """Export each ticket in a batch, recording per-ticket failures without stopping.
+
+    Args:
+        client: Zammad client used for per-ticket requests.
+        params: Export parameters.
+        batch: Ticket summaries from one page.
+        f: Open output file.
+        progress: Running totals, updated in place.
+    """
+    for ticket_summary in batch:
+        ticket_id = ticket_summary.get("id")
+        if not ticket_id:
+            continue
+        try:
+            _write_export_line(f, _fetch_export_record(client, params, ticket_summary))
+        except Exception as e:
+            progress.record_error(ticket_id, e)
+            continue
+        progress.exported += 1
+        if progress.limit_reached(params.max_tickets):
+            return
+
+
 _RATE_LIMIT_GUIDANCE = (
     "Error: Zammad rate limit reached during {context}{detail}. "
     "Wait before retrying, reduce request frequency or page size, or enable client-side "
@@ -900,6 +1218,127 @@ def _handle_api_error(e: Exception, context: str = "operation") -> str:
     return f"Error during {context}: {type(e).__name__} - {e}"
 
 
+# ============================================================================
+# Knowledge Base helpers (read-only)
+# ============================================================================
+
+
+def _kb_answer_status(answer: dict[str, Any]) -> str:
+    """Derive human-readable publication status from a KB answer dict."""
+    if answer.get("archived_at"):
+        return "archived"
+    if answer.get("published_at"):
+        return "published"
+    if answer.get("internal_at"):
+        return "internal"
+    return "draft"
+
+
+def _format_kb_markdown(kb: dict[str, Any]) -> str:
+    """Format a KnowledgeBase dict as markdown."""
+    lines = [f"# Knowledge Base (ID: {kb.get('id', 'N/A')})", ""]
+    lines.append(f"**Active**: {kb.get('active', False)}")
+    if kb.get("custom_address"):
+        lines.append(f"**Address**: {kb['custom_address']}")
+    lines.append(f"**Homepage Layout**: {kb.get('homepage_layout', 'N/A')}")
+    lines.append(f"**Category Layout**: {kb.get('category_layout', 'N/A')}")
+    cat_ids = kb.get("category_ids") or []
+    ans_ids = kb.get("answer_ids") or []
+    lines.append(f"**Root Categories**: {len(cat_ids)} (IDs: {cat_ids})")
+    lines.append(f"**Answers**: {len(ans_ids)} total")
+    lines.append(f"**Updated**: {kb.get('updated_at', 'N/A')}")
+    return "\n".join(lines)
+
+
+def _format_kb_category_markdown(category: dict[str, Any]) -> str:
+    """Format a KnowledgeBaseCategory dict as markdown."""
+    lines = [f"# KB Category (ID: {category.get('id', 'N/A')})", ""]
+    lines.append(f"**Knowledge Base ID**: {category.get('knowledge_base_id', 'N/A')}")
+    lines.append(f"**Parent ID**: {category.get('parent_id', 'None (root)')}")
+    lines.append(f"**Icon**: {category.get('category_icon', 'N/A')}")
+    lines.append(f"**Position**: {category.get('position', 0)}")
+    child_ids = category.get("child_ids") or []
+    answer_ids = category.get("answer_ids") or []
+    translation_ids = category.get("translation_ids") or []
+    lines.append(f"**Child Categories**: {len(child_ids)} (IDs: {child_ids})")
+    lines.append(f"**Answers**: {len(answer_ids)} (IDs: {answer_ids})")
+    lines.append(f"**Translation IDs**: {translation_ids}")
+    lines.append(f"**Updated**: {category.get('updated_at', 'N/A')}")
+    return "\n".join(lines)
+
+
+def _format_kb_answer_optional_sections(answer: dict[str, Any], body: str) -> list[str]:
+    """Build optional markdown sections (content, attachments, tags) for a KB answer."""
+    lines: list[str] = []
+    if body:
+        lines += ["", "## Content", "", body.strip()]
+    attachments = answer.get("attachments") or []
+    if attachments:
+        lines += ["", "## Attachments", ""]
+        lines += [
+            f"- **{att.get('filename', 'N/A')}** (ID: {att.get('id', 'N/A')}, size: {att.get('size', '?')} bytes)"
+            for att in attachments
+        ]
+    tags = answer.get("tags") or []
+    if tags:
+        lines += ["", f"**Tags**: {', '.join(tags)}"]
+    return lines
+
+
+def _format_kb_answer_markdown(answer: dict[str, Any], title: str = "", body: str = "") -> str:
+    """Format a KnowledgeBaseAnswer dict as markdown."""
+    status = _kb_answer_status(answer)
+    heading = title or f"KB Answer (ID: {answer.get('id', 'N/A')})"
+    translation_ids = answer.get("translation_ids") or []
+    lines = [
+        f"# {heading}",
+        "",
+        f"**ID**: {answer.get('id', 'N/A')}",
+        f"**Category ID**: {answer.get('category_id', 'N/A')}",
+        f"**Status**: {status}",
+        f"**Promoted**: {answer.get('promoted', False)}",
+        f"**Position**: {answer.get('position', 0)}",
+        f"**Translation IDs**: {translation_ids}",
+    ]
+    lines += _format_kb_answer_optional_sections(answer, body)
+    lines += ["", f"**Updated**: {answer.get('updated_at', 'N/A')}"]
+    return "\n".join(lines)
+
+
+def _format_kb_answers_list_markdown(answers: list[dict[str, Any]], kb_id: int, category_id: int) -> str:
+    """Format a list of KB answers as markdown."""
+    lines = [f"# KB Answers in Category {category_id} (KB: {kb_id})", ""]
+    lines.append(f"Found {len(answers)} answer(s)")
+    lines.append("")
+    for answer in answers:
+        status = _kb_answer_status(answer)
+        title = answer.get("_title") or "(no title)"
+        lines.append(f"## {title} (ID: {answer.get('id', 'N/A')})")
+        lines.append(f"- **Status**: {status}")
+        lines.append(f"- **Promoted**: {answer.get('promoted', False)}")
+        lines.append(f"- **Position**: {answer.get('position', 0)}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _format_kb_search_results_markdown(results: list[dict[str, Any]], query: str, kb_id: int) -> str:
+    """Format KB answer search results as markdown."""
+    if not results:
+        return f"No KB answers found matching '{query}' in KB {kb_id}."
+    lines = [f"# KB Answer Search: '{query}' (KB: {kb_id})", ""]
+    lines.append(f"Found {len(results)} match(es)")
+    lines.append("")
+    for answer in results:
+        title = answer.get("_title") or "(no title)"
+        status = _kb_answer_status(answer)
+        lines.append(f"## {title} (ID: {answer.get('id', 'N/A')})")
+        lines.append(f"- **Category ID**: {answer.get('_category_id', answer.get('category_id', 'N/A'))}")
+        lines.append(f"- **Status**: {status}")
+        lines.append(f"- **Promoted**: {answer.get('promoted', False)}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 _BULK_TICKET_FIELDS = {"title", "state", "priority", "owner", "group", "time_unit"}
 
 
@@ -959,22 +1398,35 @@ class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
 
     def __init__(
-        self, host: str | None = None, port: int | None = None, *, event_store: EventStore | None = None
+        self,
+        host: str | None = None,
+        port: int | None = None,
+        *,
+        audit_logger: AuditLogger | None = None,
+        event_store: EventStore | None = None,
     ) -> None:
         """Initialize the server.
 
         Args:
             host: Deprecated. Pass host to mcp.run() instead.
             port: Deprecated. Pass port to mcp.run() instead.
+            audit_logger: Audit sink for tool-call and lifecycle events. Defaults to
+                one built from the ZAMMAD_AUDIT_LOG_* environment variables.
             event_store: Optional. Retention for accepted webhook events; defaults to a bounded in-memory store.
 
         """
         if host is not None or port is not None:
             logger.warning("ZammadMCPServer(host=..., port=...) is deprecated; pass host/port to mcp.run(...) instead.")
         self.client: ZammadClient | None = None
+        self._connected_user_id: int | str | None = None
+        # Load .env before reading audit settings so .env-sourced audit config takes effect.
+        self._bootstrap_env()
+        self.audit = audit_logger or AuditLogger(AuditConfig.from_env(os.environ))
         self.event_store = event_store if event_store is not None else EventStore()
         # Create FastMCP with lifespan configured
         self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
+        if self.audit.enabled:
+            self.mcp.add_middleware(AuditMiddleware(self.audit))
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
@@ -1014,12 +1466,13 @@ class ZammadMCPServer:
     def _create_client(self, *, verify_connection: bool) -> ZammadClient:
         """Create a Zammad client after loading environment configuration."""
         self._bootstrap_env()
-        client = ZammadClient()
+        client = ZammadClient(audit_logger=self.audit)
         logger.info("Zammad client initialized successfully")
 
         if verify_connection:
             current_user = client.get_current_user()
-            logger.info("Connected as user ID: %s", current_user.get("id", "unknown"))
+            self._connected_user_id = current_user.get("id")
+            logger.info("Connected as user ID: %s", self._connected_user_id or "unknown")
 
         return client
 
@@ -1034,15 +1487,20 @@ class ZammadMCPServer:
         """Initialize the Zammad client on server startup."""
         try:
             self.client = self._create_client(verify_connection=True)
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to initialize Zammad client")
+            self.audit.log_event("authentication", "zammad_connect", success=False, details=error_details(exc))
             raise
+        details = {"user_id": self._connected_user_id}
+        self.audit.log_event("authentication", "zammad_connect", success=True, details=details)
 
     def _setup_tools(self) -> None:
         """Register all tools with the MCP server."""
         self._setup_ticket_tools()
+        self._setup_export_tools()
         self._setup_user_org_tools()
         self._setup_system_tools()
+        self._setup_kb_tools()
         self._setup_event_tools()
 
     def _setup_webhooks(self) -> None:
@@ -1720,6 +2178,91 @@ class ZammadMCPServer:
             client = self.get_client()
             result = client.remove_ticket_tag(params.ticket_id, params.tag)
             return TagOperationResult(**result)
+
+    def _setup_export_tools(self) -> None:
+        """Register export-related tools."""
+
+        @self.mcp.tool(annotations=_write_annotations("Export Tickets to JSONL"))
+        @flat_params(TicketExportParams)
+        def zammad_export_tickets(params: TicketExportParams) -> str:
+            """Export tickets with conversation articles to a JSONL file for AI training.
+
+            Fetches tickets in batches, retrieves all articles for each ticket,
+            strips HTML to plain text, and writes one JSON line per ticket.
+
+            By default (no filters), uses the list endpoint which has no result cap.
+            When filters are specified, uses the search endpoint (capped at 10,000 results).
+
+            Args:
+                params (TicketExportParams): Export parameters containing:
+                    - output_path (str): Path to output JSONL file (must end in .jsonl).
+                      Relative to ZAMMAD_EXPORT_DIR; absolute paths must resolve inside it.
+                    - query (str | None): Free text search filter
+                    - group (str | None): Filter by group name
+                    - state (str | None): Filter by state name
+                    - created_after (str | None): Filter tickets created on/after date (YYYY-MM-DD)
+                    - created_before (str | None): Filter tickets created on/before date (YYYY-MM-DD)
+                    - delay_seconds (float): Delay between API calls (default: 0.5)
+                    - per_page (int): Batch size per page (default: 50)
+                    - include_internal_articles (bool): Include internal notes (default: False)
+                    - resume_from_page (int): Page to resume from (default: 1)
+                    - max_tickets (int | None): Maximum tickets to export (default: None)
+                    - include_tags (bool): Fetch per-ticket tags via an extra API call (default: False)
+
+            Returns:
+                str: Markdown summary with file path, counts, elapsed time, and errors
+
+            JSONL record format (one per line):
+                ```json
+                {
+                    "ticket_id": 123,
+                    "ticket_number": "65003",
+                    "title": "Subject line",
+                    "group": "Support",
+                    "state": "closed",
+                    "priority": "2 normal",
+                    "tags": ["network"],
+                    "created_at": "2024-01-15T10:30:00Z",
+                    "updated_at": "2024-02-01T14:22:00Z",
+                    "conversation": [
+                        {
+                            "sender": "Customer",
+                            "type": "email",
+                            "from": "user@example.com",
+                            "subject": "Subject line",
+                            "body": "Plain text body...",
+                            "internal": false,
+                            "created_at": "2024-01-15T10:30:00Z"
+                        }
+                    ]
+                }
+                ```
+
+            Note:
+                - The file is opened in append mode to support resume from interruption.
+                - Each line is flushed immediately so progress survives crashes.
+                - Errors on individual tickets are logged but do not stop the export.
+                - The search endpoint is capped at 10,000 results by Zammad.
+            """
+            client = self.get_client()
+            start_time = time.monotonic()
+
+            use_search = any([params.query, params.group, params.state, params.created_after, params.created_before])
+
+            export_path = _resolve_export_path(params.output_path)
+
+            progress = _ExportProgress()
+
+            with open(export_path, "a") as f:
+                for batch in _iter_export_batches(client, params, use_search):
+                    _export_batch(client, params, batch, f, progress)
+                    if progress.limit_reached(params.max_tickets):
+                        break
+
+            elapsed = time.monotonic() - start_time
+            return _format_export_summary(
+                params, progress.exported, progress.error_count, progress.errors, elapsed, use_search, export_path
+            )
 
         @self.mcp.tool(annotations=_destructive_write_annotations("Bulk Update Tickets"))
         @flat_params(BulkTicketUpdateParams)
@@ -2795,6 +3338,7 @@ class ZammadMCPServer:
         self._setup_user_resource()
         self._setup_organization_resource()
         self._setup_queue_resource()
+        self._setup_kb_resources()
 
     def _setup_ticket_resource(self) -> None:
         """Register ticket resource."""
@@ -2945,6 +3489,167 @@ class ZammadMCPServer:
                 return truncate_response("\n".join(lines))
             except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
                 return _handle_api_error(e, context=f"retrieving queue for group '{group}'")
+
+    def _setup_kb_tools(self) -> None:
+        """Register read-only Knowledge Base tools.
+
+        Failure semantics: client-level errors (network/HTTP) are propagated as
+        exceptions (e.g. :class:`ZammadAPIError`) so MCP surfaces them as
+        actual tool errors instead of returning successful string payloads.
+        """
+        self._setup_kb_info_tools()
+        self._setup_kb_category_tools()
+        self._setup_kb_answer_read_tools()
+
+    def _setup_kb_info_tools(self) -> None:
+        """Register KB list/get knowledge-base tools."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("List Knowledge Bases"))
+        @flat_params(ListKnowledgeBasesParams)
+        def zammad_list_knowledge_bases(params: ListKnowledgeBasesParams) -> str:
+            """List all knowledge bases available in Zammad.
+
+            Errors (auth, network, HTTP 5xx, ...) are raised as
+            :class:`ZammadAPIError` so the MCP client sees a real tool error.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+            """
+            client = self.get_client()
+            kbs = client.list_knowledge_bases()
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps({"items": kbs, "count": len(kbs)}, indent=2, default=str)
+            else:
+                lines = ["# Knowledge Bases", "", f"Found {len(kbs)} knowledge base(s)", ""]
+                for kb in kbs:
+                    lines.append(f"## KB ID: {kb.get('id', 'N/A')}")
+                    lines.append(f"- **Active**: {kb.get('active', False)}")
+                    if kb.get("custom_address"):
+                        lines.append(f"- **Address**: {kb['custom_address']}")
+                    cat_ids = kb.get("category_ids") or []
+                    lines.append(f"- **Root Categories**: {len(cat_ids)}")
+                    lines.append("")
+                result = "\n".join(lines)
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get Knowledge Base"))
+        @flat_params(GetKnowledgeBaseParams)
+        def zammad_get_knowledge_base(params: GetKnowledgeBaseParams) -> str:
+            """Get details of a specific knowledge base by ID.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+                Use ``zammad_list_knowledge_bases`` to discover available KB IDs.
+            """
+            client = self.get_client()
+            kb = client.get_knowledge_base(params.kb_id)
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(kb, indent=2, default=str)
+            else:
+                result = _format_kb_markdown(kb)
+            return truncate_response(result)
+
+    def _setup_kb_category_tools(self) -> None:
+        """Register read-only KB category tools."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get KB Category"))
+        @flat_params(GetKBCategoryParams)
+        def zammad_get_kb_category(params: GetKBCategoryParams) -> str:
+            """Get a knowledge base category by ID.
+
+            Note:
+                Requires knowledge_base.reader or knowledge_base.editor permission.
+            """
+            client = self.get_client()
+            category = client.get_kb_category(params.kb_id, params.category_id)
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(category, indent=2, default=str)
+            else:
+                result = _format_kb_category_markdown(category)
+            return truncate_response(result)
+
+    def _setup_kb_answer_read_tools(self) -> None:
+        """Register read-only KB answer tools (list/search/get)."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("List KB Answers"))
+        @flat_params(ListKBAnswersParams)
+        def zammad_list_kb_answers(params: ListKBAnswersParams) -> str:
+            """List answers within a KB category.
+
+            Each item exposes the resolved title via the ``_title`` key.
+            """
+            client = self.get_client()
+            answers = client.list_kb_answers(params.kb_id, params.category_id)
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps({"items": answers, "count": len(answers)}, indent=2, default=str)
+            else:
+                result = _format_kb_answers_list_markdown(answers, params.kb_id, params.category_id)
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Search KB Answers"))
+        @flat_params(SearchKBAnswersParams)
+        def zammad_search_kb_answers(params: SearchKBAnswersParams) -> str:
+            """Case-insensitive substring search of KB answers (title and body).
+
+            Searches across all root categories of the KB by default, or only
+            the given ``category_id`` and its descendants when provided.
+            """
+            client = self.get_client()
+            results = client.search_kb_answers(params.kb_id, params.query, category_id=params.category_id)
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(
+                    {"items": results, "count": len(results), "query": params.query},
+                    indent=2,
+                    default=str,
+                )
+            else:
+                result = _format_kb_search_results_markdown(results, params.query, params.kb_id)
+            return truncate_response(result)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get KB Answer"))
+        @flat_params(GetKBAnswerParams)
+        def zammad_get_kb_answer(params: GetKBAnswerParams) -> str:
+            """Get a knowledge base answer by ID, including resolved title and body."""
+            client = self.get_client()
+            result_payload = client.get_kb_answer_with_content(params.kb_id, params.answer_id)
+            answer = result_payload["answer"]
+            title = result_payload["title"]
+            body = result_payload["body"]
+            if params.response_format == ResponseFormat.JSON:
+                result = json.dumps(
+                    {"answer": answer, "title": title, "body": body},
+                    indent=2,
+                    default=str,
+                )
+            else:
+                body_truncated = truncate_response(body) if body else ""
+                result = _format_kb_answer_markdown(answer, title=title, body=body_truncated)
+            return result
+
+    def _setup_kb_resources(self) -> None:
+        """Register read-only Knowledge Base resources."""
+
+        @self.mcp.resource("zammad://kb/{kb_id}")
+        def get_kb_resource(kb_id: str) -> str:
+            """Get a knowledge base as a resource."""
+            client = self.get_client()
+            kb = client.get_knowledge_base(int(kb_id))
+            return truncate_response(_format_kb_markdown(kb))
+
+        @self.mcp.resource("zammad://kb/{kb_id}/category/{category_id}")
+        def get_kb_category_resource(kb_id: str, category_id: str) -> str:
+            """Get a KB category as a resource."""
+            client = self.get_client()
+            category = client.get_kb_category(int(kb_id), int(category_id))
+            return truncate_response(_format_kb_category_markdown(category))
+
+        @self.mcp.resource("zammad://kb/{kb_id}/answer/{answer_id}")
+        def get_kb_answer_resource(kb_id: str, answer_id: str) -> str:
+            """Get a KB answer as a resource."""
+            client = self.get_client()
+            result = client.get_kb_answer_with_content(int(kb_id), int(answer_id))
+            body = truncate_response(result["body"]) if result["body"] else ""
+            return _format_kb_answer_markdown(result["answer"], title=result["title"], body=body)
 
     def _setup_prompts(self) -> None:
         """Register all prompts with the MCP server."""

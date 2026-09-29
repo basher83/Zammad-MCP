@@ -174,6 +174,32 @@ def test_url_validation_private_network_warning(mock_api: MagicMock, caplog) -> 
         assert "points to private network" in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        ("172.20.0.5", "private network"),
+        ("169.254.10.1", "private network"),
+        ("127.0.0.2", "local host"),
+        ("[::1]", "local host"),
+    ],
+)
+@patch("mcp_zammad.client.ZammadAPI")
+def test_url_validation_classifies_ip_literals(mock_api: MagicMock, caplog, host: str, expected: str) -> None:
+    """IP literals are classified by address range, not by string prefix."""
+    with patch.dict(os.environ, {"ZAMMAD_URL": f"http://{host}", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
+        ZammadClient()
+        assert f"points to {expected}" in caplog.text
+
+
+@pytest.mark.parametrize("host", ["172.5.0.1", "10.example.com"])
+@patch("mcp_zammad.client.ZammadAPI")
+def test_url_validation_ignores_public_and_named_hosts(mock_api: MagicMock, caplog, host: str) -> None:
+    """A public 172.x address or a hostname that merely starts with digits is not flagged."""
+    with patch.dict(os.environ, {"ZAMMAD_URL": f"http://{host}", "ZAMMAD_HTTP_TOKEN": "token"}, clear=True):
+        ZammadClient()
+        assert "points to" not in caplog.text
+
+
 @patch("mcp_zammad.client.ZammadAPI")
 def test_download_attachment(mock_api: MagicMock) -> None:
     """Test downloading an attachment."""

@@ -23,6 +23,7 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_bulk_update_tickets` - Update, assign, tag, or close up to 100 tickets in one call with per-ticket failure reporting
   - `zammad_get_ticket_tags` - Get tags assigned to a specific ticket
   - `zammad_list_tags` - List all tags defined in the system (requires admin.tag permission)
+  - `zammad_export_tickets` - Export tickets with their conversation articles to a JSONL file on the server host (requires `ZAMMAD_EXPORT_DIR`; see [Ticket Export](#ticket-export-optional))
 
 - **Attachment Support**
   - `zammad_get_article_attachments` - List attachments for a ticket article
@@ -180,6 +181,10 @@ The server requires Zammad API credentials. Use a `.env` file:
    # Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
    # LOG_LEVEL=INFO
 
+   # Optional: Audit logging (see "Audit Logging" below)
+   # ZAMMAD_AUDIT_LOG_ENABLED=true
+   # ZAMMAD_AUDIT_LOG_DESTINATION=stderr  # stderr (default), file, or syslog
+   # ZAMMAD_AUDIT_LOG_FILE=/var/log/mcp-zammad/audit.jsonl  # required for file
    # Optional: Resilience (see "Rate Limiting" under Troubleshooting)
    # ZAMMAD_RATE_LIMIT_ENABLED=false
    # ZAMMAD_RATE_LIMIT_REQUESTS=60
@@ -204,6 +209,53 @@ The server requires Zammad API credentials. Use a `.env` file:
 | `MCP_TRANSPORT` | `stdio` | Transport type: `stdio` or `http` |
 | `MCP_HOST` | `127.0.0.1` | Host address for HTTP transport |
 | `MCP_PORT` | - | Port number for HTTP transport (required if `MCP_TRANSPORT=http`) |
+
+### Audit Logging (Optional)
+
+Audit logging is disabled by default. When enabled, the server writes one JSON object per line
+(JSON Lines) for every MCP tool call, each Zammad connection attempt at startup, and each URL
+security check that flags a local or private-network Zammad host.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZAMMAD_AUDIT_LOG_ENABLED` | unset | Enable with `1`, `true`, `yes`, or `on` |
+| `ZAMMAD_AUDIT_LOG_DESTINATION` | `stderr` | `stderr`, `file`, or `syslog` |
+| `ZAMMAD_AUDIT_LOG_FILE` | - | Append target, required if destination is `file` |
+
+Example record:
+
+```json
+{"timestamp": "2026-09-08T12:00:00+00:00", "event_type": "tool_call", "action": "zammad_get_ticket", "success": true, "duration_ms": 12.5, "details": {}}
+```
+
+Event types are `tool_call`, `authentication`, and `security_validation`. Records never contain
+tool arguments, Zammad responses, credentials, or full URLs; failures are recorded by exception
+type only, and any `details` key containing `password`, `token`, `secret`, `authorization`,
+`credential`, or `data` is redacted. Audit output never uses stdout, so the default `stderr`
+destination is safe for the stdio transport. Invalid enabled configuration (unknown destination or
+missing file path) fails at startup.
+
+### Ticket Export (Optional)
+
+`zammad_export_tickets` is read-only against Zammad but writes a JSON Lines file on the host running
+the MCP server: one JSON object per ticket, with its title, group, state, priority, timestamps,
+optional tags, and conversation articles converted to plain text. It is intended for bulk exports
+that would exceed MCP response-size limits. Without filters it pages through the list endpoint (no
+result cap); with `query`, `group`, `state`, `created_after`, or `created_before` it uses the search
+endpoint, which Zammad caps at 10,000 results. Internal articles are excluded unless
+`include_internal_articles` is set, and tags cost one extra request per ticket when `include_tags`
+is set.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZAMMAD_EXPORT_DIR` | unset | Directory exports are confined to. Export is disabled until it is set to an existing directory |
+
+Filesystem confinement: `output_path` must end in `.jsonl`. Relative paths are resolved inside
+`ZAMMAD_EXPORT_DIR`; absolute paths are accepted only if they resolve inside it. Symlinks are
+resolved before the containment check, so `..` traversal or a symlink pointing outside the directory
+is rejected. The file is opened in append mode and flushed per ticket, so an interrupted export can
+be continued with `resume_from_page`. Per-ticket failures are counted and reported in the summary
+without stopping the export.
 
 **Important**: Keep your `.env` file out of version control (already in `.gitignore`).
 
@@ -639,6 +691,7 @@ Report via [GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/s
 - ⚠️ **URL Validation**: Rejects malformed and non-HTTP(S) URLs, but does not block private-network targets ([client.py](mcp_zammad/client.py))
 - ✅ **HTML Sanitization**: Sanitizes selected HTML-bearing fields ([models.py](mcp_zammad/models.py))
 - ✅ **Upstream Authentication**: Supports API tokens, OAuth2, and username/password for Zammad ([client.py](mcp_zammad/client.py))
+- ✅ **Audit Logging**: Opt-in JSON Lines records for tool calls, connection outcomes, and URL checks with secret redaction ([audit.py](mcp_zammad/audit.py))
 - ✅ **Dependency Scanning**: CI runs pip-audit; Dependabot security alerts are enabled separately in GitHub
 - ✅ **Security Testing**: CI runs Bandit and pip-audit ([security-scan.yml](.github/workflows/security-scan.yml))
 
