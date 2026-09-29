@@ -1,4 +1,8 @@
-"""Tests for ZammadClient.merge_tickets against a controlled HTTP session."""
+"""Tests for ZammadClient.merge_tickets against a controlled HTTP session.
+
+The client wraps the zammad-py session in ResilientSession, so the double is the
+underlying transport and every verb arrives as `request(METHOD, url)`.
+"""
 
 from collections.abc import Generator
 from unittest.mock import Mock, patch
@@ -22,22 +26,29 @@ def api() -> Generator[Mock, None, None]:
         yield instance
 
 
-def _put_response(payload: dict, status_error: Exception | None = None) -> Mock:
+@pytest.fixture
+def transport(api: Mock) -> Mock:
+    """Return the raw session double, captured before the client wraps it in ResilientSession."""
+    return api.session
+
+
+def _put_response(payload: dict, status_error: Exception | None = None, status_code: int = 200) -> Mock:
     response = Mock()
     response.json.return_value = payload
+    response.status_code = status_code
     response.raise_for_status = Mock(side_effect=status_error)
     return response
 
 
-def test_merge_by_target_number(api: Mock) -> None:
-    api.session.put.return_value = _put_response({"result": "success", "target_ticket": TARGET})
+def test_merge_by_target_number(api: Mock, transport: Mock) -> None:
+    transport.request.return_value = _put_response({"result": "success", "target_ticket": TARGET})
     client = ZammadClient(url=URL, http_token="test-token")
 
     result = client.merge_tickets(10, target_ticket_number="20002")
 
     assert result["result"] == "success"
     assert result["target_ticket"]["id"] == 20
-    api.session.put.assert_called_once_with(MERGE_URL)
+    transport.request.assert_called_once_with("PUT", MERGE_URL)
     api.ticket.find.assert_not_called()
 
 
@@ -49,52 +60,54 @@ def test_merge_by_target_number(api: Mock) -> None:
         ("20002", "20002"),
     ],
 )
-def test_merge_encodes_target_number_as_single_path_segment(api: Mock, number: str, encoded: str) -> None:
+def test_merge_encodes_target_number_as_single_path_segment(
+    api: Mock, transport: Mock, number: str, encoded: str
+) -> None:
     """A caller-supplied number must never redirect the authenticated PUT to another endpoint."""
-    api.session.put.return_value = _put_response({"result": "success", "target_ticket": TARGET})
+    transport.request.return_value = _put_response({"result": "success", "target_ticket": TARGET})
     client = ZammadClient(url=URL, http_token="test-token")
 
     client.merge_tickets(10, target_ticket_number=number)
 
-    api.session.put.assert_called_once_with(f"{URL}/ticket_merge/10/{encoded}")
+    transport.request.assert_called_once_with("PUT", f"{URL}/ticket_merge/10/{encoded}")
 
 
-def test_merge_by_target_id_resolves_number(api: Mock) -> None:
+def test_merge_by_target_id_resolves_number(api: Mock, transport: Mock) -> None:
     api.ticket.find.return_value = dict(TARGET)
-    api.session.put.return_value = _put_response({"result": "success", "target_ticket": TARGET})
+    transport.request.return_value = _put_response({"result": "success", "target_ticket": TARGET})
     client = ZammadClient(url=URL, http_token="test-token")
 
     result = client.merge_tickets(10, target_ticket_id=20)
 
     assert result["result"] == "success"
     api.ticket.find.assert_called_once_with(20)
-    api.session.put.assert_called_once_with(MERGE_URL)
+    transport.request.assert_called_once_with("PUT", MERGE_URL)
 
 
-def test_merge_rejects_missing_target(api: Mock) -> None:
+def test_merge_rejects_missing_target(api: Mock, transport: Mock) -> None:
     client = ZammadClient(url=URL, http_token="test-token")
     with pytest.raises(ValueError, match="exactly one of"):
         client.merge_tickets(10)
-    api.session.put.assert_not_called()
+    transport.request.assert_not_called()
 
 
-def test_merge_rejects_both_targets(api: Mock) -> None:
+def test_merge_rejects_both_targets(api: Mock, transport: Mock) -> None:
     client = ZammadClient(url=URL, http_token="test-token")
     with pytest.raises(ValueError, match="exactly one of"):
         client.merge_tickets(10, target_ticket_number="20002", target_ticket_id=20)
-    api.session.put.assert_not_called()
+    transport.request.assert_not_called()
 
 
-def test_merge_propagates_http_error(api: Mock) -> None:
-    api.session.put.return_value = _put_response({}, requests.HTTPError("403 Forbidden"))
+def test_merge_propagates_http_error(api: Mock, transport: Mock) -> None:
+    transport.request.return_value = _put_response({}, requests.HTTPError("403 Forbidden"), status_code=403)
     client = ZammadClient(url=URL, http_token="test-token")
     with pytest.raises(requests.HTTPError, match="403"):
         client.merge_tickets(10, target_ticket_number="20002")
 
 
-def test_merge_raises_on_in_band_failure(api: Mock) -> None:
+def test_merge_raises_on_in_band_failure(api: Mock, transport: Mock) -> None:
     """Zammad reports some merge failures with HTTP 200 and result != success."""
-    api.session.put.return_value = _put_response({"result": "failed", "message": "Ticket already merged"})
+    transport.request.return_value = _put_response({"result": "failed", "message": "Ticket already merged"})
     client = ZammadClient(url=URL, http_token="test-token")
     with pytest.raises(ValueError, match="Ticket already merged"):
         client.merge_tickets(10, target_ticket_number="20002")
