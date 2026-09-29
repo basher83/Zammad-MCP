@@ -708,17 +708,16 @@ class ZammadClient:
         return self._strip_html(first_body) if first_body else ""
 
     def _body_from_translation_assets(self, translations: dict[str, Any], translation_ids: list[int]) -> str:
-        """Extract plain-text body from translation content_attributes (legacy)."""
-        for tid in translation_ids:
-            t = translations.get(str(tid)) or {}
-            body = (t.get("content_attributes") or {}).get("body") or ""
-            if body:
-                return self._strip_html(body)
-        for translation in translations.values():
-            body = ((translation or {}).get("content_attributes") or {}).get("body") or ""
-            if body:
-                return self._strip_html(body)
-        return ""
+        """Extract plain-text body from translation content_attributes (legacy).
+
+        Translations named by ``translation_ids`` are preferred, in order; any other
+        translation with a body is the fallback when those ids are stale.
+        """
+        preferred = [translations.get(str(tid)) for tid in translation_ids]
+        candidates = [*preferred, *translations.values()]
+        bodies = (((t or {}).get("content_attributes") or {}).get("body") or "" for t in candidates)
+        body = next((b for b in bodies if b), "")
+        return self._strip_html(body) if body else ""
 
     def _extract_kb_answer_body(self, raw_payload: dict[str, Any], answer: dict[str, Any]) -> str:
         """Extract the plain-text body from translation assets."""
