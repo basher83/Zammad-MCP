@@ -320,10 +320,22 @@ class TestZammadClientMethods:
         assert len(result) == 1
         mock_instance.ticket.all.assert_called_once_with(filters={"page": 1, "per_page": 25, "expand": "true"})
 
+    @staticmethod
+    def _mock_ticket_response(mock_instance: Mock, payload: dict, *, ok: bool = True, text: str = "") -> Mock:
+        """Point the client's session at a canned GET /tickets/{id} response."""
+        # zammad_py normalises its base url to always end with "/".
+        mock_instance.url = "https://test.zammad.com/api/v1/"
+        response = Mock()
+        response.ok = ok
+        response.text = text
+        response.json.return_value = payload
+        mock_instance.session.get.return_value = response
+        return response
+
     def test_get_ticket_with_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with article pagination."""
         mock_instance = Mock()
-        mock_instance.ticket.find.return_value = {"id": 1, "title": "Test Ticket"}
+        self._mock_ticket_response(mock_instance, {"id": 1, "title": "Test Ticket"})
         mock_instance.ticket.articles.return_value = [
             {"id": 1, "body": "Article 1"},
             {"id": 2, "body": "Article 2"},
@@ -346,7 +358,7 @@ class TestZammadClientMethods:
     def test_get_ticket_all_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with all articles."""
         mock_instance = Mock()
-        mock_instance.ticket.find.return_value = {"id": 1, "title": "Test Ticket"}
+        self._mock_ticket_response(mock_instance, {"id": 1, "title": "Test Ticket"})
         mock_instance.ticket.articles.return_value = [{"id": 1, "body": "Article 1"}, {"id": 2, "body": "Article 2"}]
         mock_zammad_api.return_value = mock_instance
 
@@ -356,6 +368,78 @@ class TestZammadClientMethods:
         result = client.get_ticket(1, include_articles=True, article_limit=-1)
 
         assert len(result["articles"]) == 2
+
+    def test_get_ticket_requests_expanded_fields(self, mock_zammad_api: Mock) -> None:
+        """get_ticket must ask for expand=true, otherwise names come back as None.
+
+        Regression test: without the flag Zammad only returns ``*_id`` fields and
+        the server renders State/Priority/Group/Owner/Customer as "Unknown".
+        """
+        mock_instance = Mock()
+        self._mock_ticket_response(
+            mock_instance,
+            {
+                "id": 1,
+                "title": "Test Ticket",
+                "state_id": 2,
+                "state": "open",
+                "priority_id": 3,
+                "priority": "3 high",
+                "group": "Support",
+            },
+        )
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.get_ticket(1, include_articles=False)
+
+        mock_instance.session.get.assert_called_once_with(
+            "https://test.zammad.com/api/v1/tickets/1", params={"expand": "true"}
+        )
+        # The literal string "true" matters: requests serializes bool True as
+        # "True", which Zammad ignores because the parameter is case-sensitive.
+        _, kwargs = mock_instance.session.get.call_args
+        assert kwargs["params"]["expand"] == "true"
+        assert result["state"] == "open"
+        assert result["priority"] == "3 high"
+        assert result["group"] == "Support"
+
+    def test_get_ticket_not_found_raises_with_zammad_message(self, mock_zammad_api: Mock) -> None:
+        """A failed lookup must surface Zammad's body so the server can map it.
+
+        The server turns "Couldn't find Ticket ..." into TicketIdGuidanceError,
+        so the response text has to survive.
+        """
+        mock_instance = Mock()
+        self._mock_ticket_response(
+            mock_instance,
+            {},
+            ok=False,
+            text='{"error":"Couldn\'t find Ticket with \'id\'=999"}',
+        )
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        with pytest.raises(requests.HTTPError, match="Couldn't find Ticket"):
+            client.get_ticket(999)
+
+    @pytest.mark.parametrize("base_url", ["https://test.zammad.com/api/v1", "https://test.zammad.com/api/v1/"])
+    def test_get_ticket_url_tolerates_trailing_slash(self, base_url: str) -> None:
+        """A trailing slash on ZAMMAD_URL must not produce ``/api/v1//tickets/1``.
+
+        Uses the real ZammadAPI (which normalises its base url) and only stubs
+        the session, so the URL join is exercised for real.
+        """
+        client = ZammadClient(url=base_url, http_token="test-token")
+        session = Mock()
+        session.get.return_value = Mock(ok=True, json=Mock(return_value={"id": 1}))
+        client.api.session = session
+
+        client.get_ticket(1, include_articles=False)
+
+        session.get.assert_called_once_with("https://test.zammad.com/api/v1/tickets/1", params={"expand": "true"})
 
     def test_create_ticket(self, mock_zammad_api: Mock) -> None:
         """Test create_ticket method."""
