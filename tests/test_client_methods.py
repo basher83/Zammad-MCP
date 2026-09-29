@@ -376,7 +376,9 @@ class TestZammadClientMethods:
         response.ok = ok
         response.text = text
         response.json.return_value = payload
-        mock_instance.session.get.return_value = response
+        response.status_code = 200 if ok else 404
+        # The client wraps this session in ResilientSession, so every verb arrives as request(METHOD, url).
+        mock_instance.session.request.return_value = response
         return response
 
     def test_get_ticket_with_articles(self, mock_zammad_api: Mock) -> None:
@@ -435,18 +437,22 @@ class TestZammadClientMethods:
                 "group": "Support",
             },
         )
+        transport = mock_instance.session  # captured before the client wraps it in ResilientSession
         mock_zammad_api.return_value = mock_instance
 
         client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
 
         result = client.get_ticket(1, include_articles=False)
 
-        mock_instance.session.get.assert_called_once_with(
-            "https://test.zammad.com/api/v1/tickets/1", params={"expand": "true"}, timeout=REQUEST_TIMEOUT_SECONDS
+        transport.request.assert_called_once_with(
+            "GET",
+            "https://test.zammad.com/api/v1/tickets/1",
+            params={"expand": "true"},
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
         # The literal string "true" matters: requests serializes bool True as
         # "True", which Zammad ignores because the parameter is case-sensitive.
-        _, kwargs = mock_instance.session.get.call_args
+        _, kwargs = transport.request.call_args
         assert kwargs["params"]["expand"] == "true"
         assert result["state"] == "open"
         assert result["priority"] == "3 high"
@@ -743,7 +749,9 @@ class TestZammadClientMethods:
             {"id": 3, "name": "feature-request", "count": 23},
         ]
         mock_response.raise_for_status = Mock()
-        mock_instance.session.get.return_value = mock_response
+        mock_response.status_code = 200
+        transport = mock_instance.session
+        transport.request.return_value = mock_response
         mock_zammad_api.return_value = mock_instance
 
         client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
@@ -755,7 +763,7 @@ class TestZammadClientMethods:
         assert result[0]["count"] == 15
         assert result[1]["name"] == "billing"
         assert result[2]["name"] == "feature-request"
-        mock_instance.session.get.assert_called_once_with("https://test.zammad.com/api/v1/tag_list")
+        transport.request.assert_called_once_with("GET", "https://test.zammad.com/api/v1/tag_list")
 
     def test_list_tags_empty(self, mock_zammad_api: Mock) -> None:
         """Test list_tags returns empty list when no tags defined."""
@@ -763,7 +771,9 @@ class TestZammadClientMethods:
         mock_response = Mock()
         mock_response.json.return_value = []
         mock_response.raise_for_status = Mock()
-        mock_instance.session.get.return_value = mock_response
+        mock_response.status_code = 200
+        transport = mock_instance.session
+        transport.request.return_value = mock_response
         mock_zammad_api.return_value = mock_instance
 
         client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
@@ -771,14 +781,15 @@ class TestZammadClientMethods:
         result = client.list_tags()
 
         assert result == []
-        mock_instance.session.get.assert_called_once()
+        transport.request.assert_called_once()
 
     def test_list_tags_permission_denied(self, mock_zammad_api: Mock) -> None:
         """Test list_tags raises error when lacking admin.tag permission."""
         mock_instance = Mock()
         mock_response = Mock()
         mock_response.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
-        mock_instance.session.get.return_value = mock_response
+        mock_response.status_code = 403
+        mock_instance.session.request.return_value = mock_response
         mock_zammad_api.return_value = mock_instance
 
         client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")

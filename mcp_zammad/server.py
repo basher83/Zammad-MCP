@@ -10,6 +10,8 @@ import time
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, NoReturn, Protocol, TextIO, TypeVar
 
@@ -24,12 +26,16 @@ from starlette.responses import JSONResponse
 from .audit import AuditConfig, AuditLogger, error_details
 from .audit_middleware import AuditMiddleware
 from .client import ZammadClient
+from .events import EventStore, ListEventsParams, ListEventsResult
 from .logging_config import configure_logging
 from .models import (
     Article,
     ArticleCreate,
     Attachment,
     AttachmentDownloadError,
+    BulkTicketUpdateParams,
+    BulkUpdateFailure,
+    BulkUpdateResult,
     DownloadAttachmentParams,
     GetArticleAttachmentsParams,
     GetKBAnswerParams,
@@ -57,6 +63,8 @@ from .models import (
     TicketCreate,
     TicketExportParams,
     TicketIdGuidanceError,
+    TicketMergeParams,
+    TicketMergeResult,
     TicketPriority,
     TicketSearchParams,
     TicketState,
@@ -66,7 +74,9 @@ from .models import (
     UserBrief,
     UserCreate,
 )
+from .resilience import CircuitOpenError, RetryExhaustedError
 from .tool_params import flat_params
+from .webhooks import WebhookHandler
 
 
 # Protocol for items that can be dumped to dict (for type safety)
@@ -124,6 +134,17 @@ def _write_annotations(title: str) -> ToolAnnotations:
     return ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+        title=title,
+    )
+
+
+def _destructive_write_annotations(title: str) -> ToolAnnotations:
+    """Create destructive write tool annotations with title."""
+    return ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=True,
         idempotentHint=False,
         openWorldHint=True,
         title=title,
@@ -577,6 +598,33 @@ def _format_list_json(items: list[T]) -> str:
     return json.dumps(response, indent=2, default=str)
 
 
+def _format_custom_attribute_value(value: Any) -> str:
+    """Render a custom attribute value for Markdown output."""
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value)
+    if isinstance(value, dict):
+        return json.dumps(value, default=str)
+    return str(value)
+
+
+def _format_custom_attributes_markdown(ticket: Ticket) -> list[str]:
+    """Render custom object attributes retained on the ticket as a Markdown section.
+
+    Args:
+        ticket: Ticket whose extra (non-schema) fields are custom attributes.
+
+    Returns:
+        Markdown lines for the section, or an empty list when there are no custom attributes.
+    """
+    extras = ticket.model_extra or {}
+    if not extras:
+        return []
+    lines = ["## Custom Attributes", ""]
+    lines.extend(f"**{name}**: {_format_custom_attribute_value(value)}" for name, value in sorted(extras.items()))
+    lines.append("")
+    return lines
+
+
 def _format_ticket_detail_markdown(ticket: Ticket) -> str:
     """Format single ticket with full details as markdown.
 
@@ -596,6 +644,8 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
     lines.append(f"**Created**: {ticket.created_at.isoformat()}")
     lines.append(f"**Updated**: {ticket.updated_at.isoformat()}")
     lines.append("")
+
+    lines.extend(_format_custom_attributes_markdown(ticket))
 
     # Tags
     if hasattr(ticket, "tags") and ticket.tags:
@@ -1103,6 +1153,46 @@ def _export_batch(
             return
 
 
+_RATE_LIMIT_GUIDANCE = (
+    "Error: Zammad rate limit reached during {context}{detail}. "
+    "Wait before retrying, reduce request frequency or page size, or enable client-side "
+    "throttling with ZAMMAD_RATE_LIMIT_ENABLED=true."
+)
+_SERVER_ERROR_GUIDANCE = (
+    "Error: Zammad server error during {context}{detail}. "
+    "The server is failing or temporarily unavailable; retry later or check the Zammad instance."
+)
+
+_API_ERROR_GUIDANCE: tuple[tuple[tuple[str, ...], str], ...] = (
+    (
+        ("not found", "404"),
+        "Error: Resource not found during {context}. Please verify the ID is correct and you have access.",
+    ),
+    (("forbidden", "403"), "Error: Permission denied for {context}. Your credentials lack access to this resource."),
+    (("unauthorized", "401"), "Error: Authentication failed for {context}. Check ZAMMAD_HTTP_TOKEN is valid."),
+    (("429", "too many requests", "rate limit"), _RATE_LIMIT_GUIDANCE),
+    (
+        ("timeout",),
+        "Error: Request timeout during {context}. The server may be slow - try again or reduce the scope.",
+    ),
+    (
+        ("connection", "network"),
+        "Error: Network issue during {context}. Check ZAMMAD_URL is correct and the server is reachable.",
+    ),
+)
+
+
+def _resilience_error_message(e: Exception, context: str) -> str | None:
+    """Return guidance for retry-exhaustion or open-circuit errors, else None."""
+    if isinstance(e, RetryExhaustedError):
+        throttled = e.status_code == HTTPStatus.TOO_MANY_REQUESTS
+        template = _RATE_LIMIT_GUIDANCE if throttled else _SERVER_ERROR_GUIDANCE
+        return template.format(context=context, detail=f" ({e})")
+    if isinstance(e, CircuitOpenError):
+        return f"Error: Zammad is temporarily unavailable during {context} ({e}). Wait for the recovery timeout."
+    return None
+
+
 def _handle_api_error(e: Exception, context: str = "operation") -> str:
     """Format errors with actionable guidance for LLM agents.
 
@@ -1113,23 +1203,16 @@ def _handle_api_error(e: Exception, context: str = "operation") -> str:
     Returns:
         Formatted error message with guidance
     """
+    resilience_message = _resilience_error_message(e, context)
+    if resilience_message is not None:
+        return resilience_message
+
     error_msg = str(e).lower()
 
-    # Check for specific error patterns
-    if "not found" in error_msg or "404" in error_msg:
-        return f"Error: Resource not found during {context}. Please verify the ID is correct and you have access."
-
-    if "forbidden" in error_msg or "403" in error_msg:
-        return f"Error: Permission denied for {context}. Your credentials lack access to this resource."
-
-    if "unauthorized" in error_msg or "401" in error_msg:
-        return f"Error: Authentication failed for {context}. Check ZAMMAD_HTTP_TOKEN is valid."
-
-    if "timeout" in error_msg:
-        return f"Error: Request timeout during {context}. The server may be slow - try again or reduce the scope."
-
-    if "connection" in error_msg or "network" in error_msg:
-        return f"Error: Network issue during {context}. Check ZAMMAD_URL is correct and the server is reachable."
+    # First matching pattern wins; order mirrors the original precedence.
+    for patterns, template in _API_ERROR_GUIDANCE:
+        if any(pattern in error_msg for pattern in patterns):
+            return template.format(context=context, detail="")
 
     # Generic error with type information
     return f"Error during {context}: {type(e).__name__} - {e}"
@@ -1256,6 +1339,61 @@ def _format_kb_search_results_markdown(results: list[dict[str, Any]], query: str
     return "\n".join(lines)
 
 
+_BULK_TICKET_FIELDS = {"title", "state", "priority", "owner", "group", "time_unit"}
+
+
+def _apply_bulk_ticket_actions(client: ZammadClient, ticket_id: int, params: BulkTicketUpdateParams) -> None:
+    """Apply every requested bulk action to a single ticket.
+
+    Args:
+        client: Zammad client boundary.
+        ticket_id: Internal ticket ID to modify.
+        params: Validated bulk request describing the actions.
+
+    Raises:
+        Exception: Any client error from the first failing action.
+    """
+    fields = params.model_dump(include=_BULK_TICKET_FIELDS, exclude_none=True)
+    if fields:
+        client.update_ticket(ticket_id=ticket_id, **fields)
+    for tag in params.add_tags or []:
+        client.add_ticket_tag(ticket_id, tag)
+    for tag in params.remove_tags or []:
+        client.remove_ticket_tag(ticket_id, tag)
+    if params.note is not None:
+        client.add_article(ticket_id=ticket_id, body=params.note, article_type="note", internal=True)
+
+
+def _run_bulk_ticket_update(client: ZammadClient, params: BulkTicketUpdateParams) -> BulkUpdateResult:
+    """Process tickets sequentially, collecting per-ticket outcomes.
+
+    Args:
+        client: Zammad client boundary.
+        params: Validated bulk request.
+
+    Returns:
+        BulkUpdateResult: Successful IDs, failures with reasons, and totals.
+    """
+    successful: list[int] = []
+    failed: list[BulkUpdateFailure] = []
+    last_index = len(params.ticket_ids) - 1
+    for index, ticket_id in enumerate(params.ticket_ids):
+        try:
+            _apply_bulk_ticket_actions(client, ticket_id, params)
+            successful.append(ticket_id)
+        except Exception as e:
+            error = _handle_api_error(e, f"bulk update of ticket {ticket_id}")
+            failed.append(BulkUpdateFailure(ticket_id=ticket_id, error=error))
+        if params.delay_seconds and index < last_index:
+            time.sleep(params.delay_seconds)
+    return BulkUpdateResult(
+        successful_ticket_ids=successful,
+        failed=failed,
+        total_processed=len(params.ticket_ids),
+        total_successful=len(successful),
+    )
+
+
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
 
@@ -1265,6 +1403,7 @@ class ZammadMCPServer:
         port: int | None = None,
         *,
         audit_logger: AuditLogger | None = None,
+        event_store: EventStore | None = None,
     ) -> None:
         """Initialize the server.
 
@@ -1273,6 +1412,7 @@ class ZammadMCPServer:
             port: Deprecated. Pass port to mcp.run() instead.
             audit_logger: Audit sink for tool-call and lifecycle events. Defaults to
                 one built from the ZAMMAD_AUDIT_LOG_* environment variables.
+            event_store: Optional. Retention for accepted webhook events; defaults to a bounded in-memory store.
 
         """
         if host is not None or port is not None:
@@ -1282,6 +1422,7 @@ class ZammadMCPServer:
         # Load .env before reading audit settings so .env-sourced audit config takes effect.
         self._bootstrap_env()
         self.audit = audit_logger or AuditLogger(AuditConfig.from_env(os.environ))
+        self.event_store = event_store if event_store is not None else EventStore()
         # Create FastMCP with lifespan configured
         self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
         if self.audit.enabled:
@@ -1289,6 +1430,7 @@ class ZammadMCPServer:
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
+        self._setup_webhooks()
 
     def _create_lifespan(self) -> Any:
         """Create the lifespan context manager for the server."""
@@ -1359,6 +1501,61 @@ class ZammadMCPServer:
         self._setup_user_org_tools()
         self._setup_system_tools()
         self._setup_kb_tools()
+        self._setup_event_tools()
+
+    def _setup_webhooks(self) -> None:
+        """Expose the Zammad webhook ingress route (HTTP transport only)."""
+        handler = WebhookHandler(
+            secret_provider=lambda: os.getenv("ZAMMAD_WEBHOOK_SECRET"),
+            clock=lambda: datetime.now(timezone.utc),
+            sink=self.event_store,
+        )
+
+        @self.mcp.custom_route("/webhooks/zammad", methods=["POST"])
+        async def zammad_webhook(request: Request) -> JSONResponse:
+            result = handler.handle_delivery(await request.body(), request.headers)
+            return JSONResponse(result.body, status_code=result.status_code)
+
+    def _setup_event_tools(self) -> None:
+        """Register tools that read retained webhook events."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("List Webhook Events"))
+        @flat_params(ListEventsParams)
+        def zammad_list_events(params: ListEventsParams) -> ListEventsResult:
+            """List Zammad ticket events received via webhook, oldest first.
+
+            Events arrive only when the server runs with HTTP transport and a Zammad
+            webhook + trigger POST to `/webhooks/zammad` with a valid HMAC-SHA1 signature.
+            Retention is process-local and bounded (`capacity`); events are lost on restart.
+
+            Parameters:
+                since (datetime | None): Only events received strictly after this timestamp
+                limit (int): Maximum events per page, 1-100 (default: 50); the oldest
+                    matching events are returned first
+
+            Returns:
+                ListEventsResult: `events` (event_type, ticket_id, ticket_number, article_id,
+                trigger, source_timestamp, received_at), `count`, `capacity`, `retained_total`,
+                and `next_since` (pass back as `since` on the next call; null when no events).
+                Keep calling with `next_since` until `events` is empty to drain a backlog
+                larger than `limit` without skipping anything.
+
+            Examples:
+                - Use when: "Any new ticket activity?" -> poll with since=<last next_since>
+                - Use when: "Which tickets changed recently?" -> then zammad_get_ticket per ticket_id
+                - Don't use when: You need ticket content (this returns identifiers only)
+
+            Error Handling:
+                - Returns a validation error if limit is outside 1-100 or since is not ISO 8601
+            """
+            events = self.event_store.list(since=params.since, limit=params.limit)
+            return ListEventsResult(
+                events=events,
+                count=len(events),
+                capacity=self.event_store.capacity,
+                retained_total=len(self.event_store),
+                next_since=events[-1].received_at if events else None,
+            )
 
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
@@ -1380,7 +1577,7 @@ class ZammadMCPServer:
                     - created_before (date | None): Only tickets created on/before YYYY-MM-DD
                     - page (int): Page number (default: 1)
                     - per_page (int): Results per page, 1-100 (default: 25)
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -1475,7 +1672,7 @@ class ZammadMCPServer:
                 include_articles (bool): Include ticket articles/comments (default: True)
                 article_limit (int): Maximum articles to return, -1 for all (default: 10)
                 article_offset (int): Number of articles to skip for pagination (default: 0)
-                response_format (ResponseFormat): Output format - MARKDOWN or JSON (default: MARKDOWN)
+                response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -1631,6 +1828,8 @@ class ZammadMCPServer:
                     - pending_time (datetime | None): Pending-until timestamp (ISO 8601),
                       required when state is "pending reminder" or "pending close"
                     - time_unit (float | None): Time spent for time accounting
+                    - custom_fields (dict[str, Any] | None): Custom object attributes defined in
+                      Zammad Admin, keyed by attribute name (e.g. {"region": "north"})
 
             Returns:
                 Ticket: The updated ticket object with schema:
@@ -1652,6 +1851,7 @@ class ZammadMCPServer:
                 - Use when: "Set ticket 123 to pending until 2026-07-01" ->
                   ticket_id=123, state="pending reminder", pending_time="2026-07-01T08:00:00Z"
                 - Use when: "Reassign ticket to Alice" -> ticket_id=123, owner="alice@company.com"
+                - Use when: "Set region to north on ticket 123" -> ticket_id=123, custom_fields={"region": "north"}
                 - Don't use when: Adding comments (use zammad_add_article)
                 - Don't use when: Adding tags (use zammad_add_ticket_tag)
 
@@ -1685,7 +1885,7 @@ class ZammadMCPServer:
                 params (ArticleCreate): Validated article creation parameters containing:
                     - ticket_id (int): Internal database ID (required, NOT display number)
                     - body (str): Article content/message (required)
-                    - article_type (ArticleType): Type enum - NOTE, EMAIL, etc. (required)
+                    - article_type (ArticleType): Article type - note, email, or phone (default: note)
                     - internal (bool): Internal note vs customer-visible (default: False)
                     - subject (str | None): Article subject (for emails)
                     - content_type (str | None): text/plain or text/html (default: text/plain)
@@ -1709,9 +1909,9 @@ class ZammadMCPServer:
                 ```
 
             Examples:
-                - Use when: "Add note to ticket 123" -> ticket_id=123, body="text", article_type=NOTE
-                - Use when: "Reply to customer" -> ticket_id=123, body="reply", article_type=EMAIL
-                - Use when: "Internal comment" -> ticket_id=123, body="note", article_type=NOTE, internal=True
+                - Use when: "Add note to ticket 123" -> ticket_id=123, body="text", article_type="note"
+                - Use when: "Reply to customer" -> ticket_id=123, body="reply", article_type="email"
+                - Use when: "Internal comment" -> ticket_id=123, body="note", article_type="note", internal=True
                 - Use when: "Upload files with article" -> ticket_id=123, body="See attached", attachments=[...]
                 - Don't use when: Creating new ticket (use zammad_create_ticket with article)
                 - Don't use when: Updating ticket fields (use zammad_update_ticket)
@@ -1865,6 +2065,39 @@ class ZammadMCPServer:
 
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Merge Tickets"))
+        @flat_params(TicketMergeParams)
+        def zammad_merge_tickets(params: TicketMergeParams) -> TicketMergeResult:
+            """Merge a source ticket into a target ticket.
+
+            All articles from the source ticket are moved to the target and the
+            source is closed with state "merged". This cannot be undone.
+
+            Parameters:
+                source_ticket_id (int): Internal ID of the ticket to merge away (required)
+                target_ticket_number (str, optional): Display number of the surviving ticket
+                target_ticket_id (int, optional): Internal ID of the surviving ticket
+                Exactly one of target_ticket_number or target_ticket_id is required.
+
+            Returns:
+                TicketMergeResult with the Zammad result and the surviving target ticket
+
+            Examples:
+                - Use when: Collapsing duplicate auto-generated tickets (cron failures,
+                  monitoring noise) into a single incident ticket
+                - Don't use when: Unsure which ticket should survive (search first)
+
+            Note:
+                Requires agent permissions on both tickets. Irreversible.
+            """
+            client = self.get_client()
+            payload = client.merge_tickets(
+                source_ticket_id=params.source_ticket_id,
+                target_ticket_number=params.target_ticket_number,
+                target_ticket_id=params.target_ticket_id,
+            )
+            return TicketMergeResult(result=payload["result"], target_ticket=Ticket(**payload["target_ticket"]))
 
         @self.mcp.tool(annotations=_idempotent_write_annotations("Add Ticket Tag"))
         @flat_params(TagOperationParams)
@@ -2031,6 +2264,52 @@ class ZammadMCPServer:
                 params, progress.exported, progress.error_count, progress.errors, elapsed, use_search, export_path
             )
 
+        @self.mcp.tool(annotations=_destructive_write_annotations("Bulk Update Tickets"))
+        @flat_params(BulkTicketUpdateParams)
+        def zammad_bulk_update_tickets(params: BulkTicketUpdateParams) -> BulkUpdateResult:
+            """Apply the same changes to up to 100 tickets in one call (update, assign, tag, close).
+
+            Parameters:
+                ticket_ids (list[int]): 1-100 unique internal database IDs (NOT display numbers) (required)
+                title, state, priority, owner, group, time_unit: Same semantics as zammad_update_ticket
+                add_tags (list[str] | None): Tags to add to every ticket
+                remove_tags (list[str] | None): Tags to remove from every ticket
+                note (str | None): Internal note added to every ticket
+                delay_seconds (float): Pause between tickets (default 0)
+                At least one field, tag, or note must be supplied.
+
+            Returns:
+                BulkUpdateResult: Per-ticket outcome summary with schema:
+
+                ```json
+                {
+                    "successful_ticket_ids": [1, 3],
+                    "failed": [{"ticket_id": 2, "error": "Error: Resource not found ..."}],
+                    "total_processed": 3,
+                    "total_successful": 2
+                }
+                ```
+
+            Examples:
+                - Use when: "Close tickets 1, 2, 3" -> ticket_ids=[1, 2, 3], state="closed"
+                - Use when: "Assign these to Alice" -> ticket_ids=[...], owner="alice@company.com"
+                - Use when: "Tag all as vip" -> ticket_ids=[...], add_tags=["vip"]
+                - Use when: "Close with a note" -> ticket_ids=[...], state="closed", note="Resolved"
+                - Don't use when: Changing a single ticket (use zammad_update_ticket)
+                - Don't use when: More than 100 tickets (split into multiple calls)
+
+            Error Handling:
+                - Tickets are processed one at a time; a failure never stops the batch
+                - Each failure is reported in `failed` with an actionable message
+                - A ticket appears in successful_ticket_ids only if every requested action succeeded
+                - Zammad has no bulk endpoint: earlier tickets stay changed if a later one fails
+
+            Note:
+                This is a destructive, non-atomic operation. Review ticket_ids carefully
+                (use zammad_search_tickets first) before applying mass state or owner changes.
+            """
+            return _run_bulk_ticket_update(self.get_client(), params)
+
     def _setup_user_org_tools(self) -> None:
         """Register user and organization tools."""
 
@@ -2041,7 +2320,7 @@ class ZammadMCPServer:
 
             Parameters:
                 user_id (int): User's internal database ID (required)
-                response_format (ResponseFormat): Output format - MARKDOWN or JSON (default: MARKDOWN)
+                response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted user information with the following schema:
@@ -2102,7 +2381,7 @@ class ZammadMCPServer:
                     - query (str): Search string (matches name, email, login) (required)
                     - page (int): Page number (default: 1)
                     - per_page (int): Results per page, 1-100 (default: 25)
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2264,7 +2543,7 @@ class ZammadMCPServer:
                     - query (str): Search string (matches name, domain, note) (required)
                     - page (int): Page number (default: 1)
                     - per_page (int): Results per page, 1-100 (default: 25)
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2693,7 +2972,7 @@ class ZammadMCPServer:
 
             Args:
                 params (ListParams): Validated parameters containing:
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2757,7 +3036,7 @@ class ZammadMCPServer:
 
             Args:
                 params (ListParams): Validated parameters containing:
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2828,7 +3107,7 @@ class ZammadMCPServer:
 
             Args:
                 params (ListParams): Validated parameters containing:
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2894,7 +3173,7 @@ class ZammadMCPServer:
 
             Args:
                 params (ListParams): Validated parameters containing:
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2983,7 +3262,7 @@ class ZammadMCPServer:
             Args:
                 params (GetTicketTagsParams): Validated parameters containing:
                     - ticket_id (int): Ticket ID to get tags for
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:

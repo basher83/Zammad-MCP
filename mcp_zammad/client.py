@@ -8,11 +8,14 @@ import re as _re
 from collections import deque
 from datetime import date, datetime
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import requests
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
+
+from mcp_zammad.resilience import ResilientSession
+from mcp_zammad.resilience_config import ResilienceConfig
 
 from .audit import AuditLogger
 
@@ -91,6 +94,7 @@ class ZammadClient:
             oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
         )
         self.insecure = insecure if insecure is not None else ZammadClient._parse_bool_env("ZAMMAD_INSECURE")
+        self.resilience = ResilienceConfig.from_env()
 
         if not self.url:
             raise ConfigException("Zammad URL is required. Set ZAMMAD_URL environment variable.")
@@ -134,6 +138,9 @@ class ZammadClient:
                 "TLS certificate verification is disabled (ZAMMAD_INSECURE=true). "
                 "urllib3 may emit InsecureRequestWarning on requests; fix or trust the server certificate when possible."
             )
+        # zammad-py routes every resource call through this session, so wrapping it once
+        # gives rate limiting, retries, and circuit breaking to all API operations.
+        self.api.session = ResilientSession(self.api.session, self.resilience)
 
     def _validate_url(self, url: str) -> None:
         """Validate URL format to prevent SSRF attacks."""
@@ -365,9 +372,29 @@ class ZammadClient:
         group: str | None = None,
         pending_time: datetime | str | None = None,
         time_unit: float | None = None,
+        custom_fields: dict[str, Any] | None = None,
         customer: str | None = None,
     ) -> dict[str, Any]:
-        """Update an existing ticket."""
+        """Update an existing ticket.
+
+        Args:
+            ticket_id: Internal ticket ID.
+            title: Optional. New ticket title.
+            state: Optional. New state name.
+            priority: Optional. New priority name.
+            owner: Optional. New owner login/email.
+            group: Optional. New group name.
+            pending_time: Optional. Pending-until timestamp for pending states; datetimes are sent as ISO 8601.
+            customer: Optional. New customer login/email.
+            time_unit: Optional. Time spent for time accounting; must be > 0.
+            custom_fields: Optional. Custom object attributes sent as top-level ticket keys.
+
+        Returns:
+            The updated ticket as returned by Zammad.
+
+        Raises:
+            ValueError: If time_unit is not positive or a custom field shadows a built-in key.
+        """
         if time_unit is not None and time_unit <= 0:
             raise ValueError("time_unit must be greater than 0")
 
@@ -375,7 +402,7 @@ class ZammadClient:
         if isinstance(pending_time, datetime):
             pending_time = pending_time.isoformat()
 
-        fields = {
+        built_in = {
             "title": title,
             "state": state,
             "priority": priority,
@@ -385,7 +412,11 @@ class ZammadClient:
             "pending_time": pending_time,
             "time_unit": time_unit,
         }
-        update_data: dict[str, Any] = {key: value for key, value in fields.items() if value is not None}
+        update_data: dict[str, Any] = {key: value for key, value in built_in.items() if value is not None}
+        for name in custom_fields or {}:
+            if name in built_in:
+                raise ValueError(f"custom_fields key '{name}' is a built-in field; pass it as a named argument")
+        update_data.update(custom_fields or {})
 
         return dict(self.api.ticket.update(ticket_id, update_data))
 
@@ -896,3 +927,44 @@ class ZammadClient:
         root_ids = [category_id] if category_id is not None else (kb.get("category_ids") or [])
         category_ids = self._expand_category_ids(kb_id, root_ids)
         return self._answers_matching_query(kb_id, category_ids, query.lower())
+
+    def merge_tickets(
+        self,
+        source_ticket_id: int,
+        target_ticket_number: str | None = None,
+        target_ticket_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Merge a source ticket into a target ticket via the legacy ticket_merge endpoint.
+
+        The endpoint identifies the source by internal ID and the target by
+        display number, so a target given by ID is resolved to its number first.
+
+        Args:
+            source_ticket_id: Internal ID of the ticket that will be merged away.
+            target_ticket_number: Optional. Display number of the surviving ticket.
+            target_ticket_id: Optional. Internal ID of the surviving ticket.
+
+        Returns:
+            Raw merge response with ``result`` and ``target_ticket`` keys.
+
+        Raises:
+            ValueError: If not exactly one target is given, or Zammad reports failure in-band.
+            requests.HTTPError: If the API request fails (e.g., 403 Forbidden, 404 Not Found).
+
+        """
+        if (target_ticket_number is None) == (target_ticket_id is None):
+            msg = "Provide exactly one of target_ticket_number or target_ticket_id"
+            raise ValueError(msg)
+        if target_ticket_number is None:
+            target_ticket_number = str(self.api.ticket.find(target_ticket_id)["number"])
+
+        # Encode as a single path segment so "/" or "?" in a caller-supplied number
+        # cannot redirect the authenticated PUT to a different endpoint.
+        target_segment = quote(target_ticket_number, safe="")
+        response = self.api.session.put(f"{self.url}/ticket_merge/{source_ticket_id}/{target_segment}")
+        response.raise_for_status()
+        payload = dict(response.json())
+        if payload.get("result") != "success":
+            msg = f"Zammad refused to merge ticket {source_ticket_id} into #{target_ticket_number}: {payload.get('message', payload)}"
+            raise ValueError(msg)
+        return payload
