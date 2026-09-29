@@ -109,6 +109,10 @@ STATE_TYPE_PENDING_ACTION = 4
 STATE_TYPE_CLOSED = 5
 STATE_TYPE_MERGED = 6
 MAX_PER_PAGE = 100  # Maximum results per page for pagination
+# Zammad's search endpoint is backed by Elasticsearch, whose index.max_result_window
+# defaults to 10,000. Past that the endpoint returns empty pages rather than an error,
+# so an unguarded scan silently stops and under-reports.
+SEARCH_RESULT_CAP = 10000
 CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
 ARTICLE_BODY_TRUNCATE_LENGTH = 500  # Maximum length for article body in markdown formatting
 
@@ -1958,7 +1962,7 @@ class ZammadMCPServer:
 
     def _collect_ticket_stats_paginated(
         self, client: ZammadClient, group: str | None
-    ) -> tuple[int, int, int, int, int, int]:
+    ) -> tuple[int, int, int, int, int, int, bool]:
         """Collect ticket statistics using pagination.
 
         Args:
@@ -1966,7 +1970,9 @@ class ZammadMCPServer:
             group: Optional group filter
 
         Returns:
-            Tuple of (total, open, closed, pending, escalated, pages) counts
+            Tuple of (total, open, closed, pending, escalated, pages, truncated) counts.
+            truncated is True when the scan stopped at a backend limit, making the
+            counts lower bounds rather than exact totals.
         """
         total_count = 0
         open_count = 0
@@ -1975,6 +1981,7 @@ class ZammadMCPServer:
         escalated_count = 0
         page = 1
         per_page = MAX_PER_PAGE
+        truncated = False
 
         while True:
             tickets = client.search_tickets(group=group, page=page, per_page=per_page)
@@ -1991,7 +1998,20 @@ class ZammadMCPServer:
 
             page += 1
 
+            # A group filter routes through the search endpoint, which stops returning
+            # results at SEARCH_RESULT_CAP. Record that the totals are lower bounds
+            # instead of reporting the capped number as exact.
+            if group and total_count >= SEARCH_RESULT_CAP:
+                truncated = True
+                logger.warning(
+                    "Group '%s' reached the search result cap (%s); counts are lower bounds, not exact totals",
+                    group,
+                    SEARCH_RESULT_CAP,
+                )
+                break
+
             if page > MAX_PAGES_FOR_TICKET_SCAN:
+                truncated = True
                 logger.warning(
                     "Reached maximum page limit (%s pages), processed %s tickets - some tickets may not be counted",
                     MAX_PAGES_FOR_TICKET_SCAN,
@@ -1999,7 +2019,7 @@ class ZammadMCPServer:
                 )
                 break
 
-        return total_count, open_count, closed_count, pending_count, escalated_count, page - 1
+        return total_count, open_count, closed_count, pending_count, escalated_count, page - 1, truncated
 
     def _build_stats_result(
         self,
@@ -2010,6 +2030,7 @@ class ZammadMCPServer:
         escalated: int,
         pages: int,
         elapsed: float,
+        truncated: bool = False,
     ) -> TicketStats:
         """Build and log ticket statistics result.
 
@@ -2021,6 +2042,7 @@ class ZammadMCPServer:
             escalated: Escalated ticket count
             pages: Number of pages processed
             elapsed: Elapsed time in seconds
+            truncated: Whether the scan stopped at a backend limit
 
         Returns:
             TicketStats object
@@ -2045,6 +2067,7 @@ class ZammadMCPServer:
             escalated_count=escalated,
             avg_first_response_time=None,
             avg_resolution_time=None,
+            counts_truncated=truncated,
         )
 
     def _setup_system_tools(self) -> None:  # noqa: PLR0915
@@ -2104,12 +2127,12 @@ class ZammadMCPServer:
             group_filter_msg = f" for group '{params.group}'" if params.group else ""
             logger.info("Starting ticket statistics calculation%s", group_filter_msg)
 
-            total, open_count, closed, pending, escalated, pages = self._collect_ticket_stats_paginated(
+            total, open_count, closed, pending, escalated, pages, truncated = self._collect_ticket_stats_paginated(
                 client, params.group
             )
 
             return self._build_stats_result(
-                total, open_count, closed, pending, escalated, pages, time.time() - start_time
+                total, open_count, closed, pending, escalated, pages, time.time() - start_time, truncated
             )
 
         @self.mcp.tool(annotations=_read_only_annotations("List Groups"))
