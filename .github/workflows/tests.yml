@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-and-coverage:
+  tests:
     runs-on: ubuntu-latest
     if: github.repository == 'basher83/Zammad-MCP'
     strategy:
@@ -99,4 +99,21 @@ jobs:
             echo "📈 Coverage details available in [Codacy](https://app.codacy.com/gh/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Coverage report not generated" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  test-and-coverage:
+    # Aggregate check: the main ruleset requires this exact context, which the
+    # matrix job names (tests (3.10), ...) never satisfy on their own.
+    needs: [tests]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require every matrix test job to succeed
+        env:
+          TESTS_RESULT: ${{ needs.tests.result }}
+        run: |
+          if [ "$TESTS_RESULT" != "success" ]; then
+            echo "tests result: $TESTS_RESULT" >&2
+            exit 1
           fi
