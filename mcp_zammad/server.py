@@ -886,7 +886,7 @@ class ZammadMCPServer:
                     - customer (str | None): Filter by customer email/login
                     - page (int): Page number (default: 1)
                     - per_page (int): Results per page, 1-100 (default: 25)
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -978,7 +978,7 @@ class ZammadMCPServer:
                 include_articles (bool): Include ticket articles/comments (default: True)
                 article_limit (int): Maximum articles to return, -1 for all (default: 10)
                 article_offset (int): Number of articles to skip for pagination (default: 0)
-                response_format (ResponseFormat): Output format - MARKDOWN or JSON (default: MARKDOWN)
+                response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -1181,7 +1181,7 @@ class ZammadMCPServer:
                 params (ArticleCreate): Validated article creation parameters containing:
                     - ticket_id (int): Internal database ID (required, NOT display number)
                     - body (str): Article content/message (required)
-                    - article_type (ArticleType): Type enum - NOTE, EMAIL, etc. (required)
+                    - article_type (ArticleType): Article type - note, email, or phone (default: note)
                     - internal (bool): Internal note vs customer-visible (default: False)
                     - subject (str | None): Article subject (for emails)
                     - content_type (str | None): text/plain or text/html (default: text/plain)
@@ -1205,9 +1205,9 @@ class ZammadMCPServer:
                 ```
 
             Examples:
-                - Use when: "Add note to ticket 123" -> ticket_id=123, body="text", article_type=NOTE
-                - Use when: "Reply to customer" -> ticket_id=123, body="reply", article_type=EMAIL
-                - Use when: "Internal comment" -> ticket_id=123, body="note", article_type=NOTE, internal=True
+                - Use when: "Add note to ticket 123" -> ticket_id=123, body="text", article_type="note"
+                - Use when: "Reply to customer" -> ticket_id=123, body="reply", article_type="email"
+                - Use when: "Internal comment" -> ticket_id=123, body="note", article_type="note", internal=True
                 - Use when: "Upload files with article" -> ticket_id=123, body="See attached", attachments=[...]
                 - Don't use when: Creating new ticket (use zammad_create_ticket with article)
                 - Don't use when: Updating ticket fields (use zammad_update_ticket)
@@ -1492,7 +1492,7 @@ class ZammadMCPServer:
 
             Parameters:
                 user_id (int): User's internal database ID (required)
-                response_format (ResponseFormat): Output format - MARKDOWN or JSON (default: MARKDOWN)
+                response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted user information with the following schema:
@@ -1552,7 +1552,7 @@ class ZammadMCPServer:
                     - query (str): Search string (matches name, email, login) (required)
                     - page (int): Page number (default: 1)
                     - per_page (int): Results per page, 1-100 (default: 25)
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -1711,7 +1711,7 @@ class ZammadMCPServer:
                     - query (str): Search string (matches name, domain, note) (required)
                     - page (int): Page number (default: 1)
                     - per_page (int): Results per page, 1-100 (default: 25)
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2111,7 +2111,7 @@ class ZammadMCPServer:
 
             Args:
                 params (ListParams): Validated parameters containing:
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2174,7 +2174,7 @@ class ZammadMCPServer:
 
             Args:
                 params (ListParams): Validated parameters containing:
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2240,7 +2240,7 @@ class ZammadMCPServer:
 
             Args:
                 params (ListParams): Validated parameters containing:
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2305,7 +2305,7 @@ class ZammadMCPServer:
 
             Args:
                 params (ListParams): Validated parameters containing:
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
@@ -2393,7 +2393,7 @@ class ZammadMCPServer:
             Args:
                 params (GetTicketTagsParams): Validated parameters containing:
                     - ticket_id (int): Ticket ID to get tags for
-                    - response_format (ResponseFormat): Output format (default: MARKDOWN)
+                    - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
                 str: Formatted response with the following schema:
