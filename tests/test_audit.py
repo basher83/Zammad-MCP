@@ -111,6 +111,9 @@ def test_syslog_sink_uses_syslog_handler(monkeypatch: pytest.MonkeyPatch) -> Non
     emitted: list[str] = []
 
     class FakeSysLogHandler(logging.Handler):
+        def __init__(self, address: object = None) -> None:
+            super().__init__()
+
         def emit(self, record: logging.LogRecord) -> None:
             emitted.append(self.format(record))
 
@@ -120,6 +123,33 @@ def test_syslog_sink_uses_syslog_handler(monkeypatch: pytest.MonkeyPatch) -> Non
     audit.log_event("security_validation", "url_check", success=False)
 
     assert [json.loads(line)["event_type"] for line in emitted] == ["security_validation"]
+
+
+@pytest.mark.parametrize(("dev_log_exists", "expected_address"), [(True, "/dev/log"), (False, None)])
+def test_syslog_sink_prefers_the_local_socket(
+    monkeypatch: pytest.MonkeyPatch, dev_log_exists: bool, expected_address: str | None
+) -> None:
+    """Local syslog listens on /dev/log; UDP 514 is only the fallback when that socket is absent."""
+    seen: list[object] = []
+
+    class FakeSysLogHandler(logging.Handler):
+        def __init__(self, address: object = None) -> None:
+            super().__init__()
+            seen.append(address)
+
+    monkeypatch.setattr("mcp_zammad.audit.SysLogHandler", FakeSysLogHandler)
+    monkeypatch.setattr("mcp_zammad.audit.Path.exists", lambda _self: dev_log_exists)
+
+    _stderr_logger(ZAMMAD_AUDIT_LOG_DESTINATION="syslog")
+
+    assert seen == [expected_address]
+
+
+def test_api_key_details_are_redacted() -> None:
+    """API keys in any common spelling never reach the audit sink."""
+    result = redact({"api_key": "k1", "x-api-key": "k2", "ApiKey": "k3", "keep": "visible"})
+
+    assert result == {"api_key": "[REDACTED]", "x-api-key": "[REDACTED]", "ApiKey": "[REDACTED]", "keep": "visible"}
 
 
 def test_reconfiguration_does_not_duplicate_handlers(capsys: pytest.CaptureFixture[str]) -> None:

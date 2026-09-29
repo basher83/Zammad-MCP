@@ -21,7 +21,18 @@ from typing import Any
 AUDIT_LOGGER_NAME = "zammad.audit"
 DESTINATIONS = frozenset({"stderr", "file", "syslog"})
 REDACTED = "[REDACTED]"
-SENSITIVE_KEY_FRAGMENTS = ("password", "passwd", "token", "secret", "authorization", "credential", "data")
+SENSITIVE_KEY_FRAGMENTS = (
+    "password",
+    "passwd",
+    "token",
+    "secret",
+    "authorization",
+    "credential",
+    "data",
+    "api_key",
+    "api-key",
+    "apikey",
+)
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 
@@ -96,7 +107,11 @@ def _build_handler(config: AuditConfig) -> logging.Handler:
         config.file_path.parent.mkdir(parents=True, exist_ok=True)
         return logging.FileHandler(config.file_path, mode="a", encoding="utf-8")
     if config.destination == "syslog":
-        return SysLogHandler()
+        # Local syslog daemons listen on the /dev/log socket; SysLogHandler's
+        # default (UDP to localhost:514) is usually not listened on and drops
+        # records silently, so it stays only as the fallback.
+        dev_log = Path("/dev/log")
+        return SysLogHandler(address=str(dev_log)) if dev_log.exists() else SysLogHandler()
     return logging.StreamHandler(sys.stderr)
 
 

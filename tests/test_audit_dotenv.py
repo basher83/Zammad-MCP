@@ -1,6 +1,8 @@
 """Tests that audit settings supplied only through a ``.env`` file take effect."""
 
 import json
+import os
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -15,12 +17,13 @@ GROUP = {"id": 1, "name": "Users", "created_at": "2024-01-01T00:00:00Z", "update
 
 
 @pytest.fixture
-def dotenv_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def dotenv_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Run in an isolated cwd with no audit variables exported; restore os.environ afterwards."""
     for name in AUDIT_VARS:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.chdir(tmp_path)
-    return tmp_path
+    with patch.dict(os.environ):
+        yield tmp_path
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,7 @@
 """Zammad API client wrapper for the MCP server."""
 
 import html as _html
+import ipaddress
 import logging
 import os
 import re as _re
@@ -155,14 +156,31 @@ class ZammadClient:
             raise ConfigException(f"Invalid Zammad URL format: {e}") from e
 
     def _check_host_network(self, hostname: str) -> None:
-        """Warn (and audit) when the Zammad host is local or on a private network."""
-        blocked_hosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"]  # nosec B104
-        if hostname in blocked_hosts:
-            logger.warning(f"Zammad URL points to local host: {hostname}")
-            self._audit_host("local_host", hostname)
-        elif hostname.startswith(("10.", "192.168.", "172.")):
-            logger.warning(f"Zammad URL points to private network: {hostname}")
-            self._audit_host("private_network", hostname)
+        """Warn (and audit) when the Zammad host is local or on a private network.
+
+        IP literals are classified by address range; other hostnames are left
+        alone because their spelling says nothing about where they resolve.
+        """
+        reason = ZammadClient._classify_host(hostname)
+        if reason is None:
+            return
+        logger.warning("Zammad URL points to %s: %s", reason.replace("_", " "), hostname)
+        self._audit_host(reason, hostname)
+
+    @staticmethod
+    def _classify_host(hostname: str) -> str | None:
+        """Return ``local_host``, ``private_network`` or None for a URL hostname."""
+        if hostname == "localhost":
+            return "local_host"
+        try:
+            ip = ipaddress.ip_address(hostname.strip("[]"))
+        except ValueError:
+            return None
+        if ip.is_loopback or ip.is_unspecified:
+            return "local_host"
+        if ip.is_private or ip.is_link_local:
+            return "private_network"
+        return None
 
     def _audit_host(self, reason: str, hostname: str) -> None:
         """Emit a security_validation audit event carrying only the hostname, never the full URL."""

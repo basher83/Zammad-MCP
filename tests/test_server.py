@@ -3470,6 +3470,54 @@ def test_export_tickets_per_ticket_error_handling(mock_zammad_client, decorator_
     assert len(lines) == 2
 
 
+def _export_tool(mock_instance, decorator_capturer):
+    """Register the export tool against a mocked client and return it."""
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+    return test_tools["zammad_export_tickets"]
+
+
+def test_export_tickets_list_mode_is_not_capped_by_the_search_page_limit(
+    mock_zammad_client, decorator_capturer, export_dir, monkeypatch
+):
+    """Unfiltered exports use the uncapped list endpoint and must not stop at the search page bound."""
+    monkeypatch.setattr("mcp_zammad.server.MAX_PAGES_FOR_TICKET_SCAN", 2)
+    mock_instance, _ = mock_zammad_client
+    mock_instance.list_tickets.side_effect = [[{"id": 1}], [{"id": 2}], [{"id": 3}], []]
+    mock_instance.get_ticket.side_effect = [_make_ticket_data(i, f"T{i}") for i in (1, 2, 3)]
+    tool = _export_tool(mock_instance, decorator_capturer)
+    output_file = str(export_dir / "all.jsonl")
+
+    tool(TicketExportParams(output_path=output_file, delay_seconds=0.0))
+
+    assert mock_instance.list_tickets.call_count == 4
+    assert len(pathlib.Path(output_file).read_text().strip().splitlines()) == 3
+
+
+def test_export_tickets_date_filters_are_validated_dates(mock_zammad_client, decorator_capturer, export_dir):
+    """Date filters are typed, so search syntax cannot ride into the query, and reach the client as ISO strings."""
+    with pytest.raises(ValidationError):
+        TicketExportParams(output_path=str(export_dir / "x.jsonl"), created_after="2024-01-01 OR state:closed")
+    mock_instance, _ = mock_zammad_client
+    mock_instance.search_tickets.side_effect = [[], []]
+    tool = _export_tool(mock_instance, decorator_capturer)
+    params = TicketExportParams(
+        output_path=str(export_dir / "d.jsonl"),
+        delay_seconds=0.0,
+        created_after="2024-01-01",
+        created_before="2024-02-01",
+    )
+
+    tool(params)
+
+    kwargs = mock_instance.search_tickets.call_args.kwargs
+    assert (kwargs["created_after"], kwargs["created_before"]) == ("2024-01-01", "2024-02-01")
+
+
 def test_export_tickets_resume_from_page(mock_zammad_client, decorator_capturer, export_dir):
     """Test that resume_from_page starts pagination at the correct page."""
     mock_instance, _ = mock_zammad_client

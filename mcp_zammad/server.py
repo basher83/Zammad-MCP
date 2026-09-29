@@ -944,8 +944,8 @@ def _fetch_export_batch(
             query=params.query,
             group=params.group,
             state=params.state,
-            created_after=params.created_after,
-            created_before=params.created_before,
+            created_after=params.created_after.isoformat() if params.created_after else None,
+            created_before=params.created_before.isoformat() if params.created_before else None,
             page=page,
             per_page=params.per_page,
         )
@@ -986,7 +986,11 @@ class _ExportProgress:
 def _iter_export_batches(
     client: "ZammadClient", params: "TicketExportParams", use_search: bool
 ) -> Iterator[list[dict[str, Any]]]:
-    """Yield non-empty ticket batches from resume_from_page up to MAX_PAGES_FOR_TICKET_SCAN.
+    """Yield non-empty ticket batches from resume_from_page until the first empty page.
+
+    The search endpoint is capped at MAX_PAGES_FOR_TICKET_SCAN pages, matching the
+    ticket statistics scan; the list endpoint has no result cap, so list-mode
+    exports page until Zammad returns nothing.
 
     Args:
         client: Zammad client used to fetch pages.
@@ -996,11 +1000,14 @@ def _iter_export_batches(
     Returns:
         Iterator[list[dict[str, Any]]]: Batches in page order; stops at the first empty page.
     """
-    for page in range(params.resume_from_page, MAX_PAGES_FOR_TICKET_SCAN + 1):
+    last_page = MAX_PAGES_FOR_TICKET_SCAN if use_search else None
+    page = params.resume_from_page
+    while last_page is None or page <= last_page:
         batch = _fetch_export_batch(client, params, use_search, page)
         if not batch:
             return
         yield batch
+        page += 1
 
 
 def _fetch_export_record(
