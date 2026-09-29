@@ -419,7 +419,6 @@ git tag v1.0.0-rc.1
 ### Long Term
 
 - Webhook support for real-time updates
-- Bulk operations
 - SLA management features
 - Async Zammad client
 

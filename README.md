@@ -19,6 +19,7 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_update_ticket` - Update ticket properties
   - `zammad_add_article` - Add comments/notes to tickets
   - `zammad_add_ticket_tag` / `zammad_remove_ticket_tag` - Manage ticket tags
+  - `zammad_bulk_update_tickets` - Update, assign, tag, or close up to 100 tickets in one call with per-ticket failure reporting
   - `zammad_get_ticket_tags` - Get tags assigned to a specific ticket
   - `zammad_list_tags` - List all tags defined in the system (requires admin.tag permission)
 
