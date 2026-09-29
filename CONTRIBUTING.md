@@ -215,7 +215,6 @@ To configure the required secrets:
 
 1. Go to Settings → Secrets and variables → Actions
 2. Add the following secrets:
-   - **`SAFETY_API_KEY`**: Sign up at <https://safetycli.com/resources/plans>
    - **`CODACY_PROJECT_TOKEN`**: Get from your Codacy project settings
 
 ### Workflow Best Practices

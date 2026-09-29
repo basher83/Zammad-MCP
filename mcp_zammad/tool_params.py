@@ -1,5 +1,4 @@
-"""
-Expose Pydantic parameter models as flat MCP tool arguments.
+"""Expose Pydantic parameter models as flat MCP tool arguments.
 
 FastMCP derives a tool's ``inputSchema`` from the function signature. A tool
 declared as ``def tool(params: Model)`` therefore advertises a single nested
@@ -38,8 +37,11 @@ def flat_params(model: type[M]) -> Callable[[Callable[[M], R]], Callable[..., R]
     """
 
     def decorator(fn: Callable[[M], R]) -> Callable[..., R]:
+        """Wrap ``fn`` so it is registered with one keyword argument per model field."""
+
         @functools.wraps(fn)
         def wrapper(**kwargs: Any) -> R:
+            """Rebuild the model from flat keyword arguments and call the tool body."""
             return fn(model(**kwargs))
 
         signature = _flat_signature(model, inspect.signature(fn).return_annotation)
