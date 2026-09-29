@@ -174,24 +174,18 @@ class ZammadClient:
         """
         filters = {"page": page, "per_page": per_page, "expand": "true"}
 
-        # Build search query
-        search_parts = []
-        if query:
-            search_parts.append(query)
-        if state:
-            search_parts.append(f"state.name:{state}")
-        if priority:
-            search_parts.append(f"priority.name:{priority}")
-        if group:
-            search_parts.append(f"group.name:{group}")
-        if owner:
-            search_parts.append(f"owner.login:{owner}")
-        if customer:
-            search_parts.append(f"customer.email:{customer}")
-        if created_after:
-            search_parts.append(f"created_at:>={created_after}")
-        if created_before:
-            search_parts.append(f"created_at:<={created_before}")
+        # Build search query: each filter contributes one clause when set.
+        clauses = [
+            (query, "{}"),
+            (state, "state.name:{}"),
+            (priority, "priority.name:{}"),
+            (group, "group.name:{}"),
+            (owner, "owner.login:{}"),
+            (customer, "customer.email:{}"),
+            (created_after, "created_at:>={}"),
+            (created_before, "created_at:<={}"),
+        ]
+        search_parts = [template.format(value) for value, template in clauses if value]
 
         if search_parts:
             search_query = " AND ".join(search_parts)
@@ -292,26 +286,21 @@ class ZammadClient:
         if time_unit is not None and time_unit <= 0:
             raise ValueError("time_unit must be greater than 0")
 
-        update_data: dict[str, Any] = {}
-        if title is not None:
-            update_data["title"] = title
-        if state is not None:
-            update_data["state"] = state
-        if priority is not None:
-            update_data["priority"] = priority
-        if owner is not None:
-            update_data["owner"] = owner
-        if group is not None:
-            update_data["group"] = group
-        if customer is not None:
-            update_data["customer"] = customer
-        if pending_time is not None:
-            # Zammad expects an ISO 8601 string; serialize datetimes for the JSON body.
-            update_data["pending_time"] = (
-                pending_time.isoformat() if isinstance(pending_time, datetime) else pending_time
-            )
-        if time_unit is not None:
-            update_data["time_unit"] = time_unit
+        # Zammad expects an ISO 8601 string; serialize datetimes for the JSON body.
+        if isinstance(pending_time, datetime):
+            pending_time = pending_time.isoformat()
+
+        fields = {
+            "title": title,
+            "state": state,
+            "priority": priority,
+            "owner": owner,
+            "group": group,
+            "customer": customer,
+            "pending_time": pending_time,
+            "time_unit": time_unit,
+        }
+        update_data: dict[str, Any] = {key: value for key, value in fields.items() if value is not None}
 
         return dict(self.api.ticket.update(ticket_id, update_data))
 
