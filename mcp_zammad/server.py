@@ -1028,11 +1028,10 @@ class ZammadMCPServer:
             webhook + trigger POST to `/webhooks/zammad` with a valid HMAC-SHA1 signature.
             Retention is process-local and bounded (`capacity`); events are lost on restart.
 
-            Args:
-                params (ListEventsParams): Validated parameters containing:
-                    - since (datetime | None): Only events received strictly after this timestamp
-                    - limit (int): Maximum events per page, 1-100 (default: 50); the oldest
-                      matching events are returned first
+            Parameters:
+                since (datetime | None): Only events received strictly after this timestamp
+                limit (int): Maximum events per page, 1-100 (default: 50); the oldest
+                    matching events are returned first
 
             Returns:
                 ListEventsResult: `events` (event_type, ticket_id, ticket_number, article_id,
@@ -1613,12 +1612,11 @@ class ZammadMCPServer:
             All articles from the source ticket are moved to the target and the
             source is closed with state "merged". This cannot be undone.
 
-            Args:
-                params (TicketMergeParams): Validated parameters containing:
-                    - source_ticket_id (int): Internal ID of the ticket to merge away
-                    - target_ticket_number (str, optional): Display number of the surviving ticket
-                    - target_ticket_id (int, optional): Internal ID of the surviving ticket
-                    Exactly one of target_ticket_number or target_ticket_id is required.
+            Parameters:
+                source_ticket_id (int): Internal ID of the ticket to merge away (required)
+                target_ticket_number (str, optional): Display number of the surviving ticket
+                target_ticket_id (int, optional): Internal ID of the surviving ticket
+                Exactly one of target_ticket_number or target_ticket_id is required.
 
             Returns:
                 TicketMergeResult with the Zammad result and the surviving target ticket
@@ -1724,14 +1722,13 @@ class ZammadMCPServer:
         def zammad_bulk_update_tickets(params: BulkTicketUpdateParams) -> BulkUpdateResult:
             """Apply the same changes to up to 100 tickets in one call (update, assign, tag, close).
 
-            Args:
-                params (BulkTicketUpdateParams): Validated parameters containing:
-                    - ticket_ids (list[int]): 1-100 unique internal database IDs (NOT display numbers)
-                    - title, state, priority, owner, group, time_unit: Same semantics as zammad_update_ticket
-                    - add_tags (list[str] | None): Tags to add to every ticket
-                    - remove_tags (list[str] | None): Tags to remove from every ticket
-                    - note (str | None): Internal note added to every ticket
-                    - delay_seconds (float): Pause between tickets (default 0)
+            Parameters:
+                ticket_ids (list[int]): 1-100 unique internal database IDs (NOT display numbers) (required)
+                title, state, priority, owner, group, time_unit: Same semantics as zammad_update_ticket
+                add_tags (list[str] | None): Tags to add to every ticket
+                remove_tags (list[str] | None): Tags to remove from every ticket
+                note (str | None): Internal note added to every ticket
+                delay_seconds (float): Pause between tickets (default 0)
                 At least one field, tag, or note must be supplied.
 
             Returns:
