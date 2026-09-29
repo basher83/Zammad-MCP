@@ -25,7 +25,6 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
 - **Attachment Support**
   - `zammad_get_article_attachments` - List attachments for a ticket article
   - `zammad_download_attachment` - Download attachment content (base64-encoded)
-  - `zammad_delete_attachment` - Delete attachments from ticket articles
 
 - **User & Organization Management**
   - `zammad_create_user` - Create a Zammad user
@@ -426,15 +425,6 @@ Use zammad_add_article with attachments parameter:
       "mime_type": "application/pdf"
     }
   ]
-```
-
-### Delete an Attachment
-
-```plaintext
-Use zammad_delete_attachment with:
-- ticket_id: 123
-- article_id: 456
-- attachment_id: 789
 ```
 
 ## Development
