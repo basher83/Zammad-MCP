@@ -5,8 +5,8 @@ import json
 import os
 import pathlib
 import tempfile
-from datetime import datetime, timezone
-from typing import Any
+from datetime import date, datetime, timezone
+from typing import Any, ClassVar
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -20,7 +20,6 @@ from mcp_zammad.models import (
     ArticleType,
     Attachment,
     AttachmentUpload,
-    DeleteAttachmentParams,
     GetOrganizationParams,
     GetTicketParams,
     GetTicketStatsParams,
@@ -45,9 +44,11 @@ from mcp_zammad.models import (
 )
 from mcp_zammad.server import (
     CHARACTER_LIMIT,
-    AttachmentDeletionError,
+    MAX_PER_PAGE,
+    SEARCH_RESULT_CAP,
     ZammadMCPServer,
     _build_export_record,
+    _format_article_attachments,
     _format_ticket_detail_markdown,
     _resolve_export_path,
     _strip_html_tags,
@@ -234,6 +235,28 @@ async def test_prompts():
     assert "analyze_ticket" in prompt_names
     assert "draft_response" in prompt_names
     assert "escalation_summary" in prompt_names
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("name", "arguments"),
+    [
+        ("analyze_ticket", {"ticket_id": "$1"}),
+        ("draft_response", {"ticket_id": "$1", "tone": "$2"}),
+        ("escalation_summary", {"group": "$1"}),
+    ],
+)
+async def test_prompts_render_with_non_numeric_arguments(name: str, arguments: dict[str, str]) -> None:
+    """Prompt arguments arrive as strings, so they must not be coerced to int.
+
+    Clients that turn MCP prompts into slash commands render them with placeholder
+    values such as "$1" to discover their arguments. Annotating ticket_id as int made
+    FastMCP raise PromptError on those placeholders, so the prompts were unusable.
+    """
+    result = await mcp.render_prompt(name, arguments)
+
+    rendered = result.messages[0].content.text  # type: ignore[union-attr]
+    assert "$1" in rendered
 
 
 @pytest.mark.asyncio
@@ -628,6 +651,9 @@ def test_add_article_content_type_validation() -> None:
     plain_article = ArticleCreate(ticket_id=1, body="<p>plain</p>", content_type="text/plain")
     assert plain_article.body == "&lt;p&gt;plain&lt;/p&gt;"
 
+    apostrophe_article = ArticleCreate(ticket_id=1, body="we've got it, you'd agree", content_type="text/plain")
+    assert apostrophe_article.body == "we've got it, you'd agree"
+
     with pytest.raises(ValidationError, match="content_type"):
         ArticleCreate(ticket_id=1, body="test", content_type="application/json")  # type: ignore[arg-type]
 
@@ -1005,6 +1031,30 @@ def test_update_ticket_with_time_unit_tool(mock_zammad_client, sample_ticket_dat
     mock_instance.update_ticket.assert_called_once_with(ticket_id=1, title="Updated Title", time_unit=2.5)
 
 
+def test_update_ticket_with_customer_tool(mock_zammad_client, sample_ticket_data, decorator_capturer):
+    """Test zammad_update_ticket tool forwards customer for reassignment."""
+    mock_instance, _ = mock_zammad_client
+
+    updated_ticket = sample_ticket_data.copy()
+    updated_ticket["customer"] = {"id": 5, "email": "new@example.com"}
+
+    mock_instance.update_ticket.return_value = updated_ticket
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = TicketUpdateParams(ticket_id=1, customer="new@example.com")
+    result = test_tools["zammad_update_ticket"](**params.model_dump())
+
+    assert result.id == 1
+    mock_instance.update_ticket.assert_called_once_with(ticket_id=1, customer="new@example.com")
+
+
 def test_update_ticket_without_time_unit_tool(mock_zammad_client, sample_ticket_data, decorator_capturer):
     """Test zammad_update_ticket tool omits time_unit when not provided."""
     mock_instance, _ = mock_zammad_client
@@ -1041,6 +1091,43 @@ def test_update_ticket_valid_time_unit():
 
     params_none = TicketUpdateParams(ticket_id=1)
     assert params_none.time_unit is None
+
+
+def test_update_ticket_pending_state_requires_pending_time():
+    """Moving to a pending state without pending_time is rejected up front."""
+    with pytest.raises(ValidationError, match="pending_time"):
+        TicketUpdateParams(ticket_id=1, state="pending reminder")
+
+    with pytest.raises(ValidationError, match="pending_time"):
+        TicketUpdateParams(ticket_id=1, state="pending close")
+
+
+def test_update_ticket_pending_state_with_pending_time():
+    """pending_time is accepted (and parsed) alongside a pending state."""
+    params = TicketUpdateParams(ticket_id=1, state="pending reminder", pending_time="2026-07-01T08:00:00Z")
+    assert params.pending_time == datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
+
+
+def test_update_ticket_forwards_pending_time_as_datetime(mock_zammad_client, sample_ticket_data, decorator_capturer):
+    """The tool forwards pending_time to the client as a datetime object."""
+    mock_instance, _ = mock_zammad_client
+    mock_instance.update_ticket.return_value = sample_ticket_data
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_tools()
+
+    params = TicketUpdateParams(ticket_id=1, state="pending reminder", pending_time="2026-07-01T08:00:00Z")
+    test_tools["zammad_update_ticket"](**params.model_dump())
+
+    _, kwargs = mock_instance.update_ticket.call_args
+    assert kwargs["ticket_id"] == 1
+    assert kwargs["state"] == "pending reminder"
+    assert kwargs["pending_time"] == datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc)
 
 
 def test_get_organization_tool(mock_zammad_client, sample_organization_data):
@@ -1329,19 +1416,19 @@ def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
     # Set up paginated responses - page 1, page 2, then empty page
     mock_instance.search_tickets.side_effect = [page1_tickets, page2_tickets, []]
 
-    # Mock ticket states for state type mapping
+    # Mock ticket states for state type mapping (stock Zammad seed values)
     mock_instance.get_ticket_states.return_value = [
         {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
-        {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 5, "name": "closed", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {
-            "id": 4,
+            "id": 3,
             "name": "pending reminder",
-            "state_type_id": 4,
+            "state_type_id": 3,
             "created_at": "2024-01-01",
             "updated_at": "2024-01-01",
         },
-        {"id": 5, "name": "pending close", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 4, "name": "pending close", "state_type_id": 4, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
     ]
 
     server_inst = ZammadMCPServer()
@@ -1399,6 +1486,98 @@ def test_get_ticket_stats_tool(mock_zammad_client, decorator_capturer):
         mock_logger.warning.assert_called_with("Date filtering not yet implemented - ignoring date parameters")
 
 
+def test_categorize_ticket_state_uses_state_type_id():
+    """Categorize by state_type_id (seeded and stable), not the state name."""
+    # Regression guard: the built-in state_type_id values are seeded and fixed
+    # by Zammad (new=1, open=2, pending reminder=3, pending action=4, closed=5,
+    # merged=6). A custom state typed as pending must still land in the pending
+    # bucket even when its *name* does not look pending -- the case name-based
+    # matching gets wrong.
+    server_inst = ZammadMCPServer()
+    server_inst._state_type_mapping = {
+        "new": 1,
+        "open": 2,
+        "closed": 5,
+        "pending reminder": 3,
+        "pending close": 4,
+        "merged": 6,
+        "waiting for customer": 3,  # custom name, pending-reminder type
+    }
+
+    assert server_inst._categorize_ticket_state("new") == (1, 0, 0)
+    assert server_inst._categorize_ticket_state("open") == (1, 0, 0)
+    assert server_inst._categorize_ticket_state("closed") == (0, 1, 0)
+    assert server_inst._categorize_ticket_state("pending reminder") == (0, 0, 1)
+    assert server_inst._categorize_ticket_state("pending close") == (0, 0, 1)
+    # A custom state whose *name* is not pending but whose type is
+    # pending-reminder (3) must still be counted as pending.
+    assert server_inst._categorize_ticket_state("waiting for customer") == (0, 0, 1)
+    # A state not in the mapping (e.g. removed or renamed) is counted in the
+    # total only, never in a bucket.
+    assert server_inst._categorize_ticket_state("unknown state") == (0, 0, 0)
+    # "merged" (type 6) is in the total but in no bucket.
+    assert server_inst._categorize_ticket_state("merged") == (0, 0, 0)
+
+
+def test_get_ticket_stats_uses_state_type_id(mock_zammad_client, decorator_capturer):
+    """Ticket stats categorize by state_type_id (seeded and stable)."""
+    # Stock Zammad seed values: new=1, open=2, pending reminder=3,
+    # pending action=4, closed=5, merged=6. "pending close" is a built-in state
+    # whose type is "pending action" (4). A custom "waiting for customer" state
+    # is typed pending reminder (3) so it must count as pending even though its
+    # name is not "pending" -- the case name-based matching gets wrong.
+    mock_instance, _ = mock_zammad_client
+
+    tickets = [
+        {"id": 1, "state": {"id": 1, "name": "new", "state_type_id": 1}},
+        {"id": 2, "state": {"id": 2, "name": "open", "state_type_id": 2}},
+        {"id": 3, "state": {"id": 3, "name": "pending reminder", "state_type_id": 3}},
+        {"id": 4, "state": {"id": 5, "name": "closed", "state_type_id": 5}},
+        {"id": 5, "state": {"id": 4, "name": "pending close", "state_type_id": 4}},
+        # Custom state: counted in total, excluded from every bucket.
+        {"id": 6, "state": {"id": 6, "name": "merged", "state_type_id": 6}},
+        # Custom state: name is not "pending", but its type is pending reminder (3).
+        {"id": 7, "state": {"id": 7, "name": "waiting for customer", "state_type_id": 3}},
+    ]
+    mock_instance.search_tickets.side_effect = [tickets, []]
+    mock_instance.get_ticket_states.return_value = [
+        {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {
+            "id": 3,
+            "name": "pending reminder",
+            "state_type_id": 3,
+            "created_at": "2024-01-01",
+            "updated_at": "2024-01-01",
+        },
+        {"id": 5, "name": "closed", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 4, "name": "pending close", "state_type_id": 4, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 6, "name": "merged", "state_type_id": 6, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {
+            "id": 7,
+            "name": "waiting for customer",
+            "state_type_id": 3,
+            "created_at": "2024-01-01",
+            "updated_at": "2024-01-01",
+        },
+    ]
+
+    server_inst = ZammadMCPServer()
+    server_inst.client = mock_instance
+    test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
+    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
+    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+    server_inst._setup_system_tools()
+
+    stats = test_tools["zammad_get_ticket_stats"](**GetTicketStatsParams().model_dump())
+
+    assert stats.total_count == 7
+    assert stats.open_count == 2  # new + open
+    assert stats.closed_count == 1  # closed (state_type_id 5)
+    assert stats.pending_count == 3  # pending reminder (3) + pending close (4) + waiting for customer (3)
+    # "merged" (type 6) is in the total but in no bucket: 2 + 1 + 3 = 6, + 1 = 7.
+
+
 def test_resource_handlers(decorator_capturer):
     """Test resource handler registration and execution."""
     server = ZammadMCPServer()
@@ -1436,6 +1615,7 @@ def test_resource_handlers(decorator_capturer):
                 created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
                 updated_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
                 created_by=UserBrief(id=1, login="agent", email="agent@example.com"),
+                attachments=[Attachment(id=42, filename="report.pdf", size=2048)],
             )
         ],
     )
@@ -1458,6 +1638,8 @@ def test_resource_handlers(decorator_capturer):
     assert "Priority: high" in result
     assert "Customer: test@example.com" in result
     assert "Initial ticket description" in result
+    assert "download via zammad_download_attachment, article_id=1" in result
+    assert "id=42: report.pdf, 2048 bytes" in result
 
     # Test user resource
     server.client.get_user.return_value = {
@@ -1580,13 +1762,13 @@ def test_prompt_handlers(decorator_capturer):
 
     # Test analyze_ticket prompt
     assert "analyze_ticket" in test_prompts
-    result = test_prompts["analyze_ticket"](ticket_id=123)
+    result = test_prompts["analyze_ticket"](ticket_id="123")
     assert "analyze ticket with ID 123" in result
     assert "get_ticket tool" in result
 
     # Test draft_response prompt
     assert "draft_response" in test_prompts
-    result = test_prompts["draft_response"](ticket_id=123, tone="friendly")
+    result = test_prompts["draft_response"](ticket_id="123", tone="friendly")
     assert "draft a friendly response to ticket with ID 123" in result
     assert "add_article" in result
 
@@ -1794,6 +1976,23 @@ async def test_tool_implementations_are_called():
     server.client.search_tickets.assert_called_once()
 
 
+@pytest.mark.asyncio
+async def test_search_tickets_date_filters_in_header():
+    """Date bounds appear in the markdown results header alongside other filters."""
+    server = ZammadMCPServer()
+    server.client = Mock()
+    server.client.search_tickets.return_value = []
+
+    search_tickets_tool = await server.mcp.get_tool("zammad_search_tickets")
+    assert search_tickets_tool is not None
+    params = TicketSearchParams(created_after=date(2024, 1, 1), created_before=date(2024, 3, 31))
+    result = search_tickets_tool.fn(**params.model_dump())
+
+    assert "created_after='2024-01-01'" in result
+    assert "created_before='2024-03-31'" in result
+    assert "All tickets" not in result
+
+
 def test_get_ticket_stats_pagination(decorator_capturer):
     """Test that get_ticket_stats tool uses pagination correctly."""
     server = ZammadMCPServer()
@@ -1803,15 +2002,15 @@ def test_get_ticket_stats_pagination(decorator_capturer):
     server.client.get_ticket_states.return_value = [
         {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
-        {"id": 3, "name": "closed", "state_type_id": 3, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 5, "name": "closed", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
         {
-            "id": 4,
+            "id": 3,
             "name": "pending reminder",
-            "state_type_id": 4,
+            "state_type_id": 3,
             "created_at": "2024-01-01",
             "updated_at": "2024-01-01",
         },
-        {"id": 5, "name": "pending close", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 4, "name": "pending close", "state_type_id": 4, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
     ]
 
     # Capture tools as they're registered
@@ -2596,64 +2795,25 @@ class TestAttachmentSupport:
         with pytest.raises(Exception, match="API Error"):
             server_inst.client.download_attachment(123, 456, 789)  # type: ignore[union-attr]
 
-    def test_delete_attachment_tool_success(self, decorator_capturer) -> None:
-        """Test zammad_delete_attachment tool success."""
+    def test_no_attachment_deletion_tool_is_registered(self, decorator_capturer) -> None:
+        """Zammad exposes no attachment-deletion endpoint, so no tool may claim to.
+
+        The REST API only routes GET /ticket_attachment/:ticket_id/:article_id/:id.
+        The closest supported operation is deleting the whole article via
+        DELETE /ticket_articles/:id.
+        """
         server_inst = ZammadMCPServer()
         server_inst.client = Mock()
 
-        # Mock successful deletion
-        server_inst.client.delete_attachment.return_value = True  # type: ignore[union-attr]
-
-        # Setup tools using decorator_capturer fixture
         test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
         server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
         server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
         server_inst._setup_tools()
 
-        # Create params
-        params = DeleteAttachmentParams(ticket_id=123, article_id=456, attachment_id=789)
-
-        # Call tool
-        result = test_tools["zammad_delete_attachment"](**params.model_dump())
-
-        # Verify result structure
-        assert result.success is True
-        assert result.ticket_id == 123
-        assert result.article_id == 456
-        assert result.attachment_id == 789
-        assert "Successfully deleted attachment 789" in result.message
-        assert "article 456" in result.message
-        assert "ticket 123" in result.message
-
-        # Verify client called correctly
-        server_inst.client.delete_attachment.assert_called_once_with(  # type: ignore[union-attr]
-            ticket_id=123, article_id=456, attachment_id=789
-        )
-
-    def test_delete_attachment_tool_not_found(self, decorator_capturer) -> None:
-        """Test zammad_delete_attachment with non-existent attachment."""
-        server_inst = ZammadMCPServer()
-        server_inst.client = Mock()
-
-        # Mock API error
-        server_inst.client.delete_attachment.side_effect = Exception("Attachment not found")  # type: ignore[union-attr]
-
-        # Setup tools using decorator_capturer fixture
-        test_tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
-        server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
-        server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
-        server_inst._setup_tools()
-
-        # Create params
-        params = DeleteAttachmentParams(ticket_id=123, article_id=456, attachment_id=999)
-
-        # Verify AttachmentDeletionError is raised
-        with pytest.raises(AttachmentDeletionError) as exc_info:
-            test_tools["zammad_delete_attachment"](**params.model_dump())
-
-        # Verify error details
-        assert exc_info.value.attachment_id == 999
-        assert "Attachment not found" in str(exc_info.value)
+        # Sibling attachment tools must still register, so the absence check below is not vacuous.
+        assert "zammad_get_article_attachments" in test_tools
+        assert "zammad_download_attachment" in test_tools
+        assert "zammad_delete_attachment" not in test_tools
 
 
 class TestJSONOutputAndTruncation:
@@ -2986,6 +3146,61 @@ def test_format_ticket_detail_markdown_with_articles(sample_ticket_data, sample_
     assert "- **Created**:" in result
     assert "Test article" in result
     assert "Second article" in result
+
+
+def test_format_ticket_detail_markdown_with_attachments(sample_ticket_data, sample_article_data):
+    """Attachments are surfaced with id/filename so they can be downloaded."""
+    article = Article(
+        **{
+            **sample_article_data,
+            "attachments": [
+                {"id": 1, "filename": "kaufanfrage.pdf", "size": 20480},
+                {"id": 2, "filename": "logo.png", "size": 2048},
+            ],
+        }
+    )
+    ticket_with_attachments = Ticket(**sample_ticket_data, articles=[article])
+
+    result = _format_ticket_detail_markdown(ticket_with_attachments)
+
+    assert "**Attachments**" in result
+    assert "zammad_download_attachment" in result
+    assert f"article_id={article.id}" in result
+    assert "id=1: kaufanfrage.pdf, 20480 bytes" in result
+    assert "id=2: logo.png, 2048 bytes" in result
+
+
+def test_format_article_attachments_sanitizes_filename():
+    """Filenames with control characters or HTML are neutralized before rendering."""
+    attachments = [
+        Attachment(id=1, filename="evil\n- injected line", size=10),
+        Attachment(id=2, filename="<script>alert(1)</script>.txt", size=None),
+    ]
+
+    rendered = "\n".join(_format_article_attachments(attachments, article_id=5))
+
+    # A newline in the filename must not create an extra markdown line
+    assert "\n- injected line" not in rendered
+    assert "evil- injected line" in rendered
+    # HTML metacharacters are escaped
+    assert "<script>" not in rendered
+    assert "&lt;script&gt;" in rendered
+
+
+def test_format_article_attachments_handles_dict_with_invalid_size():
+    """Non-integer sizes (e.g. from raw dicts) are omitted rather than rendered."""
+    lines = _format_article_attachments([{"id": 7, "filename": "doc.pdf", "size": "big"}], article_id=5)
+
+    assert lines[-1] == "  - id=7: doc.pdf"
+
+
+def test_format_ticket_detail_markdown_without_attachments(sample_ticket_data, sample_article_data):
+    """Articles without attachments do not render an attachment section."""
+    ticket = Ticket(**sample_ticket_data, articles=[Article(**sample_article_data)])
+
+    result = _format_ticket_detail_markdown(ticket)
+
+    assert "**Attachments**" not in result
 
 
 def test_format_ticket_detail_markdown_with_tags(sample_ticket_data):
@@ -3806,3 +4021,68 @@ class TestExportExpandedFields:
         params = TicketExportParams(output_path=str(export_dir / "notags.jsonl"), delay_seconds=0.0)
         test_tools["zammad_export_tickets"](**params.model_dump())
         mock_instance.get_ticket_tags.assert_not_called()
+
+
+class TestTicketStatsSearchCap:
+    """Group-filtered stats must not report the search cap as an exact total."""
+
+    _STATES: ClassVar[list[dict[str, Any]]] = [
+        {"id": 1, "name": "new", "state_type_id": 1, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 2, "name": "open", "state_type_id": 2, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+        {"id": 5, "name": "closed", "state_type_id": 5, "created_at": "2024-01-01", "updated_at": "2024-01-01"},
+    ]
+
+    def _server(self, mock_instance):
+        mock_instance.get_ticket_states.return_value = self._STATES
+        server_inst = ZammadMCPServer()
+        server_inst.client = mock_instance
+        server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
+        return server_inst
+
+    def test_group_scan_flags_truncation_at_cap(self, mock_zammad_client):
+        """Hitting the cap marks the counts as lower bounds."""
+        mock_instance, _ = mock_zammad_client
+        full_page = [{"id": i, "state": "open"} for i in range(MAX_PER_PAGE)]
+        # Enough full pages to reach the cap, then the empty page the backend returns.
+        pages = [full_page] * (SEARCH_RESULT_CAP // MAX_PER_PAGE) + [[]]
+        mock_instance.search_tickets.side_effect = pages
+
+        server_inst = self._server(mock_instance)
+        *_, truncated = server_inst._collect_ticket_stats_paginated(mock_instance, "Support")
+
+        assert truncated is True
+
+    def test_small_group_scan_is_not_truncated(self, mock_zammad_client):
+        """A scan that ends before the cap reports exact counts."""
+        mock_instance, _ = mock_zammad_client
+        mock_instance.search_tickets.side_effect = [[{"id": 1, "state": "open"}], []]
+
+        server_inst = self._server(mock_instance)
+        total, *_, truncated = server_inst._collect_ticket_stats_paginated(mock_instance, "Support")
+
+        assert total == 1
+        assert truncated is False
+
+    def test_unfiltered_scan_is_not_capped(self, mock_zammad_client):
+        """Without a group filter the client uses the uncapped list endpoint."""
+        mock_instance, _ = mock_zammad_client
+        full_page = [{"id": i, "state": "open"} for i in range(MAX_PER_PAGE)]
+        pages = [full_page] * (SEARCH_RESULT_CAP // MAX_PER_PAGE) + [[]]
+        mock_instance.search_tickets.side_effect = pages
+
+        server_inst = self._server(mock_instance)
+        *_, truncated = server_inst._collect_ticket_stats_paginated(mock_instance, None)
+
+        assert truncated is False
+
+    def test_truncation_surfaces_on_the_model(self):
+        """The flag reaches TicketStats so callers can see it."""
+        server_inst = ZammadMCPServer()
+        stats = server_inst._build_stats_result(10000, 1, 2, 3, 4, 100, 1.0, True)
+        assert stats.counts_truncated is True
+
+    def test_default_stats_are_not_truncated(self):
+        """The flag defaults to False for exact scans."""
+        server_inst = ZammadMCPServer()
+        stats = server_inst._build_stats_result(5, 1, 2, 1, 1, 1, 1.0)
+        assert stats.counts_truncated is False

@@ -30,8 +30,6 @@ from .models import (
     ArticleCreate,
     Attachment,
     AttachmentDownloadError,
-    DeleteAttachmentParams,
-    DeleteAttachmentResult,
     DownloadAttachmentParams,
     GetArticleAttachmentsParams,
     GetKBAnswerParams,
@@ -71,27 +69,6 @@ from .models import (
 from .tool_params import flat_params
 
 
-class AttachmentDeletionError(Exception):
-    """Raised when attachment deletion fails."""
-
-    def __init__(self, ticket_id: int, article_id: int, attachment_id: int, reason: str) -> None:
-        """Initialize attachment deletion error.
-
-        Args:
-            ticket_id: Ticket ID
-            article_id: Article ID
-            attachment_id: Attachment ID that failed to delete
-            reason: Reason for failure
-        """
-        self.ticket_id = ticket_id
-        self.article_id = article_id
-        self.attachment_id = attachment_id
-        self.reason = reason
-        super().__init__(
-            f"Failed to delete attachment {attachment_id} from article {article_id} in ticket {ticket_id}: {reason}"
-        )
-
-
 # Protocol for items that can be dumped to dict (for type safety)
 class _Dumpable(Protocol):
     """Protocol for Pydantic models with id, name, and model_dump."""
@@ -110,17 +87,24 @@ logger = logging.getLogger(__name__)
 # Constants
 MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
+
+# Zammad state type IDs. These are seeded and fixed by Zammad (see
+# db/seeds/ticket_state_types.rb): create_if_not_exists with explicit ids, so
+# the built-in values are stable across versions and installations.
+STATE_TYPE_NEW = 1
+STATE_TYPE_OPEN = 2
+STATE_TYPE_PENDING_REMINDER = 3
+STATE_TYPE_PENDING_ACTION = 4
+STATE_TYPE_CLOSED = 5
+STATE_TYPE_MERGED = 6
 MAX_PER_PAGE = 100  # Maximum results per page for pagination
+# Zammad's search endpoint is backed by Elasticsearch, whose index.max_result_window
+# defaults to 10,000. Past that the endpoint returns empty pages rather than an error,
+# so an unguarded scan silently stops and under-reports.
+SEARCH_RESULT_CAP = 10000
 CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
 ARTICLE_BODY_TRUNCATE_LENGTH = 500  # Maximum length for article body in markdown formatting
 MAX_EXPORT_ERRORS_LOGGED = 100  # Maximum number of per-ticket errors to log during export
-
-# Zammad state type IDs (from Zammad API)
-STATE_TYPE_NEW = 1
-STATE_TYPE_OPEN = 2
-STATE_TYPE_CLOSED = 3
-STATE_TYPE_PENDING_REMINDER = 4
-STATE_TYPE_PENDING_CLOSE = 5
 
 
 # Tool annotation constants
@@ -140,17 +124,6 @@ def _write_annotations(title: str) -> ToolAnnotations:
     return ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
-        idempotentHint=False,
-        openWorldHint=True,
-        title=title,
-    )
-
-
-def _destructive_write_annotations(title: str) -> ToolAnnotations:
-    """Create destructive write tool annotations with title."""
-    return ToolAnnotations(
-        readOnlyHint=False,
-        destructiveHint=True,
         idempotentHint=False,
         openWorldHint=True,
         title=title,
@@ -229,6 +202,24 @@ def _escape_article_body(article: Article) -> str:
     """
     ct = (getattr(article, "content_type", None) or "").lower()
     return html.escape(article.body) if "html" in ct else article.body
+
+
+def _sanitize_inline_text(value: object) -> str:
+    """Neutralize control characters and HTML in a value rendered inline in markdown.
+
+    Attachment filenames originate from user uploads, so they may contain
+    newlines, control characters, or HTML/Markdown metacharacters that could
+    break out of the list item or inject markup. Strip non-printable characters
+    and HTML-escape the rest.
+
+    Args:
+        value: The value to sanitize (coerced to str)
+
+    Returns:
+        A single-line, HTML-escaped representation safe for inline rendering
+    """
+    text = "".join(ch for ch in str(value) if ch.isprintable())
+    return html.escape(text, quote=False)
 
 
 def _serialize_json(obj: dict[str, Any], *, use_compact: bool) -> str:
@@ -623,16 +614,20 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
                 type_field = article.get("type", "Unknown")
                 created_at = article.get("created_at", "Unknown")
                 body = article.get("body", "")
+                attachments = article.get("attachments")
             else:
                 # Article object - use attribute access
                 from_field = article.from_ or "Unknown"
                 type_field = article.type
                 created_at = article.created_at
                 body = article.body
+                attachments = article.attachments
 
             lines.append(f"- **From**: {from_field}")
             lines.append(f"- **Type**: {type_field}")
             lines.append(f"- **Created**: {created_at}")
+            article_id = article.get("id") if isinstance(article, dict) else article.id
+            lines.extend(_format_article_attachments(attachments, article_id))
             lines.append("")
             # Truncate very long bodies
             if len(body) > ARTICLE_BODY_TRUNCATE_LENGTH:
@@ -641,6 +636,42 @@ def _format_ticket_detail_markdown(ticket: Ticket) -> str:
             lines.append("")
 
     return "\n".join(lines)
+
+
+def _attachment_field(att: Attachment | dict, name: str) -> object:
+    """Read a field from an attachment in either dict or model form."""
+    return att.get(name) if isinstance(att, dict) else getattr(att, name, None)
+
+
+def _format_attachment_size(size: object) -> str:
+    """Render a trailing size suffix for genuine non-negative byte counts."""
+    if isinstance(size, int) and not isinstance(size, bool) and size >= 0:
+        return f", {size} bytes"
+    return ""
+
+
+def _format_attachment_line(att: Attachment | dict) -> str:
+    """Format a single attachment as a sanitized markdown bullet line."""
+    filename = _attachment_field(att, "filename")
+    safe_id = _sanitize_inline_text(_attachment_field(att, "id"))
+    safe_filename = _sanitize_inline_text(filename) if filename is not None else "(unnamed)"
+    size_str = _format_attachment_size(_attachment_field(att, "size"))
+    return f"  - id={safe_id}: {safe_filename}{size_str}"
+
+
+def _format_article_attachments(attachments: list[Attachment] | list[dict] | None, article_id: int) -> list[str]:
+    """Render an article's attachment list as markdown lines.
+
+    Surfaces attachment id/filename/size so the LLM knows files exist and can
+    fetch their content via zammad_download_attachment.
+    """
+    if not attachments:
+        return []
+
+    safe_article_id = _sanitize_inline_text(article_id)
+    lines = [f"- **Attachments** (download via zammad_download_attachment, article_id={safe_article_id}):"]
+    lines.extend(_format_attachment_line(att) for att in attachments)
+    return lines
 
 
 def _format_user_contact_section(user: User) -> list[str]:
@@ -1345,6 +1376,8 @@ class ZammadMCPServer:
                     - group (str | None): Filter by group name
                     - owner (str | None): Filter by owner email/login
                     - customer (str | None): Filter by customer email/login
+                    - created_after (date | None): Only tickets created on/after YYYY-MM-DD
+                    - created_before (date | None): Only tickets created on/before YYYY-MM-DD
                     - page (int): Page number (default: 1)
                     - per_page (int): Results per page, 1-100 (default: 25)
                     - response_format (ResponseFormat): Output format (default: MARKDOWN)
@@ -1418,6 +1451,8 @@ class ZammadMCPServer:
                 "group": params.group,
                 "owner": params.owner,
                 "customer": params.customer,
+                "created_after": params.created_after,
+                "created_before": params.created_before,
             }
             filters = [f"{k}='{v}'" for k, v in filter_parts.items() if v]
             query_info = ", ".join(filters) if filters else "All tickets"
@@ -1593,6 +1628,8 @@ class ZammadMCPServer:
                     - group (str | None): New group name
                     - owner (str | None): New owner email/login
                     - customer (str | None): New customer email/login
+                    - pending_time (datetime | None): Pending-until timestamp (ISO 8601),
+                      required when state is "pending reminder" or "pending close"
                     - time_unit (float | None): Time spent for time accounting
 
             Returns:
@@ -1612,6 +1649,8 @@ class ZammadMCPServer:
             Examples:
                 - Use when: "Change ticket 123 to high priority" -> ticket_id=123, priority="high"
                 - Use when: "Close ticket 123" -> ticket_id=123, state="closed"
+                - Use when: "Set ticket 123 to pending until 2026-07-01" ->
+                  ticket_id=123, state="pending reminder", pending_time="2026-07-01T08:00:00Z"
                 - Use when: "Reassign ticket to Alice" -> ticket_id=123, owner="alice@company.com"
                 - Don't use when: Adding comments (use zammad_add_article)
                 - Don't use when: Adding tags (use zammad_add_ticket_tag)
@@ -1826,52 +1865,6 @@ class ZammadMCPServer:
 
             # Convert bytes to base64 string for transmission
             return base64.b64encode(attachment_data).decode("utf-8")
-
-        @self.mcp.tool(annotations=_destructive_write_annotations("Delete Attachment"))
-        @flat_params(DeleteAttachmentParams)
-        def zammad_delete_attachment(params: DeleteAttachmentParams) -> DeleteAttachmentResult:
-            """Delete an attachment from a ticket article.
-
-            Args:
-                params: DeleteAttachmentParams with ticket_id, article_id, attachment_id
-
-            Returns:
-                DeleteAttachmentResult with success status and message
-
-            Examples:
-                - Use when: Removing incorrect file uploads or outdated attachments
-                - Don't use when: Attachment IDs unknown (list attachments first)
-
-            Note:
-                Requires Zammad delete permissions. Deletion is permanent.
-            """
-            client = self.get_client()
-
-            try:
-                success = client.delete_attachment(
-                    ticket_id=params.ticket_id,
-                    article_id=params.article_id,
-                    attachment_id=params.attachment_id,
-                )
-            except Exception as e:
-                raise AttachmentDeletionError(
-                    ticket_id=params.ticket_id,
-                    article_id=params.article_id,
-                    attachment_id=params.attachment_id,
-                    reason=str(e),
-                ) from e
-
-            return DeleteAttachmentResult(
-                success=success,
-                ticket_id=params.ticket_id,
-                article_id=params.article_id,
-                attachment_id=params.attachment_id,
-                message=(
-                    f"Successfully deleted attachment {params.attachment_id} from article {params.article_id} in ticket {params.ticket_id}"
-                    if success
-                    else f"Failed to delete attachment {params.attachment_id}"
-                ),
-            )
 
         @self.mcp.tool(annotations=_idempotent_write_annotations("Add Ticket Tag"))
         @flat_params(TagOperationParams)
@@ -2465,20 +2458,23 @@ class ZammadMCPServer:
             Tuple of (open_increment, closed_increment, pending_increment)
 
         Note:
-            Uses state_type_id from Zammad instead of string matching:
-            - 1 (new), 2 (open) -> open
-            - 3 (closed) -> closed
-            - 4 (pending reminder), 5 (pending close) -> pending
+            Categorizes by the state's state_type_id (seeded and stable), not
+            the state name, so a custom state typed as pending still lands in
+            the pending bucket:
+            - new (1), open (2) -> open
+            - closed (5) -> closed
+            - pending reminder (3), pending action (4) -> pending
+            Any other state (e.g. merged, 6) is counted in the total but not
+            in any bucket.
         """
         state_type_mapping = self._get_state_type_mapping()
         state_type_id = state_type_mapping.get(state_name, 0)
 
-        # Categorize based on state_type_id
-        if state_type_id in [STATE_TYPE_NEW, STATE_TYPE_OPEN]:
+        if state_type_id in (STATE_TYPE_NEW, STATE_TYPE_OPEN):
             return (1, 0, 0)
         if state_type_id == STATE_TYPE_CLOSED:
             return (0, 1, 0)
-        if state_type_id in [STATE_TYPE_PENDING_REMINDER, STATE_TYPE_PENDING_CLOSE]:
+        if state_type_id in (STATE_TYPE_PENDING_REMINDER, STATE_TYPE_PENDING_ACTION):
             return (0, 0, 1)
         return (0, 0, 0)
 
@@ -2512,7 +2508,7 @@ class ZammadMCPServer:
 
     def _collect_ticket_stats_paginated(
         self, client: ZammadClient, group: str | None
-    ) -> tuple[int, int, int, int, int, int]:
+    ) -> tuple[int, int, int, int, int, int, bool]:
         """Collect ticket statistics using pagination.
 
         Args:
@@ -2520,7 +2516,9 @@ class ZammadMCPServer:
             group: Optional group filter
 
         Returns:
-            Tuple of (total, open, closed, pending, escalated, pages) counts
+            Tuple of (total, open, closed, pending, escalated, pages, truncated) counts.
+            truncated is True when the scan stopped at a backend limit, making the
+            counts lower bounds rather than exact totals.
         """
         total_count = 0
         open_count = 0
@@ -2529,6 +2527,7 @@ class ZammadMCPServer:
         escalated_count = 0
         page = 1
         per_page = MAX_PER_PAGE
+        truncated = False
 
         while True:
             tickets = client.search_tickets(group=group, page=page, per_page=per_page)
@@ -2545,7 +2544,20 @@ class ZammadMCPServer:
 
             page += 1
 
+            # A group filter routes through the search endpoint, which stops returning
+            # results at SEARCH_RESULT_CAP. Record that the totals are lower bounds
+            # instead of reporting the capped number as exact.
+            if group and total_count >= SEARCH_RESULT_CAP:
+                truncated = True
+                logger.warning(
+                    "Group '%s' reached the search result cap (%s); counts are lower bounds, not exact totals",
+                    group,
+                    SEARCH_RESULT_CAP,
+                )
+                break
+
             if page > MAX_PAGES_FOR_TICKET_SCAN:
+                truncated = True
                 logger.warning(
                     "Reached maximum page limit (%s pages), processed %s tickets - some tickets may not be counted",
                     MAX_PAGES_FOR_TICKET_SCAN,
@@ -2553,7 +2565,7 @@ class ZammadMCPServer:
                 )
                 break
 
-        return total_count, open_count, closed_count, pending_count, escalated_count, page - 1
+        return total_count, open_count, closed_count, pending_count, escalated_count, page - 1, truncated
 
     def _build_stats_result(
         self,
@@ -2564,6 +2576,7 @@ class ZammadMCPServer:
         escalated: int,
         pages: int,
         elapsed: float,
+        truncated: bool = False,
     ) -> TicketStats:
         """Build and log ticket statistics result.
 
@@ -2575,6 +2588,7 @@ class ZammadMCPServer:
             escalated: Escalated ticket count
             pages: Number of pages processed
             elapsed: Elapsed time in seconds
+            truncated: Whether the scan stopped at a backend limit
 
         Returns:
             TicketStats object
@@ -2599,6 +2613,7 @@ class ZammadMCPServer:
             escalated_count=escalated,
             avg_first_response_time=None,
             avg_resolution_time=None,
+            counts_truncated=truncated,
         )
 
     def _setup_system_tools(self) -> None:  # noqa: PLR0915
@@ -2626,7 +2641,8 @@ class ZammadMCPServer:
                     "pending_count": 78,
                     "escalated_count": 12,
                     "avg_first_response_time": null,
-                    "avg_resolution_time": null
+                    "avg_resolution_time": null,
+                    "counts_truncated": false
                 }
                 ```
 
@@ -2645,9 +2661,13 @@ class ZammadMCPServer:
             Note:
                 Uses pagination to scan tickets without loading all into memory.
                 May take several seconds for large ticket databases (>10k tickets).
-                State categorization uses state_type_id: new/open=open, closed=closed, pending=pending.
+                State categorization is by state_type_id: new(1)/open(2)=open,
+                closed(5)=closed, pending reminder(3)/pending action(4)=pending.
                 Date filtering (start_date, end_date) not yet implemented - shows warning if provided.
                 Processes up to 100,000 tickets (1000 pages x 100 per page).
+                counts_truncated is true when the scan stopped early. For a group-filtered
+                scan, every count is then a lower bound because the 10,000-result search
+                cap was reached.
             """
             start_time = time.time()
             client = self.get_client()
@@ -2658,12 +2678,12 @@ class ZammadMCPServer:
             group_filter_msg = f" for group '{params.group}'" if params.group else ""
             logger.info("Starting ticket statistics calculation%s", group_filter_msg)
 
-            total, open_count, closed, pending, escalated, pages = self._collect_ticket_stats_paginated(
+            total, open_count, closed, pending, escalated, pages, truncated = self._collect_ticket_stats_paginated(
                 client, params.group
             )
 
             return self._build_stats_result(
-                total, open_count, closed, pending, escalated, pages, time.time() - start_time
+                total, open_count, closed, pending, escalated, pages, time.time() - start_time, truncated
             )
 
         @self.mcp.tool(annotations=_read_only_annotations("List Groups"))
@@ -2750,8 +2770,8 @@ class ZammadMCPServer:
 
                 - **new** (ID: 1)
                 - **open** (ID: 2)
-                - **closed** (ID: 3)
-                - **pending reminder** (ID: 4)
+                - **pending reminder** (ID: 3)
+                - **closed** (ID: 5)
                 ```
 
                 JSON format:
@@ -2760,12 +2780,13 @@ class ZammadMCPServer:
                     "items": [
                         {"id": 1, "name": "new", "state_type_id": 1},
                         {"id": 2, "name": "open", "state_type_id": 2},
-                        {"id": 3, "name": "closed", "state_type_id": 3}
+                        {"id": 3, "name": "pending reminder", "state_type_id": 3},
+                        {"id": 5, "name": "closed", "state_type_id": 5}
                     ],
-                    "total": 3,
-                    "count": 3,
+                    "total": 4,
+                    "count": 4,
                     "page": 1,
-                    "per_page": 3,
+                    "per_page": 4,
                     "has_more": false
                 }
                 ```
@@ -2785,7 +2806,10 @@ class ZammadMCPServer:
                 Results are cached in memory for performance (cleared on server restart).
                 All states are returned in a single response (no pagination needed).
                 Use state 'name' field when creating/updating tickets, not ID.
-                State types: 1=new, 2=open, 3=closed, 4=pending reminder, 5=pending close.
+                Built-in state_type_id values are seeded and stable across
+                Zammad installations (new=1, open=2, pending reminder=3,
+                pending action=4, closed=5, merged=6); custom states may add
+                further states that reuse these type ids.
             """
             states = self._get_cached_states()
 
@@ -3075,6 +3099,7 @@ class ZammadMCPServer:
                             [
                                 f"--- {article.created_at.isoformat()} by {created_by_email} ---",
                                 _escape_article_body(article),
+                                *_format_article_attachments(article.attachments, article.id),
                                 "",
                             ]
                         )
@@ -3351,7 +3376,7 @@ class ZammadMCPServer:
         """Register all prompts with the MCP server."""
 
         @self.mcp.prompt()
-        def analyze_ticket(ticket_id: int) -> str:
+        def analyze_ticket(ticket_id: str) -> str:
             """Generate a prompt to analyze a ticket.
 
             Note: ticket_id must be the internal database ID (NOT the display number).
@@ -3370,7 +3395,7 @@ After retrieving the ticket, provide:
 Use appropriate tools to gather any additional context about the customer or organization if needed."""
 
         @self.mcp.prompt()
-        def draft_response(ticket_id: int, tone: str = "professional") -> str:
+        def draft_response(ticket_id: str, tone: str = "professional") -> str:
             """Generate a prompt to draft a response to a ticket.
 
             Note: ticket_id must be the internal database ID (NOT the display number).
