@@ -101,7 +101,7 @@ async def test_accepted_delivery_is_observable_via_tool_without_zammad_calls(
 
     async with Client(server_with_secret.mcp) as client:
         zammad_client.reset_mock()
-        result = await client.call_tool("zammad_list_events", {"params": {"limit": 10}})
+        result = await client.call_tool("zammad_list_events", {"limit": 10})
 
     assert zammad_client.method_calls == []
     data = result.structured_content
@@ -123,7 +123,7 @@ async def test_list_events_tool_filters_since_and_limit(server_with_secret: Zamm
         store.append(WebhookEvent(event_type="ticket.update", ticket_id=seq, received_at=base.replace(minute=seq)))
 
     async with Client(server_with_secret.mcp) as client:
-        result = await client.call_tool("zammad_list_events", {"params": {"since": "2026-09-08T12:01:00Z", "limit": 1}})
+        result = await client.call_tool("zammad_list_events", {"since": "2026-09-08T12:01:00Z", "limit": 1})
 
     data = result.structured_content
     assert [e["ticket_id"] for e in data["events"]] == [2]
@@ -144,7 +144,7 @@ async def test_list_events_cursor_pages_backlog_larger_than_limit_to_completion(
     params: dict = {"limit": 2}
     async with Client(server_with_secret.mcp) as client:
         for _ in range(5):
-            data = (await client.call_tool("zammad_list_events", {"params": params})).structured_content
+            data = (await client.call_tool("zammad_list_events", params)).structured_content
             if not data["events"]:
                 break
             seen.extend(e["ticket_id"] for e in data["events"])
@@ -156,7 +156,7 @@ async def test_list_events_cursor_pages_backlog_larger_than_limit_to_completion(
 @pytest.mark.asyncio
 async def test_list_events_tool_rejects_invalid_limit(server_with_secret: ZammadMCPServer) -> None:
     async with Client(server_with_secret.mcp) as client:
-        result = await client.call_tool("zammad_list_events", {"params": {"limit": 0}}, raise_on_error=False)
+        result = await client.call_tool("zammad_list_events", {"limit": 0}, raise_on_error=False)
 
     assert result.is_error
 
@@ -164,7 +164,7 @@ async def test_list_events_tool_rejects_invalid_limit(server_with_secret: Zammad
 @pytest.mark.asyncio
 async def test_empty_store_returns_null_cursor(server_with_secret: ZammadMCPServer) -> None:
     async with Client(server_with_secret.mcp) as client:
-        result = await client.call_tool("zammad_list_events", {"params": {}})
+        result = await client.call_tool("zammad_list_events", {})
 
     assert result.structured_content == {
         "events": [],

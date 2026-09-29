@@ -38,7 +38,7 @@ def test_merge_tool_returns_target_ticket(merge_tool) -> None:
     client, tool = merge_tool
     client.merge_tickets.return_value = {"result": "success", "target_ticket": TARGET_TICKET}
 
-    result = tool(TicketMergeParams(source_ticket_id=10, target_ticket_number="20002"))
+    result = tool(**TicketMergeParams(source_ticket_id=10, target_ticket_number="20002").model_dump())
 
     assert isinstance(result, TicketMergeResult)
     assert result.result == "success"
@@ -52,7 +52,7 @@ def test_merge_tool_passes_target_id(merge_tool) -> None:
     client, tool = merge_tool
     client.merge_tickets.return_value = {"result": "success", "target_ticket": TARGET_TICKET}
 
-    tool(TicketMergeParams(source_ticket_id=10, target_ticket_id=20))
+    tool(**TicketMergeParams(source_ticket_id=10, target_ticket_id=20).model_dump())
 
     client.merge_tickets.assert_called_once_with(source_ticket_id=10, target_ticket_number=None, target_ticket_id=20)
 
@@ -62,7 +62,7 @@ def test_merge_tool_surfaces_client_failure(merge_tool) -> None:
     client.merge_tickets.side_effect = ValueError("Zammad refused to merge")
 
     with pytest.raises(ValueError, match="refused to merge"):
-        tool(TicketMergeParams(source_ticket_id=10, target_ticket_number="20002"))
+        tool(**TicketMergeParams(source_ticket_id=10, target_ticket_number="20002").model_dump())
 
 
 @pytest.mark.asyncio

@@ -214,7 +214,7 @@ def test_webhook_delivery_is_retrievable_through_mcp(http_server) -> None:
 
     async def list_events() -> dict:
         async with Client(f"{http_server}/mcp") as client:
-            result = await client.call_tool("zammad_list_events", {"params": {"limit": 10}})
+            result = await client.call_tool("zammad_list_events", {"limit": 10})
         return result.structured_content
 
     data = asyncio.run(list_events())

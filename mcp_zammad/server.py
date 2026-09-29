@@ -1020,6 +1020,7 @@ class ZammadMCPServer:
         """Register tools that read retained webhook events."""
 
         @self.mcp.tool(annotations=_read_only_annotations("List Webhook Events"))
+        @flat_params(ListEventsParams)
         def zammad_list_events(params: ListEventsParams) -> ListEventsResult:
             """List Zammad ticket events received via webhook, oldest first.
 
@@ -1605,6 +1606,7 @@ class ZammadMCPServer:
             )
 
         @self.mcp.tool(annotations=_destructive_write_annotations("Merge Tickets"))
+        @flat_params(TicketMergeParams)
         def zammad_merge_tickets(params: TicketMergeParams) -> TicketMergeResult:
             """Merge a source ticket into a target ticket.
 
@@ -1718,6 +1720,7 @@ class ZammadMCPServer:
             return TagOperationResult(**result)
 
         @self.mcp.tool(annotations=_destructive_write_annotations("Bulk Update Tickets"))
+        @flat_params(BulkTicketUpdateParams)
         def zammad_bulk_update_tickets(params: BulkTicketUpdateParams) -> BulkUpdateResult:
             """Apply the same changes to up to 100 tickets in one call (update, assign, tag, close).
 

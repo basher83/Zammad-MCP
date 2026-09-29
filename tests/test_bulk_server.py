@@ -5,7 +5,6 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
-from mcp_zammad.models import BulkTicketUpdateParams
 from mcp_zammad.server import ZammadMCPServer
 
 
@@ -19,7 +18,7 @@ def bulk_server() -> ZammadMCPServer:
 
 async def _run_bulk(server: ZammadMCPServer, **kwargs: Any) -> Any:
     tool = await server.mcp.get_tool("zammad_bulk_update_tickets")
-    return tool.fn(BulkTicketUpdateParams(**kwargs))
+    return tool.fn(**kwargs)
 
 
 @pytest.mark.asyncio
