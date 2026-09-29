@@ -218,24 +218,18 @@ class ZammadClient:
         """Search tickets with various filters."""
         filters = {"page": page, "per_page": per_page, "expand": "true"}
 
-        # Build search query
-        search_parts = []
-        if query:
-            search_parts.append(query)
-        if state:
-            search_parts.append(f"state.name:{state}")
-        if priority:
-            search_parts.append(f"priority.name:{priority}")
-        if group:
-            search_parts.append(f"group.name:{group}")
-        if owner:
-            search_parts.append(f"owner.login:{owner}")
-        if customer:
-            search_parts.append(f"customer.email:{customer}")
-        if created_after:
-            search_parts.append(f"created_at:>={created_after}")
-        if created_before:
-            search_parts.append(f"created_at:<={created_before}")
+        # Build search query: each filter contributes one clause when set.
+        clauses = [
+            (query, "{}"),
+            (state, "state.name:{}"),
+            (priority, "priority.name:{}"),
+            (group, "group.name:{}"),
+            (owner, "owner.login:{}"),
+            (customer, "customer.email:{}"),
+            (created_after, "created_at:>={}"),
+            (created_before, "created_at:<={}"),
+        ]
+        search_parts = [template.format(value) for value, template in clauses if value]
 
         if search_parts:
             search_query = " AND ".join(search_parts)
