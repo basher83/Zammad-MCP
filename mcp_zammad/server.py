@@ -7,10 +7,11 @@ import logging
 import os
 import re
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, NoReturn, Protocol, TypeVar
+from typing import Any, NoReturn, Protocol, TextIO, TypeVar
 
 import requests  # type: ignore[import-untyped]
 from dotenv import load_dotenv
@@ -945,6 +946,118 @@ def _fetch_export_batch(
     return client.list_tickets(page=page, per_page=params.per_page)
 
 
+@dataclass
+class _ExportProgress:
+    """Running totals for a ticket export."""
+
+    exported: int = 0
+    error_count: int = 0
+    errors: list[str] = field(default_factory=list)
+
+    def record_error(self, ticket_id: Any, exc: Exception) -> None:
+        """Count a per-ticket failure, keeping at most MAX_EXPORT_ERRORS_LOGGED messages.
+
+        Args:
+            ticket_id: ID of the ticket that failed.
+            exc: The exception raised while exporting it.
+        """
+        self.error_count += 1
+        if len(self.errors) < MAX_EXPORT_ERRORS_LOGGED:
+            self.errors.append(f"Ticket {ticket_id}: {type(exc).__name__} - {exc}")
+
+    def limit_reached(self, max_tickets: int | None) -> bool:
+        """Return whether the optional max_tickets cap has been reached.
+
+        Args:
+            max_tickets: Optional. Export cap; None or 0 means unlimited.
+
+        Returns:
+            bool: True when the cap is set and met.
+        """
+        return bool(max_tickets and self.exported >= max_tickets)
+
+
+def _iter_export_batches(
+    client: "ZammadClient", params: "TicketExportParams", use_search: bool
+) -> Iterator[list[dict[str, Any]]]:
+    """Yield non-empty ticket batches from resume_from_page up to MAX_PAGES_FOR_TICKET_SCAN.
+
+    Args:
+        client: Zammad client used to fetch pages.
+        params: Export parameters (filters, page size, resume page).
+        use_search: Whether to use the search endpoint instead of the list endpoint.
+
+    Returns:
+        Iterator[list[dict[str, Any]]]: Batches in page order; stops at the first empty page.
+    """
+    for page in range(params.resume_from_page, MAX_PAGES_FOR_TICKET_SCAN + 1):
+        batch = _fetch_export_batch(client, params, use_search, page)
+        if not batch:
+            return
+        yield batch
+
+
+def _fetch_export_record(
+    client: "ZammadClient", params: "TicketExportParams", ticket_summary: dict[str, Any]
+) -> dict[str, Any]:
+    """Fetch one ticket's details (and optional tags) and build its export record.
+
+    Args:
+        client: Zammad client used for the detail and tag requests.
+        params: Export parameters (delay, tag and internal-article options).
+        ticket_summary: Batch entry for the ticket; must carry an ``id``.
+
+    Returns:
+        dict[str, Any]: The JSONL export record.
+    """
+    ticket_id = ticket_summary["id"]
+    time.sleep(params.delay_seconds)
+    ticket_data = client.get_ticket(ticket_id=ticket_id, include_articles=True, article_limit=-1)
+    tags = client.get_ticket_tags(ticket_id) if params.include_tags else None
+    return _build_export_record(ticket_data, params.include_internal_articles, summary=ticket_summary, tags=tags)
+
+
+def _write_export_line(f: TextIO, record: dict[str, Any]) -> None:
+    """Append one JSON record as a line and flush so progress survives crashes.
+
+    Args:
+        f: Open text file in append mode.
+        record: Export record to serialize.
+    """
+    f.write(json.dumps(record, default=str) + "\n")
+    f.flush()
+
+
+def _export_batch(
+    client: "ZammadClient",
+    params: "TicketExportParams",
+    batch: list[dict[str, Any]],
+    f: TextIO,
+    progress: _ExportProgress,
+) -> None:
+    """Export each ticket in a batch, recording per-ticket failures without stopping.
+
+    Args:
+        client: Zammad client used for per-ticket requests.
+        params: Export parameters.
+        batch: Ticket summaries from one page.
+        f: Open output file.
+        progress: Running totals, updated in place.
+    """
+    for ticket_summary in batch:
+        ticket_id = ticket_summary.get("id")
+        if not ticket_id:
+            continue
+        try:
+            _write_export_line(f, _fetch_export_record(client, params, ticket_summary))
+        except Exception as e:
+            progress.record_error(ticket_id, e)
+            continue
+        progress.exported += 1
+        if progress.limit_reached(params.max_tickets):
+            return
+
+
 def _handle_api_error(e: Exception, context: str = "operation") -> str:
     """Format errors with actionable guidance for LLM agents.
 
@@ -1765,55 +1878,18 @@ class ZammadMCPServer:
 
             export_path = _resolve_export_path(params.output_path)
 
-            exported_count = 0
-            error_count = 0
-            errors: list[str] = []
-            page = params.resume_from_page
+            progress = _ExportProgress()
 
             with open(export_path, "a") as f:
-                while page <= MAX_PAGES_FOR_TICKET_SCAN:
-                    batch = _fetch_export_batch(client, params, use_search, page)
-                    if not batch:
+                for batch in _iter_export_batches(client, params, use_search):
+                    _export_batch(client, params, batch, f, progress)
+                    if progress.limit_reached(params.max_tickets):
                         break
-
-                    for ticket_summary in batch:
-                        ticket_id = ticket_summary.get("id")
-                        if not ticket_id:
-                            continue
-
-                        try:
-                            time.sleep(params.delay_seconds)
-                            ticket_data = client.get_ticket(
-                                ticket_id=ticket_id, include_articles=True, article_limit=-1
-                            )
-                            ticket_tags: list[str] | None = None
-                            if params.include_tags:
-                                ticket_tags = client.get_ticket_tags(ticket_id)
-                            record = _build_export_record(
-                                ticket_data,
-                                params.include_internal_articles,
-                                summary=ticket_summary,
-                                tags=ticket_tags,
-                            )
-                            f.write(json.dumps(record, default=str) + "\n")
-                            f.flush()
-                            exported_count += 1
-
-                            if params.max_tickets and exported_count >= params.max_tickets:
-                                break
-
-                        except Exception as e:
-                            error_count += 1
-                            if len(errors) < MAX_EXPORT_ERRORS_LOGGED:
-                                errors.append(f"Ticket {ticket_id}: {type(e).__name__} - {e}")
-
-                    if params.max_tickets and exported_count >= params.max_tickets:
-                        break
-
-                    page += 1
 
             elapsed = time.monotonic() - start_time
-            return _format_export_summary(params, exported_count, error_count, errors, elapsed, use_search, export_path)
+            return _format_export_summary(
+                params, progress.exported, progress.error_count, progress.errors, elapsed, use_search, export_path
+            )
 
     def _setup_user_org_tools(self) -> None:
         """Register user and organization tools."""
