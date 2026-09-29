@@ -3,12 +3,15 @@
 import os
 import pathlib
 from collections.abc import Generator
+from datetime import date, datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
 import requests
+from pydantic import ValidationError
 
-from mcp_zammad.client import ZammadClient
+from mcp_zammad.client import REQUEST_TIMEOUT_SECONDS, ZammadClient
+from mcp_zammad.models import TicketSearchParams
 
 # Test constants to avoid magic numbers
 EXPECTED_TWO_RESULTS = 2
@@ -72,6 +75,23 @@ class TestZammadClientMethods:
         assert result["title"] == "Updated Title"
         mock_instance.ticket.update.assert_called_once_with(1, {"title": "Updated Title", "state": "open"})
 
+    def test_update_ticket_with_customer(self, mock_zammad_api: Mock) -> None:
+        """Test update_ticket method with customer reassignment."""
+        mock_instance = Mock()
+        mock_instance.ticket.update.return_value = {
+            "id": 1,
+            "title": "Updated Title",
+            "customer": {"email": "new@example.com"},
+        }
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.update_ticket(1, customer="new@example.com")
+
+        assert result["customer"]["email"] == "new@example.com"
+        mock_instance.ticket.update.assert_called_once_with(1, {"customer": "new@example.com"})
+
     def test_update_ticket_with_time_unit(self, mock_zammad_api: Mock) -> None:
         """Test update_ticket method with time_unit for time accounting."""
         mock_instance = Mock()
@@ -97,6 +117,33 @@ class TestZammadClientMethods:
 
         call_args = mock_instance.ticket.update.call_args[0][1]
         assert "time_unit" not in call_args
+
+    def test_update_ticket_serializes_pending_time(self, mock_zammad_api: Mock) -> None:
+        """Test that a datetime pending_time is serialized to an ISO 8601 string."""
+        mock_instance = Mock()
+        mock_instance.ticket.update.return_value = {"id": 1}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        client.update_ticket(1, state="pending reminder", pending_time=datetime(2026, 7, 1, 8, 0, tzinfo=timezone.utc))
+
+        call_args = mock_instance.ticket.update.call_args[0][1]
+        assert call_args["pending_time"] == "2026-07-01T08:00:00+00:00"
+        assert call_args["state"] == "pending reminder"
+
+    def test_update_ticket_passes_pending_time_string_through(self, mock_zammad_api: Mock) -> None:
+        """Test that a string pending_time is forwarded unchanged."""
+        mock_instance = Mock()
+        mock_instance.ticket.update.return_value = {"id": 1}
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        client.update_ticket(1, state="pending reminder", pending_time="2026-07-01T08:00:00Z")
+
+        call_args = mock_instance.ticket.update.call_args[0][1]
+        assert call_args["pending_time"] == "2026-07-01T08:00:00Z"
 
     @pytest.mark.parametrize("time_unit", [0, -5])
     def test_update_ticket_rejects_invalid_time_unit(self, mock_zammad_api: Mock, time_unit: float) -> None:
@@ -320,10 +367,24 @@ class TestZammadClientMethods:
         assert len(result) == 1
         mock_instance.ticket.all.assert_called_once_with(filters={"page": 1, "per_page": 25, "expand": "true"})
 
+    @staticmethod
+    def _mock_ticket_response(mock_instance: Mock, payload: dict, *, ok: bool = True, text: str = "") -> Mock:
+        """Point the client's session at a canned GET /tickets/{id} response."""
+        # zammad_py normalises its base url to always end with "/".
+        mock_instance.url = "https://test.zammad.com/api/v1/"
+        response = Mock()
+        response.ok = ok
+        response.text = text
+        response.json.return_value = payload
+        response.status_code = 200 if ok else 404
+        # The client wraps this session in ResilientSession, so every verb arrives as request(METHOD, url).
+        mock_instance.session.request.return_value = response
+        return response
+
     def test_get_ticket_with_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with article pagination."""
         mock_instance = Mock()
-        mock_instance.ticket.find.return_value = {"id": 1, "title": "Test Ticket"}
+        self._mock_ticket_response(mock_instance, {"id": 1, "title": "Test Ticket"})
         mock_instance.ticket.articles.return_value = [
             {"id": 1, "body": "Article 1"},
             {"id": 2, "body": "Article 2"},
@@ -346,7 +407,7 @@ class TestZammadClientMethods:
     def test_get_ticket_all_articles(self, mock_zammad_api: Mock) -> None:
         """Test get_ticket with all articles."""
         mock_instance = Mock()
-        mock_instance.ticket.find.return_value = {"id": 1, "title": "Test Ticket"}
+        self._mock_ticket_response(mock_instance, {"id": 1, "title": "Test Ticket"})
         mock_instance.ticket.articles.return_value = [{"id": 1, "body": "Article 1"}, {"id": 2, "body": "Article 2"}]
         mock_zammad_api.return_value = mock_instance
 
@@ -356,6 +417,84 @@ class TestZammadClientMethods:
         result = client.get_ticket(1, include_articles=True, article_limit=-1)
 
         assert len(result["articles"]) == 2
+
+    def test_get_ticket_requests_expanded_fields(self, mock_zammad_api: Mock) -> None:
+        """get_ticket must ask for expand=true, otherwise names come back as None.
+
+        Regression test: without the flag Zammad only returns ``*_id`` fields and
+        the server renders State/Priority/Group/Owner/Customer as "Unknown".
+        """
+        mock_instance = Mock()
+        self._mock_ticket_response(
+            mock_instance,
+            {
+                "id": 1,
+                "title": "Test Ticket",
+                "state_id": 2,
+                "state": "open",
+                "priority_id": 3,
+                "priority": "3 high",
+                "group": "Support",
+            },
+        )
+        transport = mock_instance.session  # captured before the client wraps it in ResilientSession
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        result = client.get_ticket(1, include_articles=False)
+
+        transport.request.assert_called_once_with(
+            "GET",
+            "https://test.zammad.com/api/v1/tickets/1",
+            params={"expand": "true"},
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        # The literal string "true" matters: requests serializes bool True as
+        # "True", which Zammad ignores because the parameter is case-sensitive.
+        _, kwargs = transport.request.call_args
+        assert kwargs["params"]["expand"] == "true"
+        assert result["state"] == "open"
+        assert result["priority"] == "3 high"
+        assert result["group"] == "Support"
+
+    def test_get_ticket_not_found_raises_with_zammad_message(self, mock_zammad_api: Mock) -> None:
+        """A failed lookup must surface Zammad's body so the server can map it.
+
+        The server turns "Couldn't find Ticket ..." into TicketIdGuidanceError,
+        so the response text has to survive.
+        """
+        mock_instance = Mock()
+        self._mock_ticket_response(
+            mock_instance,
+            {},
+            ok=False,
+            text='{"error":"Couldn\'t find Ticket with \'id\'=999"}',
+        )
+        mock_zammad_api.return_value = mock_instance
+
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+
+        with pytest.raises(requests.HTTPError, match="Couldn't find Ticket"):
+            client.get_ticket(999)
+
+    @pytest.mark.parametrize("base_url", ["https://test.zammad.com/api/v1", "https://test.zammad.com/api/v1/"])
+    def test_get_ticket_url_tolerates_trailing_slash(self, base_url: str) -> None:
+        """A trailing slash on ZAMMAD_URL must not produce ``/api/v1//tickets/1``.
+
+        Uses the real ZammadAPI (which normalises its base url) and only stubs
+        the session, so the URL join is exercised for real.
+        """
+        client = ZammadClient(url=base_url, http_token="test-token")
+        session = Mock()
+        session.get.return_value = Mock(ok=True, json=Mock(return_value={"id": 1}))
+        client.api.session = session
+
+        client.get_ticket(1, include_articles=False)
+
+        session.get.assert_called_once_with(
+            "https://test.zammad.com/api/v1/tickets/1", params={"expand": "true"}, timeout=REQUEST_TIMEOUT_SECONDS
+        )
 
     def test_create_ticket(self, mock_zammad_api: Mock) -> None:
         """Test create_ticket method."""
@@ -610,7 +749,9 @@ class TestZammadClientMethods:
             {"id": 3, "name": "feature-request", "count": 23},
         ]
         mock_response.raise_for_status = Mock()
-        mock_instance.session.get.return_value = mock_response
+        mock_response.status_code = 200
+        transport = mock_instance.session
+        transport.request.return_value = mock_response
         mock_zammad_api.return_value = mock_instance
 
         client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
@@ -622,7 +763,7 @@ class TestZammadClientMethods:
         assert result[0]["count"] == 15
         assert result[1]["name"] == "billing"
         assert result[2]["name"] == "feature-request"
-        mock_instance.session.get.assert_called_once_with("https://test.zammad.com/api/v1/tag_list")
+        transport.request.assert_called_once_with("GET", "https://test.zammad.com/api/v1/tag_list")
 
     def test_list_tags_empty(self, mock_zammad_api: Mock) -> None:
         """Test list_tags returns empty list when no tags defined."""
@@ -630,7 +771,9 @@ class TestZammadClientMethods:
         mock_response = Mock()
         mock_response.json.return_value = []
         mock_response.raise_for_status = Mock()
-        mock_instance.session.get.return_value = mock_response
+        mock_response.status_code = 200
+        transport = mock_instance.session
+        transport.request.return_value = mock_response
         mock_zammad_api.return_value = mock_instance
 
         client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
@@ -638,17 +781,86 @@ class TestZammadClientMethods:
         result = client.list_tags()
 
         assert result == []
-        mock_instance.session.get.assert_called_once()
+        transport.request.assert_called_once()
 
     def test_list_tags_permission_denied(self, mock_zammad_api: Mock) -> None:
         """Test list_tags raises error when lacking admin.tag permission."""
         mock_instance = Mock()
         mock_response = Mock()
         mock_response.raise_for_status.side_effect = requests.HTTPError("403 Forbidden")
-        mock_instance.session.get.return_value = mock_response
+        mock_response.status_code = 403
+        mock_instance.session.request.return_value = mock_response
         mock_zammad_api.return_value = mock_instance
 
         client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
 
         with pytest.raises(requests.HTTPError, match="403"):
             client.list_tags()
+
+
+class TestSearchTicketsDateFilters:
+    """Creation-date bounds must reach the Zammad search query."""
+
+    @pytest.fixture
+    def mock_zammad_api(self) -> Generator[Mock, None, None]:
+        """Mock the underlying zammad_py.ZammadAPI."""
+        with patch("mcp_zammad.client.ZammadAPI") as mock_api:
+            yield mock_api
+
+    def _client(self, mock_zammad_api: Mock) -> tuple[ZammadClient, Mock]:
+        mock_instance = Mock()
+        mock_instance.ticket.search.return_value = []
+        mock_instance.ticket.all.return_value = []
+        mock_zammad_api.return_value = mock_instance
+        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
+        return client, mock_instance
+
+    def test_created_after_in_query(self, mock_zammad_api: Mock) -> None:
+        """created_after becomes a >= bound."""
+        client, mock_instance = self._client(mock_zammad_api)
+        client.search_tickets(created_after=date(2024, 1, 1))
+        assert mock_instance.ticket.search.call_args[0][0] == "created_at:>=2024-01-01"
+
+    def test_created_before_in_query(self, mock_zammad_api: Mock) -> None:
+        """created_before becomes a <= bound."""
+        client, mock_instance = self._client(mock_zammad_api)
+        client.search_tickets(created_before=date(2024, 12, 31))
+        assert mock_instance.ticket.search.call_args[0][0] == "created_at:<=2024-12-31"
+
+    def test_both_bounds_combine(self, mock_zammad_api: Mock) -> None:
+        """Both bounds AND together."""
+        client, mock_instance = self._client(mock_zammad_api)
+        client.search_tickets(created_after=date(2024, 1, 1), created_before=date(2024, 12, 31))
+        assert mock_instance.ticket.search.call_args[0][0] == "created_at:>=2024-01-01 AND created_at:<=2024-12-31"
+
+    def test_combines_with_other_filters(self, mock_zammad_api: Mock) -> None:
+        """Date bounds compose with existing filters."""
+        client, mock_instance = self._client(mock_zammad_api)
+        client.search_tickets(group="Support", created_after=date(2024, 1, 1))
+        assert mock_instance.ticket.search.call_args[0][0] == "group.name:Support AND created_at:>=2024-01-01"
+
+    def test_no_dates_leaves_query_untouched(self, mock_zammad_api: Mock) -> None:
+        """Without dates the unfiltered path still uses the list endpoint."""
+        client, mock_instance = self._client(mock_zammad_api)
+        client.search_tickets()
+        mock_instance.ticket.search.assert_not_called()
+        mock_instance.ticket.all.assert_called_once()
+
+
+class TestTicketSearchParamsDateValidation:
+    """The search params model validates the date range."""
+
+    def test_inverted_range_rejected(self) -> None:
+        """created_after later than created_before is a validation error."""
+        with pytest.raises(ValidationError, match="created_after must not be later"):
+            TicketSearchParams(created_after=date(2024, 12, 31), created_before=date(2024, 1, 1))
+
+    def test_equal_dates_allowed(self) -> None:
+        """A single-day window is valid."""
+        params = TicketSearchParams(created_after=date(2024, 6, 1), created_before=date(2024, 6, 1))
+        assert params.created_after == params.created_before
+
+    def test_string_dates_parsed(self) -> None:
+        """ISO strings coerce to dates."""
+        params = TicketSearchParams(created_after="2024-01-01")
+        assert params.created_after == date(2024, 1, 1)

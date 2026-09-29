@@ -14,18 +14,20 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
 
 - **Ticket Management**
   - `zammad_search_tickets` - Search tickets with multiple filters
-  - `zammad_get_ticket` - Get detailed ticket information with articles (supports pagination)
+  - `zammad_get_ticket` - Get detailed ticket information with articles (supports pagination); custom object attributes are included
   - `zammad_create_ticket` - Create new tickets
-  - `zammad_update_ticket` - Update ticket properties
+  - `zammad_update_ticket` - Update ticket properties, including custom object attributes via `custom_fields`
   - `zammad_add_article` - Add comments/notes to tickets
+  - `zammad_merge_tickets` - Merge a ticket into another (irreversible)
   - `zammad_add_ticket_tag` / `zammad_remove_ticket_tag` - Manage ticket tags
+  - `zammad_bulk_update_tickets` - Update, assign, tag, or close up to 100 tickets in one call with per-ticket failure reporting
   - `zammad_get_ticket_tags` - Get tags assigned to a specific ticket
   - `zammad_list_tags` - List all tags defined in the system (requires admin.tag permission)
+  - `zammad_export_tickets` - Export tickets with their conversation articles to a JSONL file on the server host (requires `ZAMMAD_EXPORT_DIR`; see [Ticket Export](#ticket-export-optional))
 
 - **Attachment Support**
   - `zammad_get_article_attachments` - List attachments for a ticket article
   - `zammad_download_attachment` - Download attachment content (base64-encoded)
-  - `zammad_delete_attachment` - Delete attachments from ticket articles
 
 - **User & Organization Management**
   - `zammad_create_user` - Create a Zammad user
@@ -38,6 +40,9 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_list_ticket_states` - Get all ticket states (cached for performance)
   - `zammad_list_ticket_priorities` - Get all priority levels (cached for performance)
   - `zammad_get_ticket_stats` - Get ticket statistics (optimized with pagination)
+
+- **Webhook Events** (HTTP transport only)
+  - `zammad_list_events` - Poll ticket events delivered by Zammad webhooks (see [Webhook Events](#webhook-events-http-transport-only))
 
 ### Resources
 
@@ -176,6 +181,19 @@ The server requires Zammad API credentials. Use a `.env` file:
    # Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
    # LOG_LEVEL=INFO
 
+   # Optional: Audit logging (see "Audit Logging" below)
+   # ZAMMAD_AUDIT_LOG_ENABLED=true
+   # ZAMMAD_AUDIT_LOG_DESTINATION=stderr  # stderr (default), file, or syslog
+   # ZAMMAD_AUDIT_LOG_FILE=/var/log/mcp-zammad/audit.jsonl  # required for file
+   # Optional: Resilience (see "Rate Limiting" under Troubleshooting)
+   # ZAMMAD_RATE_LIMIT_ENABLED=false
+   # ZAMMAD_RATE_LIMIT_REQUESTS=60
+   # ZAMMAD_RATE_LIMIT_WINDOW=60
+   # ZAMMAD_MAX_RETRIES=3
+   # ZAMMAD_RETRY_BACKOFF_BASE=1.0
+   # ZAMMAD_CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+   # ZAMMAD_CIRCUIT_BREAKER_RECOVERY_TIMEOUT=30
+
    # Optional: Transport Configuration
    # MCP_TRANSPORT=stdio  # Transport type: stdio (default) or http
    # MCP_HOST=127.0.0.1   # Host address for HTTP transport
@@ -191,6 +209,53 @@ The server requires Zammad API credentials. Use a `.env` file:
 | `MCP_TRANSPORT` | `stdio` | Transport type: `stdio` or `http` |
 | `MCP_HOST` | `127.0.0.1` | Host address for HTTP transport |
 | `MCP_PORT` | - | Port number for HTTP transport (required if `MCP_TRANSPORT=http`) |
+
+### Audit Logging (Optional)
+
+Audit logging is disabled by default. When enabled, the server writes one JSON object per line
+(JSON Lines) for every MCP tool call, each Zammad connection attempt at startup, and each URL
+security check that flags a local or private-network Zammad host.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZAMMAD_AUDIT_LOG_ENABLED` | unset | Enable with `1`, `true`, `yes`, or `on` |
+| `ZAMMAD_AUDIT_LOG_DESTINATION` | `stderr` | `stderr`, `file`, or `syslog` |
+| `ZAMMAD_AUDIT_LOG_FILE` | - | Append target, required if destination is `file` |
+
+Example record:
+
+```json
+{"timestamp": "2026-09-08T12:00:00+00:00", "event_type": "tool_call", "action": "zammad_get_ticket", "success": true, "duration_ms": 12.5, "details": {}}
+```
+
+Event types are `tool_call`, `authentication`, and `security_validation`. Records never contain
+tool arguments, Zammad responses, credentials, or full URLs; failures are recorded by exception
+type only, and any `details` key containing `password`, `token`, `secret`, `authorization`,
+`credential`, or `data` is redacted. Audit output never uses stdout, so the default `stderr`
+destination is safe for the stdio transport. Invalid enabled configuration (unknown destination or
+missing file path) fails at startup.
+
+### Ticket Export (Optional)
+
+`zammad_export_tickets` is read-only against Zammad but writes a JSON Lines file on the host running
+the MCP server: one JSON object per ticket, with its title, group, state, priority, timestamps,
+optional tags, and conversation articles converted to plain text. It is intended for bulk exports
+that would exceed MCP response-size limits. Without filters it pages through the list endpoint (no
+result cap); with `query`, `group`, `state`, `created_after`, or `created_before` it uses the search
+endpoint, which Zammad caps at 10,000 results. Internal articles are excluded unless
+`include_internal_articles` is set, and tags cost one extra request per ticket when `include_tags`
+is set.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZAMMAD_EXPORT_DIR` | unset | Directory exports are confined to. Export is disabled until it is set to an existing directory |
+
+Filesystem confinement: `output_path` must end in `.jsonl`. Relative paths are resolved inside
+`ZAMMAD_EXPORT_DIR`; absolute paths are accepted only if they resolve inside it. Symlinks are
+resolved before the containment check, so `..` traversal or a symlink pointing outside the directory
+is rejected. The file is opened in append mode and flushed per ticket, so an interrupted export can
+be continued with `resume_from_page`. Per-ticket failures are counted and reported in the summary
+without stopping the export.
 
 **Important**: Keep your `.env` file out of version control (already in `.gitignore`).
 
@@ -381,6 +446,38 @@ Configure your MCP client to use HTTP transport:
 4. **Firewall**: Restrict access to trusted networks
 5. **Host/Origin Validation**: Configure this at the authenticated proxy; the server does not add it automatically
 
+### Webhook Events (HTTP Transport Only)
+
+Instead of repeatedly searching for changed tickets, Zammad can push ticket events to the server, and MCP clients poll
+them with `zammad_list_events`. This needs `MCP_TRANSPORT=http`; stdio mode has no inbound listener.
+
+1. **Configure a secret** (the endpoint answers `503` until it is set):
+
+   ```bash
+   export ZAMMAD_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+   ```
+
+2. **Expose `POST /webhooks/zammad`** to your Zammad instance, behind TLS (reverse proxy). The signature proves the
+   payload came from Zammad but does not encrypt it.
+
+3. **Create the webhook in Zammad** (admin only): *Manage → Webhooks → New Webhook*
+   - Endpoint: `https://your-mcp-host/webhooks/zammad`
+   - HMAC SHA1 Signature Token: the same value as `ZAMMAD_WEBHOOK_SECRET`
+   - Keep the default JSON payload (the server reads `ticket.id`, `ticket.number`, `ticket.article_count`,
+     `ticket.updated_at`, and `article.id`)
+
+4. **Create a trigger** (*Manage → Triggers → New Trigger*) that fires on the ticket actions you care about and executes
+   the webhook.
+
+The server maps deliveries to `ticket.create` (first article), `ticket.article.create` (later articles), or
+`ticket.update` (no article in payload). Invalid or missing `X-Hub-Signature` headers return `401`; non-ticket or
+malformed payloads return `400`. Only identifiers and timestamps are retained — never article bodies.
+
+Retention is process-local and bounded (1000 events, oldest evicted first) and is lost on restart. Poll with
+`zammad_list_events`, which returns the oldest events after `since` first (up to `limit`); pass the returned
+`next_since` as `since` on the next call and repeat until `events` is empty, then fetch details with
+`zammad_get_ticket`.
+
 ## Examples
 
 ### Search for Open Tickets
@@ -404,7 +501,7 @@ Use zammad_create_ticket with:
 ```plaintext
 1. Use zammad_get_ticket with ticket_id=123 to see the full conversation
 2. Use zammad_add_article to add your response
-3. Use zammad_update_ticket to change state to "pending reminder"
+3. Use zammad_update_ticket to change state to "pending reminder" with a pending_time (e.g. "2026-07-01T08:00:00Z")
 ```
 
 ### Analyze Escalated Tickets
@@ -428,14 +525,17 @@ Use zammad_add_article with attachments parameter:
   ]
 ```
 
-### Delete an Attachment
+### Merge Duplicate Tickets
+
+Useful for collapsing recurring auto-generated tickets (cron failures, monitoring noise) into one incident. The source ticket's articles move to the target and the source is closed as "merged". This cannot be undone.
 
 ```plaintext
-Use zammad_delete_attachment with:
-- ticket_id: 123
-- article_id: 456
-- attachment_id: 789
+Use zammad_merge_tickets with:
+- source_ticket_id: 123          # internal ID of the ticket to merge away
+- target_ticket_number: "20002"  # display number of the surviving ticket
 ```
+
+`target_ticket_id` may be given instead of `target_ticket_number`, but not both.
 
 ## Development
 
@@ -553,11 +653,27 @@ To generate an API token in Zammad:
 
 ### Rate Limiting
 
-The server respects Zammad's rate limits. If you hit rate limits:
+The client wraps every Zammad request with retries, an optional client-side throttle, and a circuit breaker.
 
-- Reduce request frequency
-- Paginate large result sets
-- Cache frequently accessed data
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ZAMMAD_RATE_LIMIT_ENABLED` | `false` | Opt in to client-side throttling |
+| `ZAMMAD_RATE_LIMIT_REQUESTS` | `60` | Max requests per window (>= 1) |
+| `ZAMMAD_RATE_LIMIT_WINDOW` | `60` | Window length in seconds (> 0) |
+| `ZAMMAD_MAX_RETRIES` | `3` | Retries for safe reads; `0` disables |
+| `ZAMMAD_RETRY_BACKOFF_BASE` | `1.0` | Backoff seconds: `base * 2^attempt` |
+| `ZAMMAD_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Consecutive failures before failing fast |
+| `ZAMMAD_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `30` | Seconds before requests are allowed again; one more failure re-opens the circuit |
+
+Behavior to be aware of:
+
+- Only `GET`/`HEAD`/`OPTIONS` are retried, on HTTP 429/500/502/503/504, connection errors, and timeouts.
+  Writes (`POST`/`PUT`/`PATCH`/`DELETE`) are sent exactly once so a slow Zammad never duplicates a ticket or article.
+- A `Retry-After` header expressed in seconds overrides the backoff (capped at 60s); other formats fall back to backoff.
+- Throttling and circuit state are per process. Multiple server instances do not share a budget.
+- When retries are exhausted or the circuit is open, tools return an `Error:` message naming the cause: a 429
+  outcome (or a throttled write) points at rate limiting and `ZAMMAD_RATE_LIMIT_ENABLED`; a 5xx outcome reports a
+  server error. Reduce request frequency, paginate, or enable throttling if you keep hitting Zammad's limits.
 
 ## Security
 
@@ -575,8 +691,9 @@ Report via [GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/s
 - ⚠️ **URL Validation**: Rejects malformed and non-HTTP(S) URLs, but does not block private-network targets ([client.py](mcp_zammad/client.py))
 - ✅ **HTML Sanitization**: Sanitizes selected HTML-bearing fields ([models.py](mcp_zammad/models.py))
 - ✅ **Upstream Authentication**: Supports API tokens, OAuth2, and username/password for Zammad ([client.py](mcp_zammad/client.py))
+- ✅ **Audit Logging**: Opt-in JSON Lines records for tool calls, connection outcomes, and URL checks with secret redaction ([audit.py](mcp_zammad/audit.py))
 - ✅ **Dependency Scanning**: CI runs pip-audit; Dependabot security alerts are enabled separately in GitHub
-- ✅ **Security Testing**: CI runs Bandit, Safety, and pip-audit ([security-scan.yml](.github/workflows/security-scan.yml))
+- ✅ **Security Testing**: CI runs Bandit and pip-audit ([security-scan.yml](.github/workflows/security-scan.yml))
 
 See [SECURITY.md](SECURITY.md) for complete documentation.
 

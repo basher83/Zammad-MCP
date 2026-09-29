@@ -25,6 +25,15 @@ def test_transport_config_http_from_env(monkeypatch) -> None:
     assert config.port == 8080
 
 
+def test_transport_config_transport_case_insensitive(monkeypatch) -> None:
+    """Test MCP_TRANSPORT accepts any case."""
+    monkeypatch.setenv("MCP_TRANSPORT", "HTTP")
+    monkeypatch.setenv("MCP_PORT", "8080")
+
+    config = TransportConfig.from_env()
+    assert config.transport == TransportType.HTTP
+
+
 def test_transport_config_stdio_from_env(monkeypatch) -> None:
     """Test stdio transport configuration from environment."""
     monkeypatch.setenv("MCP_TRANSPORT", "stdio")

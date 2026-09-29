@@ -162,6 +162,18 @@ filtered_data = {k: v for k, v in data.items()
                 if k not in ['password', 'token', 'secret']}
 ```
 
+### MCP Server Audit Logging
+
+The server can emit an opt-in audit trail (`ZAMMAD_AUDIT_LOG_ENABLED=true`) as JSON Lines to
+stderr, a file, or syslog. It records tool-call outcomes, connection outcomes, and URL security
+checks for forensic review. It is an operator-controlled aid, not a compliance certification:
+
+- Records contain no tool arguments, Zammad responses, credentials, or full URLs; failures are
+  logged by exception type only, and sensitive-looking `details` keys are redacted.
+- Records are written locally only. Retention, rotation, and access control for file and syslog
+  destinations are the operator's responsibility; treat the audit file as sensitive metadata.
+- Audit output never uses stdout, so it cannot corrupt the stdio transport.
+
 ## Zammad Instance Security
 
 ### Instance Configuration
@@ -233,8 +245,12 @@ This project employs multiple layers of security scanning:
 
 - ✅ **Dependabot**: Security alerts; automated version-update pull requests are disabled in repository configuration
 - ✅ **pip-audit**: Python package vulnerability detection (active in CI)
-- ✅ **Safety**: Known vulnerability database checks (active in CI)
 - ✅ **Renovate**: Automated dependency management governed by the shared preset
+
+Safety was removed because it introduced NLTK with an unpatched vulnerability
+([GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp)).
+The blocking pip-audit scan covers the installed application and development dependencies
+locally and in CI, without advisory exclusions.
 
 #### Container Security
 
@@ -252,7 +268,6 @@ This project employs multiple layers of security scanning:
 uv run pip-audit               # Check for vulnerable packages
 uv run bandit -r mcp_zammad    # Static security analysis
 uv run pre-commit run semgrep --all-files  # Pattern-based scanning
-uv run safety check --output json  # Vulnerability database check
 
 # Docker image scanning
 docker scout cves ghcr.io/basher83/zammad-mcp:latest
@@ -264,9 +279,6 @@ docker scout cves ghcr.io/basher83/zammad-mcp:latest
 
 For the security scanning workflow to function properly, configure the following secrets in your repository:
 
-- **`SAFETY_API_KEY`**: Optional; enables authenticated Safety scanning
-  - Sign up at <https://safetycli.com/resources/plans>
-  - Add the key to Settings → Secrets → Actions
 - **`CODACY_PROJECT_TOKEN`**: For Codacy security analysis (optional)
   - Available from your Codacy project settings
 - **`GITHUB_TOKEN`**: Automatically provided by GitHub Actions

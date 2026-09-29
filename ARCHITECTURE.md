@@ -49,7 +49,7 @@ The main server implementation using FastMCP framework.
 
 **Key Features:**
 
-- 22 tools for comprehensive Zammad operations
+- 21 tools for comprehensive Zammad operations
 - 4 resources with URI-based access pattern
 - 3 pre-configured prompts for common scenarios
 - Lifespan management for proper initialization
@@ -277,6 +277,11 @@ MCP errors include:
 - Environment variable configuration
 - No credential logging
 - HTTPS enforcement for API calls
+- Resilience layer (`mcp_zammad/resilience*.py`): `ZammadClient` replaces the `zammad_py`
+  `requests.Session` with a `ResilientSession`, so every API call passes through one boundary that
+  applies an opt-in fixed-window rate limiter, exponential backoff with `Retry-After` support for
+  safe methods only, and a closed/open/half-open circuit breaker. State is process-local; the clock
+  and sleeper are injected so behavior is deterministic under test.
 
 ### Needed Improvements
 
@@ -284,11 +289,6 @@ MCP errors include:
    - URL validation to prevent SSRF
    - Input sanitization for user data
    - Parameter bounds checking
-
-1. **Rate Limiting**
-   - Client-side rate limiting
-   - Exponential backoff
-   - Circuit breaker pattern
 
 1. **Audit Logging**
    - Operation logging

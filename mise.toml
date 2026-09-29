@@ -13,12 +13,12 @@ truncate = true
 [tools]
 python = "3.13.14"
 eza = "0.23.5"
-fd = "10.4.2"
-rg = "15.1.0"
-git-cliff = "2.13.1"
+fd = "10.5.0"
+rg = "15.2.0"
+git-cliff = "2.14.2"
 shellcheck = "0.11.0"
-uv = "0.11.28"
-prek = "0.4.8"
+uv = "0.12.20"
+prek = "0.5.4"
 "packslip:github.com/jdx/hk" = "latest"
 
 [env]
@@ -102,6 +102,15 @@ run = "uv lock --upgrade"
 [tasks.python-install]
 description = "Install Python dependencies"
 run = "uv sync"
+
+# === Validation tasks (non-mutating; same gates CI runs) ===
+[tasks.validate]
+description = "Fast developer gates: lint + affected tests"
+run = "./scripts/validate.sh dev"
+
+[tasks.validate-release]
+description = "Release gates: lint + full coverage suite + build"
+run = "./scripts/validate.sh release"
 
 # === Hooks tasks ===
 [tasks.hooks-install]

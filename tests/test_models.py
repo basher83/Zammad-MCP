@@ -4,15 +4,50 @@ import pytest
 from pydantic import ValidationError
 
 from mcp_zammad.models import (
+    Article,
     ArticleCreate,
     AttachmentUpload,
-    DeleteAttachmentParams,
-    DeleteAttachmentResult,
     GetTicketParams,
     ResponseFormat,
     TicketCreate,
     TicketUpdate,
+    TicketUpdateParams,
 )
+
+_BASE_ARTICLE = {
+    "id": 456,
+    "ticket_id": 123,
+    "type": "email",
+    "sender": "Customer",
+    "body": "See attached.",
+    "created_by_id": 2,
+    "updated_by_id": 2,
+    "created_at": "2026-05-30T10:00:00Z",
+    "updated_at": "2026-05-30T10:00:00Z",
+}
+
+
+class TestArticleAttachments:
+    """Tests for attachment metadata on read Article models."""
+
+    def test_article_parses_attachments(self):
+        """Article exposes attachment metadata returned by the Zammad API."""
+        article = Article(
+            **_BASE_ARTICLE,
+            attachments=[
+                {"id": 1, "filename": "kaufanfrage.pdf", "size": 20480},
+                {"id": 2, "filename": "logo.png", "size": 2048},
+            ],
+        )
+        assert article.attachments is not None
+        assert [a.id for a in article.attachments] == [1, 2]
+        assert article.attachments[0].filename == "kaufanfrage.pdf"
+        assert article.attachments[0].size == 20480
+
+    def test_article_without_attachments_defaults_none(self):
+        """Articles with no attachments key default to None."""
+        article = Article(**_BASE_ARTICLE)
+        assert article.attachments is None
 
 
 class TestTicketCreate:
@@ -26,7 +61,7 @@ class TestTicketCreate:
             customer="test@example.com",
             article_body="Test body",
         )
-        assert ticket.title == "&lt;script&gt;alert(&#x27;XSS&#x27;)&lt;/script&gt;"
+        assert ticket.title == "&lt;script&gt;alert('XSS')&lt;/script&gt;"
 
     def test_html_sanitization_in_body(self):
         """Test that HTML is escaped in article body."""
@@ -36,7 +71,30 @@ class TestTicketCreate:
             customer="test@example.com",
             article_body="<b>Bold</b> and <script>alert('XSS')</script>",
         )
-        assert ticket.article_body == "&lt;b&gt;Bold&lt;/b&gt; and &lt;script&gt;alert(&#x27;XSS&#x27;)&lt;/script&gt;"
+        assert ticket.article_body == "&lt;b&gt;Bold&lt;/b&gt; and &lt;script&gt;alert('XSS')&lt;/script&gt;"
+
+    def test_quotes_preserved_in_plain_text(self):
+        """Test that double quotes and apostrophes survive sanitization while & is still escaped."""
+        ticket = TicketCreate(
+            title='He said "we\'ve got it"',
+            group="Support",
+            customer="test@example.com",
+            article_body='Quote: "you\'d agree" & more',
+        )
+        assert ticket.title == 'He said "we\'ve got it"'
+        assert ticket.article_body == 'Quote: "you\'d agree" &amp; more'
+
+    def test_update_params_title_keeps_quotes(self):
+        """zammad_update_ticket titles must keep quotes and apostrophes like create/update models do."""
+        params = TicketUpdateParams(ticket_id=1, title='He said "we\'ve got it" & left')  # type: ignore[call-arg]
+        assert params.title == 'He said "we\'ve got it" &amp; left'
+
+    def test_update_params_pending_time_required_only_for_seeded_pending_states(self):
+        """Only the seeded pending states demand pending_time; custom names fall through to Zammad."""
+        accepted = TicketUpdateParams(ticket_id=1, state="pending review")  # type: ignore[call-arg]
+        assert accepted.state == "pending review"
+        with pytest.raises(ValidationError, match="pending_time"):
+            TicketUpdateParams(ticket_id=1, state="Pending Reminder")  # type: ignore[call-arg]
 
     def test_field_length_limits(self):
         """Test that field length limits are enforced."""
@@ -58,6 +116,11 @@ class TestTicketUpdate:
         update = TicketUpdate(title="<i>Important</i> Update")  # type: ignore[call-arg]
         assert update.title == "&lt;i&gt;Important&lt;/i&gt; Update"
 
+    def test_quotes_preserved_in_plain_text_title(self):
+        """Test that quotes remain literal while HTML-sensitive characters are escaped."""
+        update = TicketUpdate(title='<i>Say "hi", it\'s AT&T</i>')  # type: ignore[call-arg]
+        assert update.title == '&lt;i&gt;Say "hi", it\'s AT&amp;T&lt;/i&gt;'
+
     def test_none_title_not_sanitized(self):
         """Test that None title is not processed."""
         update = TicketUpdate(state="closed")  # type: ignore[call-arg]
@@ -70,16 +133,41 @@ class TestTicketUpdate:
         assert "String should have at most 200 characters" in str(exc_info.value)
 
 
+class TestTicketUpdateParams:
+    """Test TicketUpdateParams model validation."""
+
+    def test_customer_at_max_length_accepted(self):
+        """A 255-character customer value is accepted (max_length boundary)."""
+        params = TicketUpdateParams(ticket_id=1, customer="x" * 255)  # type: ignore[call-arg]
+        assert params.customer == "x" * 255
+
+    def test_customer_over_max_length_rejected(self):
+        """A 256-character customer value is rejected (exceeds max_length)."""
+        with pytest.raises(ValidationError) as exc_info:
+            TicketUpdateParams(ticket_id=1, customer="x" * 256)  # type: ignore[call-arg]
+        assert "String should have at most 255 characters" in str(exc_info.value)
+
+
 class TestArticleCreate:
     """Test ArticleCreate model validation."""
 
     def test_html_sanitization_in_body(self):
-        """Test that HTML is escaped in article body."""
+        """Test that HTML is escaped in article body, but quotes/apostrophes are left intact.
+
+        text/plain bodies are sent verbatim (e.g. in outbound emails), so quotes must not
+        become &#x27;/&quot; entities. <, >, & are still escaped, which already neutralizes
+        the tag regardless of the quote style used inside it.
+        """
         article = ArticleCreate(
             ticket_id=123,
             body="<div onclick='alert()'>Click me</div>",
         )
-        assert article.body == "&lt;div onclick=&#x27;alert()&#x27;&gt;Click me&lt;/div&gt;"
+        assert article.body == "&lt;div onclick='alert()'&gt;Click me&lt;/div&gt;"
+
+    def test_double_quotes_preserved_in_plain_text_body(self):
+        """Test that double quotes are not turned into &quot; for text/plain bodies."""
+        article = ArticleCreate(ticket_id=123, body='She said "hello" & left')
+        assert article.body == 'She said "hello" &amp; left'
 
     def test_ticket_id_validation(self):
         """Test that ticket_id must be positive."""
@@ -185,53 +273,3 @@ class TestArticleCreateWithAttachments:
         assert article.ticket_id == 123
         assert article.body == "Simple comment"
         assert article.attachments is None
-
-
-class TestDeleteAttachmentParams:
-    """Tests for DeleteAttachmentParams model."""
-
-    def test_valid_params(self):
-        """Test creating valid delete attachment parameters."""
-        params = DeleteAttachmentParams(ticket_id=123, article_id=456, attachment_id=789)
-        assert params.ticket_id == 123
-        assert params.article_id == 456
-        assert params.attachment_id == 789
-
-    def test_invalid_ticket_id(self):
-        """Test that ticket_id must be positive."""
-        with pytest.raises(ValidationError, match="greater than 0"):
-            DeleteAttachmentParams(ticket_id=0, article_id=456, attachment_id=789)
-
-
-class TestDeleteAttachmentResult:
-    """Tests for DeleteAttachmentResult model."""
-
-    def test_successful_deletion(self):
-        """Test creating successful deletion result."""
-        result = DeleteAttachmentResult(
-            success=True,
-            ticket_id=123,
-            article_id=456,
-            attachment_id=789,
-            message="Successfully deleted attachment 789 from article 456 in ticket 123",
-        )
-        assert result.success is True
-        assert result.ticket_id == 123
-        assert result.article_id == 456
-        assert result.attachment_id == 789
-        assert "Successfully deleted" in result.message
-
-    def test_failed_deletion(self):
-        """Test creating failed deletion result."""
-        result = DeleteAttachmentResult(
-            success=False,
-            ticket_id=123,
-            article_id=456,
-            attachment_id=789,
-            message="Failed to delete attachment 789",
-        )
-        assert result.success is False
-        assert result.ticket_id == 123
-        assert result.article_id == 456
-        assert result.attachment_id == 789
-        assert "Failed" in result.message
