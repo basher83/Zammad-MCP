@@ -13,6 +13,7 @@
 
 ### 🐛 Bug Fixes
 
+- Expose MCP tool arguments at the top level for AI agent compatibility (#212)
 - Address CodeRabbit review feedback
 - Resolve Codacy D-series docstring violations in changed files
 - *(tests)* Add local fake Zammad server to HTTP integration fixture
@@ -31,6 +32,10 @@
 
 - Address PR review feedback (#213)
 
+### 📚 Documentation
+
+- *(changelog)* Record removal of codex digest automation
+
 ### ⚙️ Miscellaneous Tasks
 
 - Update tooling and add documentation
@@ -48,6 +53,9 @@
 - *(codacy)* Strip non-Python tools, sync versions from codacy-cli init
 - *(codex)* Add repo-local Codex plugin and drop stale repomix xml
 - Replace CLAUDE instructions with AGENTS link
+- Update changelog generation
+- Align automation with uv and coverage rules
+- *(triage)* Remove repo-local codex digest automation
 
 ## [1.1.0] - 2025-12-09
 

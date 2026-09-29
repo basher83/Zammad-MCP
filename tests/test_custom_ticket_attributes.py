@@ -51,7 +51,9 @@ def test_get_ticket_json_includes_custom_attributes(ticket_tools):
     tools, client = ticket_tools
     client.get_ticket.return_value = _ticket_payload()
 
-    result = tools["zammad_get_ticket"](GetTicketParams(ticket_id=123, response_format=ResponseFormat.JSON))
+    result = tools["zammad_get_ticket"](
+        **GetTicketParams(ticket_id=123, response_format=ResponseFormat.JSON).model_dump()
+    )
 
     parsed = json.loads(result)
     assert parsed["region"] == "Lilongwe"
@@ -63,7 +65,9 @@ def test_get_ticket_markdown_renders_custom_attributes(ticket_tools):
     tools, client = ticket_tools
     client.get_ticket.return_value = _ticket_payload()
 
-    result = tools["zammad_get_ticket"](GetTicketParams(ticket_id=123, response_format=ResponseFormat.MARKDOWN))
+    result = tools["zammad_get_ticket"](
+        **GetTicketParams(ticket_id=123, response_format=ResponseFormat.MARKDOWN).model_dump()
+    )
 
     assert "## Custom Attributes" in result
     assert "**region**: Lilongwe" in result
@@ -78,7 +82,9 @@ def test_get_ticket_markdown_omits_custom_section_without_custom_attributes(tick
         del payload[key]
     client.get_ticket.return_value = payload
 
-    result = tools["zammad_get_ticket"](GetTicketParams(ticket_id=123, response_format=ResponseFormat.MARKDOWN))
+    result = tools["zammad_get_ticket"](
+        **GetTicketParams(ticket_id=123, response_format=ResponseFormat.MARKDOWN).model_dump()
+    )
 
     assert "## Custom Attributes" not in result
 
@@ -87,7 +93,9 @@ def test_search_tickets_json_includes_custom_attributes(ticket_tools):
     tools, client = ticket_tools
     client.search_tickets.return_value = [_ticket_payload()]
 
-    result = tools["zammad_search_tickets"](TicketSearchParams(query="outage", response_format=ResponseFormat.JSON))
+    result = tools["zammad_search_tickets"](
+        **TicketSearchParams(query="outage", response_format=ResponseFormat.JSON).model_dump()
+    )
 
     item = json.loads(result)["items"][0]
     assert item["region"] == "Lilongwe"
@@ -99,7 +107,7 @@ def test_update_ticket_tool_forwards_custom_fields(ticket_tools):
     client.update_ticket.return_value = _ticket_payload()
 
     params = TicketUpdateParams(ticket_id=123, state="open", custom_fields={"region": "Blantyre"})
-    result = tools["zammad_update_ticket"](params)
+    result = tools["zammad_update_ticket"](**params.model_dump())
 
     client.update_ticket.assert_called_once_with(ticket_id=123, state="open", custom_fields={"region": "Blantyre"})
     assert result.model_dump()["region"] == "Lilongwe"
