@@ -71,3 +71,21 @@ def test_list_params_reject_out_of_range_limit(limit: int) -> None:
 def test_list_params_reject_unknown_fields() -> None:
     with pytest.raises(ValidationError):
         ListEventsParams(sinc="2026-09-08T12:00:00Z")  # type: ignore[call-arg]
+
+
+def test_cursor_walks_events_that_share_a_receipt_timestamp() -> None:
+    """Paging by ``received_at`` must not skip events appended within the same clock tick."""
+    store = EventStore(capacity=5)
+    for ticket_id in (1, 2, 3):
+        store.append(WebhookEvent(event_type="ticket.update", ticket_id=ticket_id, received_at=BASE))
+
+    seen: list[int] = []
+    since: datetime | None = None
+    for _ in range(5):
+        page = store.list(since=since, limit=1)
+        if not page:
+            break
+        seen.extend(e.ticket_id for e in page)
+        since = page[-1].received_at
+
+    assert seen == [1, 2, 3]

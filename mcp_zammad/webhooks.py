@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 SIGNATURE_HEADER = "x-hub-signature"
 TRIGGER_HEADER = "x-zammad-trigger"
 SIGNATURE_PREFIX = "sha1="
+SHA1_HEX_LENGTH = 40
 
 
 class EventSink(Protocol):
@@ -52,7 +53,10 @@ def verify_signature(body: bytes, header: str | None, secret: str) -> None:
     if not header or not header.startswith(SIGNATURE_PREFIX):
         raise WebhookRejectedError(401, "Missing or malformed X-Hub-Signature header; expected 'sha1=<hex digest>'")
     expected = hmac.new(secret.encode(), body, hashlib.sha1).hexdigest()
-    if not hmac.compare_digest(expected, header[len(SIGNATURE_PREFIX) :].lower()):
+    digest = header[len(SIGNATURE_PREFIX) :].lower()
+    if len(digest) != SHA1_HEX_LENGTH or any(c not in "0123456789abcdef" for c in digest):
+        raise WebhookRejectedError(401, "Malformed X-Hub-Signature header; expected 'sha1=<hex digest>'")
+    if not hmac.compare_digest(expected, digest):
         raise WebhookRejectedError(401, "X-Hub-Signature does not match the configured webhook secret")
 
 

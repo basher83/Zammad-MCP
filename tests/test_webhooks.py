@@ -101,7 +101,7 @@ def test_missing_secret_returns_503_and_stores_nothing(store: EventStore) -> Non
 
 @pytest.mark.parametrize(
     "signature",
-    [None, "", "sha256=abc", "sha1=nothex", sign(b"other body"), sign(ticket_payload(), "wrong-secret")],
+    [None, "", "sha256=abc", "sha1=nothex", "sha1=é", sign(b"other body"), sign(ticket_payload(), "wrong-secret")],
 )
 def test_missing_or_invalid_signature_returns_401(handler: WebhookHandler, store: EventStore, signature) -> None:
     result = handler.handle_delivery(ticket_payload(), headers(signature))

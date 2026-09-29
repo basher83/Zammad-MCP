@@ -447,7 +447,7 @@ class BulkTicketUpdateParams(StrictBaseModel):
     add_tags: list[TagName] | None = Field(None, description="Tags to add to every ticket")
     remove_tags: list[TagName] | None = Field(None, description="Tags to remove from every ticket")
     note: str | None = Field(None, description="Internal note to add to every ticket", max_length=10000)
-    delay_seconds: float = Field(0, ge=0, description="Pause between tickets to reduce API pressure")
+    delay_seconds: float = Field(0, ge=0, le=10, description="Pause between tickets (max 10s) to reduce API pressure")
 
     @field_validator("ticket_ids")
     @classmethod

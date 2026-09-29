@@ -3,8 +3,9 @@
 import pytest
 import requests
 
-from mcp_zammad.resilience import RetryExhaustedError
-from tests.resilience_support import URL, FakeClock, Harness, make_response
+from mcp_zammad.resilience import ResilientSession, RetryExhaustedError
+from mcp_zammad.resilience_config import ResilienceConfig
+from tests.resilience_support import URL, FakeClock, FakeSession, Harness, make_response
 
 
 def test_safe_request_retries_until_success() -> None:
@@ -164,3 +165,18 @@ def test_session_state_is_delegated_to_wrapped_session() -> None:
     assert harness.inner.headers["X-On-Behalf-Of"] == "agent"
     assert harness.session.verify is True
     assert harness.inner.closed is True
+
+
+def test_rate_limit_reservation_in_a_future_window_waits_for_that_window() -> None:
+    """A caller that arrives while another is still sleeping into the next window must wait too."""
+
+    inner = FakeSession([make_response(200)] * 4)
+    sleeps: list[float] = []
+    config = ResilienceConfig(rate_limit_enabled=True, rate_limit_requests=2, rate_limit_window=10.0)
+    # The sleeper records but does not advance the clock: the sleeping caller has not woken yet.
+    session = ResilientSession(inner, config, clock=FakeClock(start=1000.0), sleeper=sleeps.append)
+
+    for _ in range(4):
+        session.get(URL)
+
+    assert sleeps == [10.0, 10.0]

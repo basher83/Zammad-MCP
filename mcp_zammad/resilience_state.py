@@ -33,7 +33,7 @@ class RateLimiter:
                 self._window_start, self._count = now, 0
             if self._count < self._limit:
                 self._count += 1
-                return 0.0
+                return max(0.0, self._window_start - now)
             wait = self._window_start + self._window - now
             self._window_start, self._count = now + wait, 1
             return wait
@@ -49,23 +49,29 @@ class CircuitBreaker:
         self._lock = threading.Lock()
         self._failures = 0
         self._opened_at: float | None = None
+        self._probing = False
 
     def check(self) -> None:
-        """Raise CircuitOpenError while open; allow one probe once the recovery timeout has elapsed."""
+        """Raise CircuitOpenError while open or probing; admit one probe once the recovery timeout has elapsed."""
         with self._lock:
+            if self._probing:
+                raise CircuitOpenError(
+                    "Zammad circuit breaker is half-open; a recovery probe is in flight, retry shortly"
+                )
             if self._opened_at is None:
                 return
             remaining = self._opened_at + self._recovery_timeout - self._clock()
             if remaining > 0:
                 raise CircuitOpenError(_open_message(self._failures, remaining, self._recovery_timeout))
-            self._opened_at = None
+            self._opened_at, self._probing = None, True
 
     def record_success(self) -> None:
         with self._lock:
-            self._failures = 0
+            self._failures, self._probing = 0, False
 
     def record_failure(self) -> None:
         with self._lock:
+            self._probing = False
             self._failures += 1
             if self._failures >= self._threshold:
                 self._opened_at = self._clock()

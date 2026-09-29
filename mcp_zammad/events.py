@@ -1,7 +1,7 @@
 """Bounded in-memory retention of normalized Zammad webhook events."""
 
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from pydantic import Field
@@ -69,7 +69,14 @@ class EventStore:
         return len(self._events)
 
     def append(self, event: WebhookEvent) -> None:
-        """Retain ``event``, evicting the oldest event when at capacity."""
+        """Retain ``event``, evicting the oldest event when at capacity.
+
+        Receipt timestamps are kept strictly increasing (bumped by a microsecond when
+        two deliveries share a clock tick) so ``received_at`` works as a paging cursor.
+        """
+        if self._events and _as_utc(event.received_at) <= _as_utc(self._events[-1].received_at):
+            bumped = _as_utc(self._events[-1].received_at) + timedelta(microseconds=1)
+            event = event.model_copy(update={"received_at": bumped})
         self._events.append(event)
 
     def list(self, *, since: datetime | None = None, limit: int | None = None) -> list[WebhookEvent]:

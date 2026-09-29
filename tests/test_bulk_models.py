@@ -108,3 +108,8 @@ def test_result_exposes_success_and_failure_details():
     assert result.failed[0].ticket_id == 2
     assert result.total_processed == 3
     assert result.total_successful == 2
+
+
+def test_rejects_delay_above_ten_seconds():
+    with pytest.raises(ValidationError, match="delay_seconds"):
+        BulkTicketUpdateParams(ticket_ids=[1], state="closed", delay_seconds=10.5)
