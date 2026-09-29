@@ -8,6 +8,27 @@ on:
   workflow_dispatch:
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    if: github.repository == 'basher83/Zammad-MCP'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.28"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev --frozen --python "3.13"
+
+      - name: Run canonical release validation
+        run: ./scripts/validate.sh release
+
   test-and-coverage:
     runs-on: ubuntu-latest
     if: github.repository == 'basher83/Zammad-MCP'

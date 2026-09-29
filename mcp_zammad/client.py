@@ -248,24 +248,42 @@ class ZammadClient:
         owner: str | None = None,
         group: str | None = None,
         time_unit: float | None = None,
+        custom_fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Update an existing ticket."""
+        """Update an existing ticket.
+
+        Args:
+            ticket_id: Internal ticket ID.
+            title: Optional. New ticket title.
+            state: Optional. New state name.
+            priority: Optional. New priority name.
+            owner: Optional. New owner login/email.
+            group: Optional. New group name.
+            time_unit: Optional. Time spent for time accounting; must be > 0.
+            custom_fields: Optional. Custom object attributes sent as top-level ticket keys.
+
+        Returns:
+            The updated ticket as returned by Zammad.
+
+        Raises:
+            ValueError: If time_unit is not positive or a custom field shadows a built-in key.
+        """
         if time_unit is not None and time_unit <= 0:
             raise ValueError("time_unit must be greater than 0")
 
-        update_data: dict[str, Any] = {}
-        if title is not None:
-            update_data["title"] = title
-        if state is not None:
-            update_data["state"] = state
-        if priority is not None:
-            update_data["priority"] = priority
-        if owner is not None:
-            update_data["owner"] = owner
-        if group is not None:
-            update_data["group"] = group
-        if time_unit is not None:
-            update_data["time_unit"] = time_unit
+        built_in = {
+            "title": title,
+            "state": state,
+            "priority": priority,
+            "owner": owner,
+            "group": group,
+            "time_unit": time_unit,
+        }
+        update_data: dict[str, Any] = {key: value for key, value in built_in.items() if value is not None}
+        for name in custom_fields or {}:
+            if name in built_in:
+                raise ValueError(f"custom_fields key '{name}' is a built-in field; pass it as a named argument")
+        update_data.update(custom_fields or {})
 
         return dict(self.api.ticket.update(ticket_id, update_data))
 
