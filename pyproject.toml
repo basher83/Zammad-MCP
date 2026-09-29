@@ -149,6 +149,8 @@ directory = "htmlcov"
 [tool.uv]
 # Enforce security floors without replacing upstream dependency constraints.
 constraint-dependencies = [
+    "mcp>=1.28.1,<2",
+    "fastmcp>=3.0.0,<4",
     "anyio>=4.14.2",
     "click>=8.3.3",
     "setuptools>=83.0.0",
