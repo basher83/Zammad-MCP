@@ -219,6 +219,7 @@ async def test_server_initialization(mock_zammad_client):
         "zammad_add_ticket_tag",
         "zammad_remove_ticket_tag",
         "zammad_get_current_user",
+        "zammad_export_tickets",
     ]
     for tool in expected_tools:
         assert tool in tool_names
