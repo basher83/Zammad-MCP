@@ -201,6 +201,16 @@ class PriorityBrief(BaseModel):
     active: bool = True
 
 
+class Attachment(BaseModel):
+    """Ticket article attachment information."""
+
+    id: int
+    filename: str
+    size: int | None = None
+    content_type: str | None = None
+    created_at: datetime | None = None
+
+
 class Article(BaseModel):
     """Ticket article (comment/note)."""
 
@@ -221,6 +231,9 @@ class Article(BaseModel):
     updated_at: datetime
     created_by: UserBrief | str | None = None
     updated_by: UserBrief | str | None = None
+    attachments: list[Attachment] | None = Field(
+        None, description="Files attached to this article; download via zammad_download_attachment using their id"
+    )
 
 
 class Ticket(BaseModel):
@@ -295,8 +308,12 @@ class TicketCreate(StrictBaseModel):
     @field_validator("title", "article_body")
     @classmethod
     def sanitize_html(cls, v: str) -> str:
-        """Escape HTML to prevent XSS attacks."""
-        return html.escape(v)
+        """Escape HTML to prevent XSS attacks.
+
+        quote=False: title and the initial article are plain text (no content_type choice here),
+        sent/stored verbatim, so quotes and apostrophes must not become &#x27;/&quot; entities.
+        """
+        return html.escape(v, quote=False)
 
 
 class TicketUpdate(StrictBaseModel):
@@ -315,7 +332,7 @@ class TicketUpdate(StrictBaseModel):
     @classmethod
     def sanitize_title(cls, v: str | None) -> str | None:
         """Escape HTML to prevent XSS attacks."""
-        return html.escape(v) if v else v
+        return html.escape(v, quote=False) if v else v
 
 
 class TicketSearchParams(StrictBaseModel):
@@ -327,19 +344,18 @@ class TicketSearchParams(StrictBaseModel):
     group: str | None = Field(None, description="Filter by group name")
     owner: str | None = Field(None, description="Filter by owner login/email")
     customer: str | None = Field(None, description="Filter by customer email")
+    created_after: date | None = Field(None, description="Only tickets created on or after this date (YYYY-MM-DD)")
+    created_before: date | None = Field(None, description="Only tickets created on or before this date (YYYY-MM-DD)")
     page: int = Field(default=1, ge=1, description="Page number (must be >= 1)")
     per_page: int = Field(default=25, ge=1, le=100, description="Results per page (1-100)")
     response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
 
-
-class Attachment(BaseModel):
-    """Ticket article attachment information."""
-
-    id: int
-    filename: str
-    size: int | None = None
-    content_type: str | None = None
-    created_at: datetime | None = None
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "TicketSearchParams":
+        """Reject an inverted date range rather than silently returning nothing."""
+        if self.created_after and self.created_before and self.created_after > self.created_before:
+            raise ValueError("created_after must not be later than created_before")
+        return self
 
 
 class ArticleCreate(StrictBaseModel):
@@ -367,7 +383,10 @@ class ArticleCreate(StrictBaseModel):
     def sanitize_body(self) -> "ArticleCreate":
         """Sanitize body content according to content type."""
         if self.content_type == "text/plain":
-            self.body = html.escape(self.body)
+            # quote=False: plain text is sent/stored verbatim (e.g. in outbound emails), so quotes
+            # and apostrophes must not be turned into &#x27;/&quot; entities. Still neutralize
+            # <, >, & in case a downstream renderer treats the body as HTML despite the content type.
+            self.body = html.escape(self.body, quote=False)
         else:
             self.body = self._sanitize_html_body(self.body)
         return self
@@ -399,6 +418,14 @@ class TicketUpdateParams(StrictBaseModel):
     priority: str | None = Field(None, description="New priority name", max_length=100)
     owner: str | None = Field(None, description="New owner login/email", max_length=255)
     group: str | None = Field(None, description="New group name", max_length=100)
+    customer: str | None = Field(None, description="New customer email/login (must exist in Zammad)", max_length=255)
+    pending_time: datetime | None = Field(
+        None,
+        description=(
+            "Pending-until timestamp (ISO 8601, e.g. '2026-07-01T08:00:00Z'). "
+            "Required by Zammad when state is 'pending reminder' or 'pending close'."
+        ),
+    )
     time_unit: float | None = Field(
         None, description="Time spent for time accounting (unit defined in Zammad admin settings)", gt=0
     )
@@ -410,8 +437,20 @@ class TicketUpdateParams(StrictBaseModel):
     @field_validator("title")
     @classmethod
     def sanitize_title(cls, v: str | None) -> str | None:
-        """Escape HTML to prevent XSS attacks."""
-        return html.escape(v) if v else v
+        """Escape HTML-sensitive characters while keeping quotes and apostrophes readable."""
+        return html.escape(v, quote=False) if v else v
+
+    @model_validator(mode="after")
+    def require_pending_time_for_pending_states(self) -> "TicketUpdateParams":
+        """Fail fast when moving to a seeded pending state without a pending_time.
+
+        Only Zammad's seeded state names are checked; custom states are left to
+        Zammad's own validation because their names say nothing about their type.
+        """
+        seeded_pending_states = {"pending reminder", "pending close"}
+        if self.state is not None and self.state.lower() in seeded_pending_states and self.pending_time is None:
+            raise ValueError(f"state '{self.state}' requires 'pending_time' (the pending-until timestamp, ISO 8601).")
+        return self
 
     @field_validator("custom_fields")
     @classmethod
@@ -506,24 +545,6 @@ class DownloadAttachmentParams(StrictBaseModel):
     max_bytes: int | None = Field(
         default=10_000_000, ge=1, description="Maximum attachment size in bytes (None for unlimited)"
     )
-
-
-class DeleteAttachmentParams(StrictBaseModel):
-    """Delete attachment request parameters."""
-
-    ticket_id: int = Field(gt=0, description="Ticket ID")
-    article_id: int = Field(gt=0, description="Article ID")
-    attachment_id: int = Field(gt=0, description="Attachment ID")
-
-
-class DeleteAttachmentResult(StrictBaseModel):
-    """Result of attachment deletion operation."""
-
-    success: bool = Field(description="Whether the deletion succeeded")
-    ticket_id: int = Field(description="Ticket ID")
-    article_id: int = Field(description="Article ID")
-    attachment_id: int = Field(description="Attachment ID that was deleted")
-    message: str = Field(description="Human-readable result message")
 
 
 class TicketMergeParams(StrictBaseModel):
@@ -800,6 +821,13 @@ class TicketStats(BaseModel):
     escalated_count: int = Field(description="Number of escalated tickets")
     avg_first_response_time: float | None = Field(None, description="Average first response time in minutes")
     avg_resolution_time: float | None = Field(None, description="Average resolution time in minutes")
+    counts_truncated: bool = Field(
+        default=False,
+        description=(
+            "True when the scan hit the search backend's result cap, so the counts are "
+            "lower bounds rather than exact totals."
+        ),
+    )
 
 
 class TagOperationResult(BaseModel):

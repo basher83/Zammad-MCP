@@ -27,7 +27,6 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
 - **Attachment Support**
   - `zammad_get_article_attachments` - List attachments for a ticket article
   - `zammad_download_attachment` - Download attachment content (base64-encoded)
-  - `zammad_delete_attachment` - Delete attachments from ticket articles
 
 - **User & Organization Management**
   - `zammad_create_user` - Create a Zammad user
@@ -450,7 +449,7 @@ Use zammad_create_ticket with:
 ```plaintext
 1. Use zammad_get_ticket with ticket_id=123 to see the full conversation
 2. Use zammad_add_article to add your response
-3. Use zammad_update_ticket to change state to "pending reminder"
+3. Use zammad_update_ticket to change state to "pending reminder" with a pending_time (e.g. "2026-07-01T08:00:00Z")
 ```
 
 ### Analyze Escalated Tickets
@@ -472,15 +471,6 @@ Use zammad_add_article with attachments parameter:
       "mime_type": "application/pdf"
     }
   ]
-```
-
-### Delete an Attachment
-
-```plaintext
-Use zammad_delete_attachment with:
-- ticket_id: 123
-- article_id: 456
-- attachment_id: 789
 ```
 
 ### Merge Duplicate Tickets
