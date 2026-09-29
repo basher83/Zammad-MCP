@@ -2094,7 +2094,8 @@ class ZammadMCPServer:
                     "pending_count": 78,
                     "escalated_count": 12,
                     "avg_first_response_time": null,
-                    "avg_resolution_time": null
+                    "avg_resolution_time": null,
+                    "counts_truncated": false
                 }
                 ```
 
@@ -2117,6 +2118,9 @@ class ZammadMCPServer:
                 closed=closed, pending reminder/pending close=pending.
                 Date filtering (start_date, end_date) not yet implemented - shows warning if provided.
                 Processes up to 100,000 tickets (1000 pages x 100 per page).
+                counts_truncated is true when the scan stopped early. For a group-filtered
+                scan, every count is then a lower bound because the 10,000-result search
+                cap was reached.
             """
             start_time = time.time()
             client = self.get_client()
