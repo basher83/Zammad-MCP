@@ -36,7 +36,7 @@ async def test_audit_enabled_via_dotenv_records_tool_call(dotenv_cwd: Path) -> N
         mock_class.return_value = Mock(get_groups=Mock(return_value=[GROUP]))
         server = ZammadMCPServer()
         async with Client(server.mcp) as client:
-            await client.call_tool("zammad_list_groups", {"params": {}})
+            await client.call_tool("zammad_list_groups", {})
 
     assert server.audit.enabled
     records = [json.loads(line) for line in audit_file.read_text().splitlines()]

@@ -630,7 +630,7 @@ Report via [GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/s
 - ✅ **Upstream Authentication**: Supports API tokens, OAuth2, and username/password for Zammad ([client.py](mcp_zammad/client.py))
 - ✅ **Audit Logging**: Opt-in JSON Lines records for tool calls, connection outcomes, and URL checks with secret redaction ([audit.py](mcp_zammad/audit.py))
 - ✅ **Dependency Scanning**: CI runs pip-audit; Dependabot security alerts are enabled separately in GitHub
-- ✅ **Security Testing**: CI runs Bandit, Safety, and pip-audit ([security-scan.yml](.github/workflows/security-scan.yml))
+- ✅ **Security Testing**: CI runs Bandit and pip-audit ([security-scan.yml](.github/workflows/security-scan.yml))
 
 See [SECURITY.md](SECURITY.md) for complete documentation.
 

@@ -386,7 +386,7 @@ class TestKBToolSuccessSemantics:
         monkeypatch.setattr(instance, "get_client", lambda: fake_client)
         tool = await instance.mcp.get_tool(tool_name)
 
-        result = await tool.run({"params": {**params, "response_format": "json"}})
+        result = await tool.run({**params, "response_format": "json"})
 
         assert result.content
         assert json.loads(result.content[0].text)
@@ -401,7 +401,7 @@ class TestKBToolSuccessSemantics:
         monkeypatch.setattr(instance, "get_client", lambda: fake_client)
         tool = await instance.mcp.get_tool("zammad_list_knowledge_bases")
 
-        result = await tool.run({"params": {}})
+        result = await tool.run({})
 
         assert "# Knowledge Bases" in result.content[0].text
         assert "support.example" in result.content[0].text
@@ -428,7 +428,7 @@ class TestToolFailureSemantics:
 
         tool = await instance.mcp.get_tool("zammad_list_knowledge_bases")
         with pytest.raises(ZammadAPIError):
-            await tool.run({"params": {}})
+            await tool.run({})
 
     @pytest.mark.asyncio
     async def test_get_kb_answer_propagates_zammad_api_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -441,7 +441,7 @@ class TestToolFailureSemantics:
 
         tool = await instance.mcp.get_tool("zammad_get_kb_answer")
         with pytest.raises(ZammadAPIError):
-            await tool.run({"params": {"kb_id": 1, "answer_id": 9}})
+            await tool.run({"kb_id": 1, "answer_id": 9})
 
 
 class TestKBToolMarkdownOutputs:
@@ -508,7 +508,7 @@ class TestKBToolMarkdownOutputs:
         monkeypatch.setattr(instance, "get_client", lambda: fake_client)
         tool = await instance.mcp.get_tool(tool_name)
 
-        result = await tool.run({"params": params})
+        result = await tool.run(params)
 
         assert expected in result.content[0].text
 
@@ -520,7 +520,7 @@ class TestKBToolMarkdownOutputs:
         monkeypatch.setattr(instance, "get_client", lambda: fake_client)
         tool = await instance.mcp.get_tool("zammad_search_kb_answers")
 
-        result = await tool.run({"params": {"kb_id": 1, "query": "nope"}})
+        result = await tool.run({"kb_id": 1, "query": "nope"})
 
         assert "No KB answers found matching 'nope'" in result.content[0].text
 

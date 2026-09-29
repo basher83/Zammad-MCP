@@ -54,7 +54,7 @@ async def test_successful_tool_call_emits_one_audit_record(fake_zammad, audit: A
     server = ZammadMCPServer(audit_logger=audit)
 
     async with Client(server.mcp) as client:
-        result = await client.call_tool("zammad_list_groups", {"params": {}})
+        result = await client.call_tool("zammad_list_groups", {})
 
     assert "Users" in result.content[0].text
     records = _records(audit_file, "tool_call")
@@ -73,7 +73,7 @@ async def test_failed_tool_call_records_failure_and_reraises(fake_zammad, audit:
 
     async with Client(server.mcp) as client:
         with pytest.raises(ToolError):
-            await client.call_tool("zammad_list_groups", {"params": {}})
+            await client.call_tool("zammad_list_groups", {})
 
     records = _records(audit_file, "tool_call")
     assert len(records) == 1
@@ -88,7 +88,7 @@ async def test_disabled_audit_keeps_tool_behavior_and_silence(fake_zammad, audit
     server = ZammadMCPServer(audit_logger=disabled)
 
     async with Client(server.mcp) as client:
-        result = await client.call_tool("zammad_list_groups", {"params": {}})
+        result = await client.call_tool("zammad_list_groups", {})
 
     assert "Users" in result.content[0].text
     assert not audit_file.exists()
