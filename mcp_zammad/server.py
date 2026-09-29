@@ -1938,7 +1938,7 @@ class ZammadMCPServer:
     def _setup_export_tools(self) -> None:
         """Register export-related tools."""
 
-        @self.mcp.tool(annotations=_read_only_annotations("Export Tickets to JSONL"))
+        @self.mcp.tool(annotations=_write_annotations("Export Tickets to JSONL"))
         def zammad_export_tickets(params: TicketExportParams) -> str:
             """Export tickets with conversation articles to a JSONL file for AI training.
 
