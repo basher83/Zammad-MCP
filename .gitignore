@@ -257,8 +257,8 @@ secrets/
 *.secret
 *.key
 
-# Explicitly include Claude settings
-!.claude/settings.local.json
+# Personal Claude Code settings
+.claude/settings.local.json
 
 # Hookify local rule configs (personal preferences)
 .claude/hookify.*.local.md
