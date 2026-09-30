@@ -589,6 +589,7 @@ Repository-specific guidance for `basher83/Zammad-MCP`. This layer supplements t
 - Supported transports are `stdio` and `http`. Stdio is the default. HTTP requires `MCP_PORT`; `MCP_HOST` defaults to `127.0.0.1`.
 - Pass HTTP host and port to `mcp.run(transport="http", host=..., port=...)`; do not pass them to `FastMCP()`.
 - Keep tool annotations accurate: distinguish read-only, write, idempotent-write, and destructive operations.
+- MCP clients see only the first docstring paragraphs of a tool, up to its `Args:` or `Parameters:` section. FastMCP drops the rest. Without a parameter section, clients see the whole docstring. Put what an agent needs there: when to use the tool, what to use instead, and requirements or errors. `tests/test_tool_descriptions.py` checks this text through the MCP boundary.
 - Register tools, resources, and prompts through the `ZammadMCPServer` setup methods. Test observable MCP behavior through public FastMCP or process boundaries; do not add new assertions against private registries.
 
 ## Configuration and security invariants
