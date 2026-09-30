@@ -49,6 +49,13 @@ GitHub treats Dependabot-triggered `pull_request` workflows like forked PRs: the
   "commitMessagePrefix": "chore(deps):",
   "packageRules": [
     {
+      "description": "Keep Python pinned below 3.14 until MCP SDK v1.x officially supports it",
+      "matchDepNames": [
+        "python"
+      ],
+      "allowedVersions": "<3.14"
+    },
+    {
       "description": "Require approval for major Zammad API updates",
       "matchPackageNames": [
         "zammad-py"
@@ -72,7 +79,8 @@ Key points:
   - Are labeled with `dependencies` and `renovate`.
   - Are assigned to `@basher83`.
   - Use `chore(deps):` as the commit message prefix.
-- Extra repo‑specific rule:
+- Extra repo‑specific rules:
+  - Renovate does not propose Python 3.14 or later (`allowedVersions: "<3.14"`). This matches `requires-python` in `pyproject.toml`.
   - Major updates to `zammad-py` require explicit approval in the Dependency Dashboard.
 
 ---

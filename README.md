@@ -241,8 +241,8 @@ Example record:
 
 Event types are `tool_call`, `authentication`, and `security_validation`. Records never contain
 tool arguments, Zammad responses, credentials, or full URLs; failures are recorded by exception
-type only, and any `details` key containing `password`, `token`, `secret`, `authorization`,
-`credential`, or `data` is redacted. Audit output never uses stdout, so the default `stderr`
+type only, and any `details` key containing `password`, `passwd`, `token`, `secret`, `authorization`,
+`credential`, `data`, `api_key`, `api-key`, or `apikey` is redacted. Audit output never uses stdout, so the default `stderr`
 destination is safe for the stdio transport. Invalid enabled configuration (unknown destination or
 missing file path) fails at startup.
 
@@ -484,7 +484,8 @@ them with `zammad_list_events`. This needs `MCP_TRANSPORT=http`; stdio mode has 
 
 The server maps deliveries to `ticket.create` (first article), `ticket.article.create` (later articles), or
 `ticket.update` (no article in payload). Invalid or missing `X-Hub-Signature` headers return `401`; non-ticket or
-malformed payloads return `400`. Only identifiers and timestamps are retained — never article bodies.
+malformed payloads return `400`. Accepted deliveries return `202`, and the server keeps the
+`X-Zammad-Trigger` header value as the event `trigger`. Only identifiers and timestamps are retained — never article bodies.
 
 Retention is process-local and bounded (1000 events, oldest evicted first) and is lost on restart. Poll with
 `zammad_list_events`, which returns the oldest events after `since` first (up to `limit`); pass the returned

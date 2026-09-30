@@ -330,7 +330,7 @@ MCP errors include:
    `@self.mcp.tool(annotations=_read_only_annotations("Title"))` stacked over `@flat_params(ParamsModel)`.
    Use `_write_annotations`, `_idempotent_write_annotations`, or `_destructive_write_annotations` for
    write operations
-1. Call `self.get_client()` for the client and return a `str` through `truncate_response()`
+1. Call `self.get_client()` for the client and return a result. Read tools usually return a `str` through `truncate_response()`. Write tools and some other tools, such as `zammad_list_events`, return a Pydantic model
 1. Add tests through the public FastMCP boundary with a mocked `ZammadClient`. See the
    `zammad_list_knowledge_bases` example in [CONTRIBUTING.md](CONTRIBUTING.md#1-new-tools)
 
@@ -354,9 +354,11 @@ MCP errors include:
 
 ```text
 tests/
-├── test_server.py      # Main test suite
-├── conftest.py         # Shared fixtures
-└── test_*.py           # Additional test modules
+├── test_server.py          # Main test suite
+├── conftest.py             # Shared fixtures
+├── resilience_support.py   # Shared helpers for resilience tests
+├── test_*.py               # Additional test modules
+└── integration/            # Subprocess tests (HTTP transport, resilience over HTTP)
 ```
 
 ### Mock Strategy

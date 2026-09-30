@@ -85,7 +85,7 @@ uv run mcp-zammad
 Before submitting a PR, ensure your code passes all quality checks:
 
 ```bash
-# Fast non-mutating developer gate: lint + affected tests (same gates as CI)
+# Fast non-mutating developer gate: lint + affected tests (CI runs the release variant)
 mise run validate
 
 # Run comprehensive quality checks (recommended before a PR; this formats and fixes files)
@@ -156,7 +156,7 @@ The repository includes several GitHub Actions workflows that run automatically 
 |----------|---------|----------|------------------|
 | **Tests and Coverage** | Runs tests and reports coverage | Push, PR to main | None |
 | **Security Scan** | Python security analysis | Push, PR to main, Weekly (Mon 9:00 UTC) | None |
-| **Build and Publish Docker** | Builds and publishes Docker images | Push to main, tags, Manual | None (uses GITHUB_TOKEN) |
+| **Build and Publish Docker** | Builds and publishes Docker images | Push to main, tags, Manual, PR to main (build only) | None (uses GITHUB_TOKEN) |
 
 ### Workflow Details
 
@@ -168,7 +168,7 @@ The repository includes several GitHub Actions workflows that run automatically 
   - `tests`: runs the full pytest suite with coverage on a Python 3.10, 3.11, 3.12, and 3.13 matrix. It uploads coverage reports as artifacts and writes a coverage summary to the job summary
   - `test-and-coverage`: aggregate required check that fails unless `validate` and every `tests` matrix job succeed
 - **Failure conditions**: Any gate in `validate` fails, tests fail, or coverage drops below the `fail_under` floor in `pyproject.toml`
-- **Codacy upload**: The `tests` job uploads `coverage.xml` to Codacy only when the `CODACY_PROJECT_TOKEN` secret is present, so forks and Dependabot PRs pass without it
+- **Codacy upload**: The `tests` job uploads `coverage.xml` to Codacy only when three conditions are true. The job runs on the Python 3.13 matrix leg, the run is not manual, and the `CODACY_PROJECT_TOKEN` secret is present. Forks and Dependabot PRs pass without the secret
 
 #### 2. Security Scan (`security-scan.yml`)
 
@@ -178,7 +178,7 @@ The repository includes several GitHub Actions workflows that run automatically 
   - **pip-audit**: Dependency vulnerability scanning
 - **Reports**: Uploads security reports as artifacts and to GitHub Security tab
 - **Configuration**: No additional secrets required
-- **Fork Compatibility**: Workflow automatically handles missing secrets in forked repositories without failing
+- **Fork Compatibility**: The job runs only in `basher83/Zammad-MCP`. Forks skip it through a repository guard
 
 #### 3. Build and Publish Docker (`docker-publish.yml`)
 
@@ -369,7 +369,7 @@ Once the tag is pushed, the GitHub Actions workflow automatically:
   - `ghcr.io/basher83/zammad-mcp:1.2.0` (exact version)
   - `ghcr.io/basher83/zammad-mcp:1.2` (minor version)
   - `ghcr.io/basher83/zammad-mcp:1` (major version)
-  - `ghcr.io/basher83/zammad-mcp:latest` (if this is the latest release)
+- Release tags do not update `latest`. Pushes to `main` produce the `latest` tag.
 
 #### 4. Create GitHub Release
 
