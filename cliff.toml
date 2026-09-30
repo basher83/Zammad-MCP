@@ -13,7 +13,7 @@ body = """
 {% endif %}
 {% for group, commits in commits | group_by(attribute="group") %}
     ### {{ group | striptags | trim | upper_first }}
-    {% for commit in commits %}
+    {% for commit in commits | unique(attribute="message") %}
         - {% if commit.scope %}*({{ commit.scope }})* {% endif %}\
             {% if commit.breaking %}[**breaking**] {% endif %}\
             {{ commit.message | upper_first }}\
@@ -43,6 +43,9 @@ require_conventional = false
 split_commits = false
 # An array of regex based parsers to modify commit messages prior to further processing.
 commit_preprocessors = [
+    # Wrap snake_case identifiers (tool and field names) in backticks so underscores are not parsed as emphasis.
+    { pattern = '\b(_?[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+)\b', replace = "`${1}`" },
+    { pattern = '\b(_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*_)\b', replace = "`${1}`" },
     # Replace issue numbers with link templates to be updated in `changelog.postprocessors`.
     #{ pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](<REPO>/issues/${2}))"},
     # Check spelling of the commit message using https://github.com/crate-ci/typos.
@@ -55,6 +58,10 @@ protect_breaking_commits = false
 # Assigns commits to groups.
 # Optionally sets the commit's scope and can decide to exclude commits from further processing.
 commit_parsers = [
+    # Superseded within the same release by "categorize by state_type_id"; keeping them would describe two contradictory behaviours.
+    { message = "^fix\\(stats\\): categorize ticket stats by state name", skip = true },
+    { message = "^fix\\(stats\\): add pending-prefix fallback", skip = true },
+    { message = "^fix\\(stats\\): restrict pending fallback", skip = true },
     { message = "^feat", group = "<!-- 0 -->🚀 Features" },
     { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
     { message = "^doc", group = "<!-- 3 -->📚 Documentation" },
@@ -75,6 +82,8 @@ commit_parsers = [
 filter_commits = false
 # An array of link parsers for extracting external references, and turning them into URLs, using regex.
 link_parsers = []
+# Only semantic version tags are releases; any other tag (for example a local scratch tag) is ignored.
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
 # Include only the tags that belong to the current branch.
 use_branch_tags = false
 # Order releases topologically instead of chronologically.
