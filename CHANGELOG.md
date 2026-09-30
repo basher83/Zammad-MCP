@@ -113,6 +113,7 @@
 - *(server)* Correct `article_type` default and example casing in `add_article`
 - *(webhooks)* Document the payload extraction helpers
 - Record rate limiting feature in unreleased changelog
+- *(changelog)* Regenerate unreleased notes for the merged integration batches
 
 ### 🎨 Styling
 
@@ -174,6 +175,7 @@
 - Add canonical non-mutating validation script shared by local and CI
 - Make validate.sh abort on the first failing gate
 - Keep one canonical validation job and flatten new tool docstrings
+- *(changelog)* Treat only vN.N.N tags as releases
 
 ### 🛡️ Security
 
