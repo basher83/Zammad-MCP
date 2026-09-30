@@ -17,7 +17,7 @@
     "packageRules": [
         {
             "description": "Keep Python pinned below 3.14 until MCP SDK v1.x officially supports it",
-            "matchPackageNames": [
+            "matchDepNames": [
                 "python"
             ],
             "allowedVersions": "<3.14"
