@@ -74,16 +74,40 @@ echo "✅ CHANGELOG.md updated!"
 """
 
 [tasks.changelog-bump]
+shell = "bash -c"
 description = "Bump version and update changelog for a release"
 usage = 'arg "<version>" help="Version number (e.g., 0.1.4)"'
 run = """
+set -euo pipefail
+
 echo "📝 Creating release ${usage_version}..."
-git-cliff --tag "v${usage_version}" -o CHANGELOG.md
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir" CHANGELOG.md.new' EXIT
+
+# Preserve released history beginning at the first semantic-version heading; only the
+# new release is generated, so earlier sections are never rewritten.
+awk '
+  /^## \\[v?[0-9]+\\.[0-9]+\\.[0-9]+[^]]*\\]/ { found = 1 }
+  found { print }
+' CHANGELOG.md > "$tmp_dir/releases.md"
+
+if [ ! -s "$tmp_dir/releases.md" ]; then
+  echo "❌ No released-version heading found in CHANGELOG.md"
+  exit 1
+fi
+
+git-cliff --tag "v${usage_version}" --unreleased --strip header > "$tmp_dir/release.md"
+cat "$tmp_dir/release.md" > CHANGELOG.md.new
+printf '\n' >> CHANGELOG.md.new
+cat "$tmp_dir/releases.md" >> CHANGELOG.md.new
+mv CHANGELOG.md.new CHANGELOG.md
+
 echo "✅ CHANGELOG.md updated for v${usage_version}!"
 echo "Next steps:"
 echo "  1. Review CHANGELOG.md"
-echo "  2. Update version in pyproject.toml"
-echo "  3. Commit changes: git add CHANGELOG.md pyproject.toml && git commit -m 'chore: release v${usage_version}'"
+echo "  2. Update version in pyproject.toml (uv version ${usage_version})"
+echo "  3. Commit changes: git add CHANGELOG.md pyproject.toml uv.lock && git commit -m 'chore(release): prepare for v${usage_version}'"
 echo "  4. Tag release: git tag -a v${usage_version} -m 'Release v${usage_version}'"
 echo "  5. Push: git push && git push --tags"
 """

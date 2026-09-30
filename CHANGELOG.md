@@ -1,5 +1,5 @@
 
-## [unreleased]
+## [1.2.0] - 2026-09-30
 
 
 ### 🚀 Features
@@ -75,6 +75,8 @@
 - *(tools)* Expose flat arguments for merge, bulk update, and list events
 - Address review findings on resilience, webhooks, events and CI aggregate
 - *(deps)* Cap fastmcp <4 and mcp <2 in project dependencies
+- *(renovate)* Match the mise Python cap by dependency name
+- *(package)* Report the distribution version from `__version__`
 
 ### 💼 Other
 
@@ -112,6 +114,7 @@
 - Record rate limiting feature in unreleased changelog
 - *(changelog)* Regenerate unreleased notes for the merged integration batches
 - *(changelog)* Include this branch's own changelog commit in the unreleased notes
+- *(changelog)* Address review findings on the generator and the plan
 
 ### 🎨 Styling
 
@@ -174,6 +177,8 @@
 - Make validate.sh abort on the first failing gate
 - Keep one canonical validation job and flatten new tool docstrings
 - *(changelog)* Treat only vN.N.N tags as releases
+- *(mise)* Keep released changelog sections intact in changelog-bump
+- *(changelog)* Wrap dunder names in backticks
 
 ### 🛡️ Security
 

@@ -46,6 +46,7 @@ commit_preprocessors = [
     # Wrap snake_case identifiers (tool and field names) in backticks so underscores are not parsed as emphasis.
     { pattern = '\b(_?[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+)\b', replace = "`${1}`" },
     { pattern = '\b(_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*_)\b', replace = "`${1}`" },
+    { pattern = '\b(__[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*__)\b', replace = "`${1}`" },
     # Replace issue numbers with link templates to be updated in `changelog.postprocessors`.
     #{ pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](<REPO>/issues/${2}))"},
     # Check spelling of the commit message using https://github.com/crate-ci/typos.
