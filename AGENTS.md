@@ -403,6 +403,7 @@ If you violate any of these constraints, the output is considered incorrect.
 - Sections 8.1 to 8.7 apply to code only: Python and shell source under `mcp_zammad/`, `tests/`, and `scripts/`.
 - They do not apply to documentation, generated files, or configuration. This includes Markdown (`README.md`, `CHANGELOG.md`, `AGENTS.md`, `docs/`, `.claude/`), YAML, TOML, and JSON files. `.rumdl.toml` sets the Markdown policy.
 - The limits apply to new constructs and to constructs that a change modifies. A change does not have to refactor constructs that it does not touch.
+- Docstring and comment changes do not make a construct a changed construct.
 - These files were over the 200-line limit on 2026-09-30. They are exempt from section 8.3 until they are refactored. New and changed constructs in them must still obey sections 8.1 and 8.2.
   - `mcp_zammad/server.py`, `mcp_zammad/client.py`, `mcp_zammad/models.py`
   - `tests/test_server.py`, `tests/test_client_methods.py`, `tests/test_kb_readonly.py`, `tests/test_client.py`, `tests/test_models.py`, `tests/integration/test_http_transport.py`
