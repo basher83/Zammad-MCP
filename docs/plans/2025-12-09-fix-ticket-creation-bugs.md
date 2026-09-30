@@ -1,6 +1,6 @@
 # Fix GitHub Issues #148 and #149 - Implementation Plan
 
-> **Status:** Implemented in v1.1.0 (2025-12-09) for issues #148 and #149. Historical record. Do not execute this plan. Commands, versions, and line numbers in it are stale.
+**Status:** Implemented in v1.1.0 (2025-12-09) for issues #148 and #149. Historical record. Do not execute this plan. Commands, versions, and line numbers in it are stale.
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 

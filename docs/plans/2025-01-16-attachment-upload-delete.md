@@ -1,6 +1,6 @@
 # Attachment Upload & Delete Implementation Plan
 
-> **Status:** Implemented in v1.0.0 (PR #122, issue #14). Version 1.2.0 removed `zammad_delete_attachment` because Zammad has no such endpoint (issue #320, PRs #322 and #348). Historical record. Do not execute this plan. Commands, versions, and line numbers in it are stale.
+**Status:** Implemented in v1.0.0 (PR #122, issue #14). Version 1.2.0 removed `zammad_delete_attachment` because Zammad has no such endpoint (issue #320, PRs #322 and #348). Historical record. Do not execute this plan. Commands, versions, and line numbers in it are stale.
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
