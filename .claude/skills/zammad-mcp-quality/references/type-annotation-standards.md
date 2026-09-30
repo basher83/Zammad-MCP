@@ -10,7 +10,7 @@ The Zammad MCP project uses **Python 3.10+** type syntax with strict MyPy checki
 2. **Type hint all functions and methods**
 3. **Use union syntax with `|`** not `Optional` or `Union`
 4. **Avoid parameter shadowing** (use `article_type` not `type`)
-5. **Use `typing.cast` when type narrowing is needed**
+5. **Narrow `T | None` with a guard clause. Use `typing.cast` only as a last resort**
 
 ## Modern Syntax Reference
 
@@ -62,10 +62,12 @@ result: Union[int, str]           # Use int | str
 def create_article(type: str, body: str):  # 'type' is a built-in!
     ...
 
-# BAD - shadows class name
-def process_ticket(ticket: Ticket, ticket: dict):  # Duplicate!
+# BAD - shadows the Ticket model name with a plain dict
+def process_ticket(ticket: dict):  # readers expect a Ticket model here
     ...
 ```
+
+Note: `def f(ticket: Ticket, ticket: dict)` is a `SyntaxError` (duplicate argument), not shadowing. Python rejects it before any linter runs.
 
 ### ✅ DO: Use descriptive parameter names
 
@@ -143,45 +145,30 @@ class Ticket(BaseModel):
 
 ---
 
-## Type Narrowing with `cast()`
+## Type Narrowing: `ZammadClient | None` and lazy initialization
 
-### When type checkers need help
-
-```python
-from typing import cast
-
-def get_zammad_client() -> ZammadClient:
-    """Get client with proper type narrowing."""
-    # Server might have client: ZammadClient | None
-    client = server.client
-
-    if client is None:
-        raise RuntimeError("Client not initialized")
-
-    # Type narrow for return
-    return cast(ZammadClient, client)
-```
-
-### Sentinel pattern
+The server does not use a sentinel class or `typing.cast` for the client. `ZammadMCPServer` (in `mcp_zammad/server.py`) declares the attribute as `ZammadClient | None` and narrows it with a guard in `get_client`, which lazily creates the client when it is missing:
 
 ```python
-from typing import cast
-
-# Define sentinel
-class _Uninitialized:
-    pass
-
-_UNINITIALIZED = _Uninitialized()
-
-class Server:
-    def __init__(self):
-        self.client: ZammadClient | _Uninitialized = _UNINITIALIZED
+class ZammadMCPServer:
+    def __init__(self, ...) -> None:
+        ...
+        self.client: ZammadClient | None = None
+        ...
 
     def get_client(self) -> ZammadClient:
-        if isinstance(self.client, _Uninitialized):
-            raise RuntimeError("Not initialized")
-        return cast(ZammadClient, self.client)
+        """Get the Zammad client, ensuring it's initialized."""
+        if not self.client:
+            logger.debug("Zammad client not initialized, performing lazy initialization")
+            self.client = self._create_client(verify_connection=False)
+        return self.client
 ```
+
+MyPy narrows `self.client` to `ZammadClient` after the assignment inside the guard, so the code needs no `cast()`. Tools call `self.get_client()` instead of reading `self.client` directly.
+
+### When `cast()` is still appropriate
+
+Use `typing.cast` only when the checker cannot follow a narrowing you have already proven at runtime (for example, a `dict[str, Any]` value you checked with `isinstance`). Prefer a guard clause or a Pydantic model over `cast` where either works.
 
 ---
 
@@ -268,7 +255,8 @@ async def lifespan(app: FastMCP) -> AsyncIterator[None]:
 ### Tool function signatures
 
 ```python
-@mcp.tool(...)
+@self.mcp.tool(annotations=_read_only_annotations("Search Tickets"))
+@flat_params(TicketSearchParams)
 def zammad_search_tickets(params: TicketSearchParams) -> str:
     """Search for tickets.
 
@@ -284,7 +272,7 @@ def zammad_search_tickets(params: TicketSearchParams) -> str:
 ### Resource handler signatures
 
 ```python
-@mcp.resource("zammad://ticket/{ticket_id}")
+@self.mcp.resource("zammad://ticket/{ticket_id}")
 def get_ticket_resource(ticket_id: str) -> str:
     """Get ticket resource.
 
@@ -328,16 +316,18 @@ class ZammadClient:
 
 ## MyPy Configuration
 
-Project uses strict type checking (see pyproject.toml):
+MyPy is a hard gate in `scripts/validate.sh` (`mise run validate`). The configuration in `pyproject.toml` is:
 
 ```toml
 [tool.mypy]
 python_version = "3.10"
-strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+ignore_missing_imports = true
 ```
+
+`strict = true` is not set. Per-module overrides follow in `[[tool.mypy.overrides]]`.
 
 **Common MyPy errors and fixes:**
 
@@ -378,14 +368,14 @@ When writing or reviewing code:
 - [ ] No parameter shadowing (`type`, `id`, `format`, etc.)
 - [ ] Complex types documented in docstrings
 - [ ] Pydantic models use Field() for validation
-- [ ] Type narrowing uses `cast()` when needed
-- [ ] MyPy runs without errors
+- [ ] Optional attributes typed `T | None` and narrowed with a guard clause. Use `cast()` only as a last resort
+- [ ] MyPy runs without errors (`mise run validate`)
 
 ## References
 
 - Python 3.10+ typing documentation
-- CLAUDE.md: Type annotation standards
-- .github/copilot-instructions.md: Python conventions
+- AGENTS.md: Python conventions and code structure constraints
+- `mcp_zammad/server.py`: `ZammadMCPServer.get_client`
 - CodeRabbit PR #97: Type annotation feedback
 - PEP 604: Union type syntax
 - PEP 585: Type hinting generics in standard collections

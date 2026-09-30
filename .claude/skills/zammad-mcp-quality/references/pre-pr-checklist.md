@@ -11,20 +11,22 @@ Use this checklist before creating a PR to catch common issues that Code Rabbit 
 
 ## 🎯 Quick Scan (2 minutes)
 
-Run these commands to catch obvious issues:
+Run the canonical non-mutating developer gates (`scripts/validate.sh dev`: format check, ruff, mypy in parallel, then tests affected by your diff):
 
 ```bash
-# Format code
-uv run ruff format mcp_zammad tests
+# From project root
+mise run validate
+```
 
-# Check for linting errors
+MyPy is a hard gate here. Resolve every error it reports. Do not filter or ignore output.
+
+For individual gates, the non-mutating commands are:
+
+```bash
+uv run ruff format --check mcp_zammad tests
 uv run ruff check mcp_zammad tests
-
-# Type check (ignore pre-existing errors)
-uv run mypy mcp_zammad 2>&1 | rg "error:" | head -20
-
-# Run tests
-uv run pytest
+uv run mypy mcp_zammad
+uv run pytest tests/test_server.py   # or another focused path
 ```
 
 ---
@@ -57,7 +59,7 @@ rg "from typing import (List|Dict|Optional|Union)" mcp_zammad/
 → *See [pagination-patterns.md](./pagination-patterns.md)*
 
 - [ ] `total` field shows true total (or `None` if unknown), NOT page count
-- [ ] `has_more` computed from `total` when available
+- [ ] `has_more` computed from `total` when available, otherwise from the `len(items) == per_page` heuristic (the shipped formatters use the heuristic because Zammad returns no total)
 - [ ] All required fields present: `items`, `total`, `count`, `page`, `per_page`, `offset`, `has_more`, `next_page`, `next_offset`
 - [ ] JSON truncation preserves validity (structural, not string truncation)
 - [ ] Support both `ResponseFormat.JSON` and `ResponseFormat.MARKDOWN`
@@ -103,34 +105,33 @@ raise ValueError(
 
 ### MCP Tool Implementation
 
-- [ ] Tool uses `@mcp.tool()` decorator
-- [ ] Takes Pydantic model as input parameter (post-PR #101)
+- [ ] Register the tool inside a `ZammadMCPServer._setup_*` method with `@self.mcp.tool(annotations=...)`
+- [ ] Annotations come from the matching helper: `_read_only_annotations`, `_write_annotations`, `_idempotent_write_annotations` or `_destructive_write_annotations` (pick the one that matches the side effect)
+- [ ] `@flat_params(Model)` sits directly under `@self.mcp.tool(...)`. Without it the tool advertises one nested `params` object that MCP clients cannot send (see `mcp_zammad/tool_params.py`)
+- [ ] Takes one Pydantic model as `params` (post-PR #101). The model is a `StrictBaseModel` in `mcp_zammad/models.py`
 - [ ] Returns appropriate type (`str`, Pydantic model, etc.)
-- [ ] Includes comprehensive docstring with Args/Returns
+- [ ] Includes comprehensive docstring with Parameters/Returns/Examples/Error Handling
 - [ ] Tool name follows naming convention (`zammad_` prefix)
-- [ ] Uses dependency injection (`get_client()`)
-- [ ] Handles errors gracefully with actionable messages
+- [ ] Uses dependency injection (`self.get_client()`)
+- [ ] String results pass through `truncate_response()`
+- [ ] Handles errors with actionable messages
 
-**Example:**
+**Example** (from `_setup_ticket_tools` in `mcp_zammad/server.py`, docstring trimmed):
 
 ```python
-@mcp.tool(
-    annotations={
-        "readOnlyHint": True,
-        "idempotentHint": True,
-    }
-)
+@self.mcp.tool(annotations=_read_only_annotations("Search Tickets"))
+@flat_params(TicketSearchParams)
 def zammad_search_tickets(params: TicketSearchParams) -> str:
-    """Search for tickets with various filters.
-
-    Args:
-        params: Search parameters including query, state, priority, pagination
-
-    Returns:
-        Formatted response in JSON or Markdown format
-    """
+    """Search for tickets with filters and pagination. ..."""
     client = self.get_client()
+
+    # Extract search parameters (exclude response_format for API call)
+    search_params = params.model_dump(exclude={"response_format"}, exclude_none=True)
+    tickets_data = client.search_tickets(**search_params)
+
+    tickets = [Ticket(**ticket) for ticket in tickets_data]
     ...
+    return truncate_response(result)
 ```
 
 ---
@@ -161,7 +162,7 @@ class TicketSearchParams(BaseModel):
 ## 📝 Documentation Checks
 
 - [ ] Docstrings updated for new/modified functions
-- [ ] CHANGELOG.md updated (add to Unreleased section)
+- [ ] Run `mise run changelog` to regenerate the Unreleased section of CHANGELOG.md (do not hand-edit released sections)
 - [ ] README.md updated if adding public features
 - [ ] Tool docstrings clarify ID vs number for ticket operations (if applicable)
 
@@ -173,8 +174,8 @@ class TicketSearchParams(BaseModel):
 - [ ] Tests updated for modified functionality
 - [ ] Tests use proper mocking (mock `ZammadClient`)
 - [ ] Error cases tested
-- [ ] Run full test suite: `uv run pytest`
-- [ ] Coverage maintained: `uv run pytest --cov=mcp_zammad`
+- [ ] Affected tests pass: `mise run validate`
+- [ ] Full suite passes with the 86% coverage floor from `pyproject.toml`: `mise run validate-release`
 
 **Test organization:**
 
@@ -208,10 +209,13 @@ class TicketSearchParams(BaseModel):
 
 ## 📊 Complexity Checks
 
-- [ ] Functions < 50 lines (except tool registration)
-- [ ] Cyclomatic complexity < 10 (use helper functions)
-- [ ] No deeply nested logic (> 3-4 levels)
-- [ ] Extract complex logic into helper methods
+AGENTS.md section 8 (Code Structure Constraints) sets the limits:
+
+- [ ] Nesting depth ≤ 3 (guard clauses, early returns, function extraction)
+- [ ] Every construct (function, method, class, type) ≤ 30 lines
+- [ ] Every file ≤ 200 lines total, including imports, comments and blank lines
+- [ ] One responsibility per construct. Split mixed concerns
+- [ ] Extract complex logic into helper functions
 
 ---
 
@@ -232,7 +236,7 @@ class TicketSearchParams(BaseModel):
 - [ ] Resources use URI pattern: `zammad://entity/id`
 - [ ] Tool names descriptive and agent-friendly
 - [ ] Follow dependency injection pattern
-- [ ] Use sentinel pattern for optional initialization
+- [ ] Get the client through `self.get_client()` (lazy `ZammadClient | None`, no sentinel class)
 
 ### Issue #99 Context (if touching ticket operations)
 
@@ -244,21 +248,13 @@ class TicketSearchParams(BaseModel):
 
 ## 📋 Pre-Commit Command
 
-Run this before committing:
+Run the release gates before opening the PR (`scripts/validate.sh release`: lint, full suite with the 86% coverage floor, package build). This is the same command CI runs:
 
 ```bash
-# All-in-one quality check
-./scripts/quality-check.sh && uv run pytest --cov=mcp_zammad
+mise run validate-release
 ```
 
-If no quality check script, run:
-
-```bash
-uv run ruff format mcp_zammad tests && \
-uv run ruff check mcp_zammad tests && \
-uv run mypy mcp_zammad && \
-uv run pytest --cov=mcp_zammad
-```
+`./scripts/quality-check.sh` is a different, mutating script: it rewrites files with `ruff format` and `ruff check --fix`, writes security and coverage reports, and already runs pytest. Do not chain it with a second `pytest` run, and do not use it when the user asks for a read-only validation.
 
 ---
 
@@ -273,7 +269,8 @@ Based on [coderabbit-learnings.md](./coderabbit-learnings.md):
 5. ❌ **JSON truncation breaks validity** → Use structural truncation
 6. ❌ **Vague error messages** → Make them actionable
 7. ❌ **Missing return type hints** → Add to all functions
-8. ❌ **High cyclomatic complexity** → Extract helper functions
+8. ❌ **Construct over 30 lines or nesting over 3** → Extract helper functions (AGENTS.md section 8)
+9. ❌ **Tool without `@flat_params`** → Clients see a nested `params` schema they cannot send
 
 ---
 
@@ -300,4 +297,4 @@ For detailed guidance:
 - [type-annotation-standards.md](./type-annotation-standards.md)
 - [coderabbit-learnings.md](./coderabbit-learnings.md)
 
-**Questions?** Check CLAUDE.md, .github/copilot-instructions.md, or ask in PR comments.
+**Questions?** Check AGENTS.md or ask in PR comments.

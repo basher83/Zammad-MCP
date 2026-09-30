@@ -6,19 +6,21 @@ description: Use PROACTIVELY after completing coding tasks with 3+ modified file
 
 # Git Commit
 
-This command serves as a git workflow orchestrator to create clean, logical commits while addressing any code quality issues. Follow the `Instructions` and run the `Commands` to execute pre-commit hooks and invoke the commit-craft agent for commit creation.
+This command creates clean, logical commits. It validates the working tree with the pre-commit hooks first. If the hooks fail, fix the reported problems and run the hooks again before you commit. Follow the `Instructions` and run the `Commands`.
 
 ## Instructions
 
 - Review the current state of the git repository using the provided commands.
-- Execute pre-commit hooks and fix any issues in the codebase.
-- Invoke the commit-craft agent (@agent-commit-craft) to create clean, logical
-  commits for all changes in the repository.
+- Run the pre-commit hooks. If a hook fails, fix the problem and run the hooks again until they pass.
+- Group the changes into logical units. One commit per concern (for example: a feature, its tests, an unrelated docs fix). Do not mix unrelated changes in one commit.
+- Stage each unit explicitly with `git add <paths>`. Do not use `git add -A` or `git add .`.
+- Write each commit message in Conventional Commits format: `<type>(<scope>): <summary>` with type in `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`, `build`, `perf`. Keep the summary under 72 characters, imperative mood. Add a body when the why is not obvious.
+- Never push unless the user asks.
+- Report the commit hashes and one-line summaries when done.
 
 ## Commands
 
 - Current Status: !`git status`
-- Current diff: !`git diff HEAD origin/main`
+- Current diff: !`git diff origin/main...HEAD`
 - Current branch: !`git branch --show-current`
 - Run Pre-commit Hooks: !`mise run pre-commit-run`
-- Commit Craft Agent: @agent-commit-craft

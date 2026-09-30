@@ -108,13 +108,13 @@ def create_article(article_type: str, ticket_id: int):
 **Problem:**
 Hard-coded `CHARACTER_LIMIT = 25000` requires code changes for different deployments.
 
-**Solution:**
+**Current state:** Not implemented. `mcp_zammad/server.py` still defines the module constant:
 
 ```python
-CHARACTER_LIMIT = int(os.getenv("ZAMMAD_MCP_CHARACTER_LIMIT", "25000"))
+CHARACTER_LIMIT = 25000  # Maximum response size per MCP best practices
 ```
 
-**Status:** ✅ Implemented in PR #97
+There is no `ZAMMAD_MCP_CHARACTER_LIMIT` environment variable. `truncate_response(content, limit=CHARACTER_LIMIT)` accepts a `limit` argument, so a caller can override it per call. Treat an environment override as an open suggestion, not a shipped feature.
 
 ---
 
@@ -161,9 +161,9 @@ except Exception:
 **Severity:** Low (maintainability)
 
 **Problem:**
-Functions with high cyclomatic complexity (> 8-10) are hard to maintain and test.
+Large, deeply nested functions are hard to maintain and test. The project limits are in AGENTS.md section 8: nesting depth ≤ 3, every construct ≤ 30 lines, every file ≤ 200 lines.
 
-**CodeRabbit Warnings:**
+**CodeRabbit Warnings (historical):**
 
 - `_handle_api_error`: complexity 10
 - `_setup_ticket_tools`: complexity 24
@@ -174,35 +174,26 @@ Functions with high cyclomatic complexity (> 8-10) are hard to maintain and test
 - Break large setup methods into smaller helpers
 - Use dictionaries/mappings instead of long if/elif chains
 
-**Example Refactor:**
+**Shipped Refactor:** `_handle_api_error` is now table-driven. The `(patterns, template)` tuples live in `_API_ERROR_GUIDANCE`, resilience errors go through `_resilience_error_message`, and the function body is one loop:
 
 ```python
-# ❌ High complexity
-def _handle_api_error(e, context):
-    if "404" in str(e):
-        return "Not found..."
-    elif "403" in str(e):
-        return "Permission denied..."
-    elif "401" in str(e):
-        return "Auth failed..."
-    elif "timeout" in str(e):
-        return "Timeout..."
-    # ... 10 more conditions
+def _handle_api_error(e: Exception, context: str = "operation") -> str:
+    resilience_message = _resilience_error_message(e, context)
+    if resilience_message is not None:
+        return resilience_message
 
-# ✅ Lower complexity
-ERROR_HANDLERS = {
-    "404": lambda ctx: f"Not found during {ctx}...",
-    "403": lambda ctx: f"Permission denied for {ctx}...",
-    ...
-}
-
-def _handle_api_error(e, context):
     error_msg = str(e).lower()
-    for pattern, handler in ERROR_HANDLERS.items():
-        if pattern in error_msg:
-            return handler(context)
-    return f"Error during {context}: {e}"
+
+    # First matching pattern wins; order mirrors the original precedence.
+    for patterns, template in _API_ERROR_GUIDANCE:
+        if any(pattern in error_msg for pattern in patterns):
+            return template.format(context=context, detail="")
+
+    # Generic error with type information
+    return f"Error during {context}: {type(e).__name__} - {e}"
 ```
+
+See [error-handling-guide.md](./error-handling-guide.md) for the full table.
 
 ---
 
@@ -231,23 +222,21 @@ def long_function():
 
 ## 📚 CodeRabbit Learnings Feature
 
-CodeRabbit has a "Learnings" feature that tracks project-specific patterns:
+CodeRabbit has a "Learnings" feature that tracks project-specific patterns.
 
-**Current Learnings (from .coderabbit.yaml reviews):**
+**Where learnings live:** In CodeRabbit's hosted knowledge base, not in this repository. `.coderabbit.yaml` only enables the feature (`knowledge_base.learnings.scope: auto`). It holds no learning text. Read them in the CodeRabbit dashboard or in review comments.
 
-1. **2025-07-24:** "Use FastMCP framework for MCP server implementation"
-   - Applies to: `mcp_zammad/**/*.py`
-   - Source: .github/copilot-instructions.md
+**What `.coderabbit.yaml` does hold:** `reviews.path_instructions` (per-path review guidance for `server.py`, `client.py`, `models.py`, `tests/`, shell scripts, workflows and the Dockerfile) and `path_filters`. Note that `path_filters` excludes `!**/.claude/**`, so CodeRabbit never reviews this skill.
 
-2. **2025-10-21:** "Define MCP prompts in server.py using the mcp.prompt() decorator"
-   - Applies to: `mcp_zammad/server.py`
-   - Source: CLAUDE.md
+**Learnings recorded from past reviews** (dates from the CodeRabbit UI):
+
+1. **2025-07-24:** "Use FastMCP framework for MCP server implementation" (applies to `mcp_zammad/**/*.py`)
+2. **2025-10-21:** "Define MCP prompts in server.py using the mcp.prompt() decorator" (applies to `mcp_zammad/server.py`)
 
 **How to leverage:**
 
-- CodeRabbit auto-applies these learnings in reviews
-- Stored in CodeRabbit's knowledge base
-- Referenced in path_instructions (.coderabbit.yaml)
+- CodeRabbit auto-applies its stored learnings in reviews
+- To make a rule visible in the repo, add it to `reviews.path_instructions` in `.coderabbit.yaml` or to AGENTS.md
 
 ---
 
@@ -336,15 +325,9 @@ result = tool("zammad_search_tickets", params=params)
 - Target: Python 3.10+
 - Format + lint in one tool
 
-### GitHub Check: Codacy
+### Codacy
 
-**Common Warnings:**
-
-- Cyclomatic complexity > 8
-- Function length > 50 lines
-- Too many parameters
-
-**Note:** Some warnings are acceptable for MCP tool registration functions.
+PR #369 removed the no-op Codacy SARIF workflow, so there is no Codacy code-quality check on PRs. What remains is a conditional coverage upload in `.github/workflows/tests.yml` (only on Python 3.13 and only when the `CODACY_PROJECT_TOKEN` secret exists). The structural limits that apply are the AGENTS.md section 8 limits above, enforced in review.
 
 ### LanguageTool (Documentation)
 
@@ -412,7 +395,7 @@ result = tool("zammad_search_tickets", params=params)
 
 1. **Don't just fix** - understand the pattern
 2. **Document learnings** - update this file
-3. **Share knowledge** - update CLAUDE.md and .coderabbit.yaml
+3. **Share knowledge** - update AGENTS.md and .coderabbit.yaml
 4. **Prevent recurrence** - add to checklist
 5. **Track metrics** - measure improvement
 
@@ -435,4 +418,4 @@ result = tool("zammad_search_tickets", params=params)
 - Trend analysis of feedback frequency
 - Integration with CI/CD for pre-commit validation
 
-**Script stub:** `scripts/extract_feedback.py`
+**Script stub:** `scripts/extract_feedback.py` (prints `[TODO]` placeholders, not functional)

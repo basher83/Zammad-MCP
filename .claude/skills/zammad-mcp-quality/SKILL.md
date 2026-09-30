@@ -58,12 +58,15 @@ Keep patterns in mind while coding:
 
 This takes 5-10 minutes but reduces review iterations by 60-70%.
 
-**Quick quality check:**
+**Quick quality check** (non-mutating, the same gates CI runs through `scripts/validate.sh`):
 
 ```bash
 # From project root
-./scripts/quality-check.sh && uv run pytest --cov=mcp_zammad
+mise run validate           # dev loop: lint + affected tests
+mise run validate-release   # before the PR: lint + full suite (86% floor) + build
 ```
+
+`./scripts/quality-check.sh` is mutating (formats, auto-fixes, writes reports) and already runs pytest. Do not chain it with another pytest run.
 
 ### 4. After CodeRabbit Review
 
@@ -126,7 +129,7 @@ Python 3.10+ type annotation guide:
 - Modern vs legacy syntax
 - Parameter shadowing fixes
 - Pydantic model types
-- Type narrowing with `cast()`
+- Type narrowing of `ZammadClient | None` via `get_client()`
 - MyPy configuration
 
 ---
@@ -135,11 +138,11 @@ Python 3.10+ type annotation guide:
 
 ### extract_feedback.py (Future)
 
-Stub for automating CodeRabbit feedback extraction:
+Stub for automating CodeRabbit feedback extraction. It is not functional: every function prints a `[TODO]` placeholder and returns empty data. Do not rely on its output.
 
 ```bash
-# Future usage
-python scripts/extract_feedback.py --prs 10 --output references/coderabbit-learnings.md
+# Future usage (never invoke bare `python`; AGENTS.md requires uv)
+uv run scripts/extract_feedback.py --prs 10 --output references/coderabbit-learnings.md
 ```
 
 **Status:** Planned for Phase 3 automation
@@ -236,7 +239,7 @@ Track these over time to measure skill effectiveness:
 
 - Issue recurrence rate (same pattern 2+ PRs)
 - Time to first approval (Target: < 1 hour)
-- Test coverage (Target: > 90%)
+- Test coverage (Floor: 86%, `fail_under` in `pyproject.toml`)
 
 ---
 
@@ -259,7 +262,7 @@ Update this skill when:
 3. **Document** in appropriate reference guide
 4. **Add to checklist** if high-frequency
 5. **Test pattern** with codebase examples
-6. **Validate** in next PR
+6. **Check** in next PR
 
 ### Contributors
 
@@ -277,13 +280,9 @@ When updating references:
 
 This skill **complements** existing docs:
 
-**CLAUDE.md** - Project context for Claude Code
-→ Focuses on architecture, development rules
+**AGENTS.md** - Project context for coding agents (`CLAUDE.md` is a symlink to it)
+→ Focuses on architecture, development rules, TDD contract, code structure limits
 → Quality skill adds CodeRabbit-specific patterns
-
-**.github/copilot-instructions.md** - GitHub Copilot guidance
-→ Focuses on code generation patterns
-→ Quality skill adds review/validation patterns
 
 **.coderabbit.yaml** - CodeRabbit configuration
 → Focuses on tool settings and path instructions
