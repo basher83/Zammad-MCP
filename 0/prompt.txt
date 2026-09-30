@@ -1,0 +1,21 @@
+everything should be merged in now, lets make sure we clean up and get synced on main
+
+---
+
+yup, good to clean those up leaving renovate/*
+
+---
+
+ok let me give you some more things I need tracked as issues: maintainer-pr-ledger.md at repo root should have been in docs/maintainer. .coderabbit.yaml and .codacy.yaml need a deep dive research phase to re-validate the current settings still make sense for this repo. docs/ai-docs/* likely full sub dir can be removed. docs/dev/my-dev-setup.md remove. need a wider full repo docs audit against the  .agents/skills/technical-documentation skill. .claude/{commands,skills} needs audit to scrape or merge relevant parts whats there is old
+
+---
+
+I think there's already a AGENTS.md audit in there as well but just need to verify
+
+---
+
+#374 covers it, that's fine
+
+---
+
+ah can you symlink the tech doc skill into .claude/skills for me as well, no issue go ahead on main and commit then push pls
