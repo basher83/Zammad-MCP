@@ -4,6 +4,7 @@
 **Related Issues**: #148, #149
 **Reporter**: @Erudition
 **Severity**: High (blocks core functionality)
+**Status**: Fixed in v1.1.0 (2025-12-09). See the [implementation plan](../plans/2025-12-09-fix-ticket-creation-bugs.md).
 
 ---
 

@@ -344,8 +344,6 @@ The project currently uses bash scripts for:
 1. Add `profile-zammad.py` for performance testing
 1. Create `issue-helper.py` for better issue management
 
-=======
-
 **Go/No-Go Decision Point**:
 
 - ✅ All UV scripts stable in CI for ≥2 weeks

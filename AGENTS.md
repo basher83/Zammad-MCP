@@ -556,6 +556,7 @@ Repository-specific guidance for `basher83/Zammad-MCP`. This layer supplements t
 ## Tooling and validation
 
 - Use `uv` for Python dependency and command execution. Use `mise run setup` for repository setup.
+- `mise run validate` runs the fast non-mutating developer gates (`./scripts/validate.sh dev`: format check, lint, types, affected tests). `mise run validate-release` runs the release gates (`./scripts/validate.sh release`: the same lint gates, the full coverage suite, and a package build). The CI `validate` job runs the release gates.
 - Cheap non-mutating checks are `uv run ruff format --check mcp_zammad tests`, `uv run ruff check mcp_zammad tests`, `uv run mypy mcp_zammad`, and focused `uv run pytest <path>`.
 - `./scripts/quality-check.sh` is mutating: it formats code, applies Ruff fixes, writes security and coverage reports, and runs the full suite with an 86% coverage floor. Do not use it when a read-only validation was requested.
 - `mise run pre-commit-run` invokes `prek run --all-files`; configured hooks may modify files.
@@ -563,7 +564,7 @@ Repository-specific guidance for `basher83/Zammad-MCP`. This layer supplements t
 
 ## Known automation inconsistency
 
-`pyproject.toml` declares Python `>=3.10,<3.14`, while `mise.toml` pins Python 3.14.4 and GitHub test/security workflows select Python 3.14. Coverage enforcement also differs: the local quality script requires 86%, while the test workflow requires 65%. Markdown policy diverges too: pre-commit uses Rumdl with `.rumdl.toml`, while `mise run markdown-lint` invokes markdownlint-cli2 without equivalent configuration. Treat these as automation-foundation defects: reconcile the canonical versions and gates before production TDD, and do not claim local/CI parity until it is verified.
+Last checked on 2026-09-30. `pyproject.toml` declares Python `>=3.10,<3.14`, and the test workflow matrix covers Python 3.10 to 3.13. `mise.toml` pins Python 3.13.15, but `.python-version` pins 3.13.14, and the security workflow reads `.python-version`. `mise.toml` and the workflows pin uv 0.12.21, but the `uv-pre-commit` hook in `.pre-commit-config.yaml` pins 0.11.28. Coverage uses one 86% floor in `pyproject.toml`. `mise run markdown-lint` and pre-commit both run Rumdl with `.rumdl.toml`. Treat the Python and uv pin differences as automation-foundation defects. Reconcile the canonical versions before production TDD. Do not claim local/CI parity until you verify it.
 
 ## FastMCP contract
 

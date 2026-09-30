@@ -1,5 +1,7 @@
 # Attack plan: clear the open PR board
 
+> **Status:** Historical snapshot. PRs #346, #347, #348, and #349 merged on 2026-09-29 and executed this triage. On 2026-09-30 the repository had no open PRs. Do not use this page as the current PR state.
+
 **Written 2026-09-29 against `main` = `0d02c45`.** This replaces the ledger's
 "triage attention order" with an execution plan. It was built by fetching every open
 PR head, merging candidates onto a scratch branch in sequence, and running the full

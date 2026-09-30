@@ -362,7 +362,7 @@ Use @ to quickly include files or directories without waiting for Claude to read
     > Show me the data from @github:repos/owner/repo/issues
     ```
 
-    This fetches data from connected MCP servers using the format @server:resource. See [MCP resources](/en/docs/claude-code/mcp#use-mcp-resources) for details.
+    This fetches data from connected MCP servers using the format @server:resource. See [MCP resources](https://docs.claude.com/en/docs/claude-code/mcp#use-mcp-resources) for details.
   </Step>
 </Steps>
 
@@ -418,7 +418,7 @@ Suppose you're working on complex architectural decisions, challenging bugs, or 
 * "think" triggers basic extended thinking
 * intensifying phrases such as "think more", "think a lot", "think harder", or "think longer" triggers deeper thinking
 
-  For more extended thinking prompting tips, see [Extended thinking tips](/en/docs/build-with-claude/prompt-engineering/extended-thinking-tips).
+  For more extended thinking prompting tips, see [Extended thinking tips](https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/extended-thinking-tips).
 </Tip>
 
 <Note>
@@ -663,7 +663,7 @@ Suppose you need Claude's output in a specific format, especially when integrati
 
 Claude Code supports custom slash commands that you can create to quickly execute specific prompts or tasks.
 
-For more details, see the [Slash commands](/en/docs/claude-code/slash-commands) reference page.
+For more details, see the [Slash commands](https://docs.claude.com/en/docs/claude-code/slash-commands) reference page.
 
 ### Create project-specific commands
 

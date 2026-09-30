@@ -1,5 +1,7 @@
 # Maintainer PR ledger — Zammad-MCP
 
+> **Status:** Historical snapshot. PRs #346, #347, #348, and #349 merged on 2026-09-29 and executed this triage. On 2026-09-30 the repository had no open PRs. Do not use this page as the current PR state.
+
 **Pre-triage snapshot: 2026-09-25 UTC.** This enumerates every open PR and issue in `basher83/Zammad-MCP`, ranks attention, separates decisions from implementation/review work, and proposes coherent queues. It is **not** a PR execution workflow, merge authorization, or a new code-review verdict.
 
 **Verified coverage: 41 PRs + 16 issues = 57 open items**, reconciled by exact number sets, not just totals. Gitcrawl: 18 durable discovery clusters; curated here into 17 workgroups. Comment routing: **PRs — 11 Yes / 16 No / 14 Unclear/conditional; issues — 7 Yes / 3 No / 6 Unclear/conditional.** These are item flags, not that many separate messages: use the grouped decision inbox below.

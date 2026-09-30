@@ -1,5 +1,7 @@
 # MCP Audit Fixes Implementation Plan
 
+> **Status:** Implemented in v1.0.0 (2025-11-24). Task 5.1 (`tests/test_integration_response_formats.py`) was not done. `pyproject.toml` now sets the dependency versions. Historical record. Do not execute this plan. Commands, versions, and line numbers in it are stale.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Fix MCP protocol compliance issues, enhance documentation, and update to MCP 1.21.1 to resolve security vulnerability.

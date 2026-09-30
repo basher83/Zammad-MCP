@@ -41,7 +41,7 @@ Quickstart Prerequisite: Install `jq` for JSON processing in the command line.
 
 ### Step 1: Open hooks configuration
 
-Run the `/hooks` [slash command](/en/docs/claude-code/slash-commands) and select
+Run the `/hooks` [slash command](https://docs.claude.com/en/docs/claude-code/slash-commands) and select
 the `PreToolUse` hook event.
 
 `PreToolUse` hooks run before tool calls and can block them while providing
@@ -92,7 +92,7 @@ Run `/hooks` again or check `~/.claude/settings.json` to see your configuration:
 ## Configuration
 
 Claude Code hooks are configured in your
-[settings files](/en/docs/claude-code/settings):
+[settings files](https://docs.claude.com/en/docs/claude-code/settings):
 
 * `~/.claude/settings.json` - User settings
 * `.claude/settings.json` - Project settings
@@ -406,7 +406,7 @@ if issues:
 ## Working with MCP Tools
 
 Claude Code hooks work seamlessly with
-[Model Context Protocol (MCP) tools](/en/docs/claude-code/mcp). When MCP servers
+[Model Context Protocol (MCP) tools](https://docs.claude.com/en/docs/claude-code/mcp). When MCP servers
 provide tools, they appear with a special naming pattern that you can match in
 your hooks.
 
@@ -551,7 +551,7 @@ This prevents malicious hook modifications from affecting your current session.
 To troubleshoot hooks:
 
 1. Check if `/hooks` menu displays your configuration
-1. Verify that your [settings files](/en/docs/claude-code/settings) are valid
+1. Verify that your [settings files](https://docs.claude.com/en/docs/claude-code/settings) are valid
    JSON
 1. Test commands manually
 1. Check exit codes

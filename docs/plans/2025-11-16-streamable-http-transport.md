@@ -1,5 +1,7 @@
 # Streamable HTTP Transport Implementation Plan
 
+> **Status:** Implemented in v1.0.0 (PR #119, issue #113). For current behavior, read [HTTP transport deployment](../deployment/http-transport.md) and `mcp_zammad/config.py`. Historical record. Do not execute this plan. Commands, versions, and line numbers in it are stale.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Add Streamable HTTP transport support to enable remote deployment of the Zammad MCP server alongside Zammad instances in cloud environments.

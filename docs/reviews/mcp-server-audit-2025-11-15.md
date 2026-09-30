@@ -4,6 +4,7 @@
 **Auditor:** Claude Code (mcp-builder skill framework)
 **Server:** mcp-zammad v0.2.0
 **Scope:** Full implementation review against MCP best practices
+**Status:** Historical. Version 1.0.0 addressed most findings. Read the [fix plan](../plans/2025-11-15-mcp-audit-fixes.md) for the status of each task.
 
 ## Summary
 

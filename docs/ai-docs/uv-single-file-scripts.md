@@ -79,9 +79,9 @@ This will add a `script` section at the top of the script declaring the dependen
 
 ```python
 # /// script
-# dependencies = [\
-#   "requests<3",\
-#   "rich",\
+# dependencies = [
+#   "requests<3",
+#   "rich",
 # ]
 # ///
 
@@ -131,8 +131,8 @@ In addition to locking dependencies, uv supports an `exclude-newer` field in the
 
 ```python
 # /// script
-# dependencies = [\
-#   "requests",\
+# dependencies = [
+#   "requests",
 # ]
 # [tool.uv]
 # exclude-newer = "2023-10-16T00:00:00Z"

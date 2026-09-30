@@ -34,6 +34,8 @@ docker run -i --rm \
   ghcr.io/github/github-mcp-server
 ```
 
+### Available Toolsets
+
 - `repos` - Repository management
 - `issues` - Issue management  
 - `pull_requests` - Pull request operations
@@ -41,8 +43,6 @@ docker run -i --rm \
 - `code_security` - Security scanning access
 - `experiments` - Beta features
 - `all` - Enable all toolsets
-
-### Available Toolsets
 
 ## Claude Code Configuration
 

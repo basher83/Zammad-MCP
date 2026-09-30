@@ -2,7 +2,7 @@
 
 Claude Code supports custom slash commands that you can create to quickly execute specific prompts or tasks.
 
-For more details, see the [Slash commands](/en/docs/claude-code/slash-commands) reference page.
+For more details, see the [Slash commands](https://docs.claude.com/en/docs/claude-code/slash-commands) reference page.
 
 ## Create project-specific commands
 
