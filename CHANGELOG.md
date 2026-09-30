@@ -56,9 +56,6 @@
 - *(prompts)* Accept string arguments for `ticket_id`
 - Don't HTML-escape quotes/apostrophes in plain-text article/ticket content
 - Preserve quotes when updating ticket titles
-- *(stats)* Categorize ticket stats by state name, not `state_type_id`
-- *(stats)* Add pending-prefix fallback for custom states in name-based categorization
-- *(stats)* Restrict pending fallback to space-terminated word match
 - *(stats)* Categorize by `state_type_id` (seeded and stable), not state name
 - *(client)* Request expand=true when fetching a single ticket
 - *(client)* Build `get_ticket` URL from `zammad_py`'s normalised base
@@ -91,7 +88,7 @@
 - *(export)* Split `zammad_export_tickets` into focused helpers
 - *(client)* Build ticket search clauses declaratively
 - *(client)* Pick the legacy translation body from one candidate list
-- Drop orphaned _destructive_write_annotations and harden guard test
+- Drop orphaned `_destructive_write_annotations` and harden guard test
 - Split attachment formatting to cut cyclomatic complexity
 - *(client)* Build search clauses and update payloads declaratively
 - *(webhooks)* Address Codacy static analysis findings
@@ -114,6 +111,7 @@
 - *(webhooks)* Document the payload extraction helpers
 - Record rate limiting feature in unreleased changelog
 - *(changelog)* Regenerate unreleased notes for the merged integration batches
+- *(changelog)* Include this branch's own changelog commit in the unreleased notes
 
 ### 🎨 Styling
 

@@ -115,23 +115,23 @@ moving parts:
 `#326`, `#331`, `#287`, `#329`.
 
 Expected conflicts: #287 and #329 against #326/#331 in `client.py` and
-`models.py` (adjacent field additions), and #329 against `main` in README. After
-#328, add `requests>=2.32.0` and `types-requests` to `pyproject.toml` and drop the
+`models.py` (adjacent field additions), and #329 against `main` in README. After merging #328,
+add `requests>=2.32.0` and `types-requests` to `pyproject.toml` and drop the
 `# type: ignore[import-untyped]` on the import.
 
 Close on merge: #318, #315, #321, #327, #313 (open a follow-up issue for the
-timeout), #330.
+timeout), #330, and #311 (declined; see the Stats decision above).
 
 ### Batch 3: features (target: one to two days)
 
 `#343` (enum stack), `#339` (bulk stack), `#335`, `#338`, `#336`, `#341`.
 
-Each new tool gets `@flat_params(...)`. Restore `_destructive_write_annotations` when
-#336 conflicts with #325's deletion. Expected conflicts: #339 vs #343 in `models.py`
+Each new tool gets `@flat_params(...)`. Restore `_destructive_write_annotations` when #336
+conflicts with #325's deletion. Expected conflicts: #339 vs #343 in `models.py`
 (2 hunks), #336 (8 hunks), #335 (6 hunks), #341 (3 hunks).
 
-Close on merge: #333, #340, #334, #312. Update issues #201, #15, #278, #309, #16,
-#120 with the integration PR link; close the ones the MVP fully answers.
+Close on merge: #333, #340, #334, #312. Update issues #201, #15, #278, #309, #16, #120
+with the integration PR link; close the ones the MVP fully answers.
 
 ### Batch 4: the three that need code work (target: one day)
 
@@ -148,9 +148,11 @@ Close on merge: #344, #200, #198 (or narrow it to the create/write follow-up).
   not to try to fix contributor PRs in place.
 - Fork PRs never ran CI. The integration PR is what gets the first real test run for
   most of this code, so treat batch CI as the gate, not the per-PR checks.
-- Self-approval is rejected on your own PRs. If the ruleset requires a review, use an
-  admin bypass on the integration PR after CI is green rather than asking a bot; the
-  local gate plus CI is stronger evidence than any of the existing comment verdicts.
+- The `main` ruleset requires zero approvals and the `test-and-coverage` and
+  `security-scan` checks; its only review gate is the extra approval for
+  unattributed changes, which is satisfied by committing integration work under
+  the maintainer identity. Do not use an admin bypass. If a review requirement
+  is ever added, wait for an independent reviewer or defer the merge.
 - Do not run `scripts/quality-check.sh` during integration; it mutates files. Use the
   four non-mutating commands the ledger names.
 - Keep the merge commits. Squashing the integration PR would erase contributor

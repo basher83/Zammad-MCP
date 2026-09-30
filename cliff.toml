@@ -44,8 +44,8 @@ split_commits = false
 # An array of regex based parsers to modify commit messages prior to further processing.
 commit_preprocessors = [
     # Wrap snake_case identifiers (tool and field names) in backticks so underscores are not parsed as emphasis.
-    { pattern = '\b([A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+)\b', replace = "`${1}`" },
-    { pattern = '\b(_[A-Za-z0-9]+_)\b', replace = "`${1}`" },
+    { pattern = '\b(_?[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+)\b', replace = "`${1}`" },
+    { pattern = '\b(_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*_)\b', replace = "`${1}`" },
     # Replace issue numbers with link templates to be updated in `changelog.postprocessors`.
     #{ pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](<REPO>/issues/${2}))"},
     # Check spelling of the commit message using https://github.com/crate-ci/typos.
@@ -58,6 +58,10 @@ protect_breaking_commits = false
 # Assigns commits to groups.
 # Optionally sets the commit's scope and can decide to exclude commits from further processing.
 commit_parsers = [
+    # Superseded within the same release by "categorize by state_type_id"; keeping them would describe two contradictory behaviours.
+    { message = "^fix\\(stats\\): categorize ticket stats by state name", skip = true },
+    { message = "^fix\\(stats\\): add pending-prefix fallback", skip = true },
+    { message = "^fix\\(stats\\): restrict pending fallback", skip = true },
     { message = "^feat", group = "<!-- 0 -->🚀 Features" },
     { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
     { message = "^doc", group = "<!-- 3 -->📚 Documentation" },
