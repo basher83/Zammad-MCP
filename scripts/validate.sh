@@ -33,6 +33,26 @@ fi
 # .python-version; setup-uv steps and the uv-pre-commit hook pin uv separately.
 mise_pin() { sed -n "s/^$1 = \"\(.*\)\"$/\1/p" mise.toml; }
 
+# Print "<workflow>:<job> <version>" for every astral-sh/setup-uv step, or
+# MISSING when the step has no explicit `version` input.
+setup_uv_versions() {
+  uv run --frozen python - .github/workflows/*.yml <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+jobs = [(path, name, job) for path in sys.argv[1:]
+        for name, job in (yaml.safe_load(Path(path).read_text()).get("jobs") or {}).items()]
+steps = [(f"{path}:{name}", step) for path, name, job in jobs for step in job.get("steps") or []]
+for label, step in steps:
+    if not str(step.get("uses", "")).startswith("astral-sh/setup-uv@"):
+        continue
+    version = (step.get("with") or {}).get("version")
+    print(label, "MISSING" if version is None else version)
+PY
+}
+
 check_pin() {
   local label="$1" want="$2" got="$3"
   [ "$want" = "$got" ] && return 0
@@ -41,7 +61,7 @@ check_pin() {
 }
 
 run_pins() {
-  local py uv pin status=0
+  local py uv pin steps step status=0
   py="$(mise_pin python)"
   uv="$(mise_pin uv)"
   if [ -z "$py" ] || [ -z "$uv" ]; then
@@ -51,9 +71,13 @@ run_pins() {
   check_pin .python-version "$py" "$(tr -d '[:space:]' < .python-version)" || status=1
   pin="$(grep -A2 'astral-sh/uv-pre-commit' .pre-commit-config.yaml | sed -n 's/.*# \([0-9.]*\)$/\1/p')"
   check_pin "the uv-pre-commit hook" "$uv" "$pin" || status=1
-  while IFS= read -r pin; do
-    check_pin "a setup-uv step in .github/workflows" "$uv" "$pin" || status=1
-  done < <(grep -h -A2 'astral-sh/setup-uv@' .github/workflows/*.yml | sed -n 's/^ *version: "\(.*\)"$/\1/p')
+  if ! steps="$(setup_uv_versions)"; then
+    echo "❌ pins: cannot parse the setup-uv steps in .github/workflows"
+    return 1
+  fi
+  while read -r step pin; do
+    [ -n "$step" ] && { check_pin "setup-uv in $step" "$uv" "$pin" || status=1; }
+  done <<<"$steps"
   [ "$status" -eq 0 ] && echo "📌 pins: Python $py and uv $uv match mise.toml"
   return "$status"
 }

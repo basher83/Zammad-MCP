@@ -150,7 +150,7 @@ cd zammad-mcp
 # Install the pinned tools from mise.toml (Python, uv, prek, git-cliff, and others)
 mise install
 
-# Install the Python dependencies from uv.lock into .venv
+# Install the Python dependencies into .venv (uv sync)
 mise run setup
 
 # Install the pre-commit hooks
@@ -557,7 +557,7 @@ Use zammad_merge_tickets with:
 
 ### Setup
 
-`mise run setup` is the only supported setup path. It runs `uv sync`, which installs the locked dependencies, including the `dev` group, the same way CI does.
+`mise run setup` is the only supported setup path. It runs `uv sync`, which installs the project dependencies, including the `dev` group. CI runs `uv sync --dev --frozen`, which installs exactly what `uv.lock` records and never changes it. A local `uv sync` can update `uv.lock` when the lockfile is out of date.
 
 ```bash
 # Clone the repository
@@ -567,7 +567,7 @@ cd zammad-mcp
 # Install the pinned tools from mise.toml (Python, uv, prek, git-cliff, and others)
 mise install
 
-# Install the Python dependencies from uv.lock into .venv
+# Install the Python dependencies into .venv (uv sync)
 mise run setup
 
 # Install the pre-commit hooks

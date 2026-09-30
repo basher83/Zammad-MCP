@@ -23,7 +23,7 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
 
    ```bash
    mise install            # pinned tools from mise.toml
-   mise run setup          # uv sync from uv.lock into .venv
+   mise run setup          # uv sync into .venv
    mise run hooks-install  # pre-commit hooks
    ```
 
