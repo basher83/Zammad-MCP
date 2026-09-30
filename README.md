@@ -140,22 +140,24 @@ View all versions on [GitHub Container Registry](https://github.com/basher83/Zam
 
 ### Option 3: For Developers
 
-To contribute or modify the code:
+To contribute or modify the code, install [mise](https://mise.jdx.dev/getting-started.html). `mise.toml` pins the Python and uv versions and defines the project tasks.
 
 ```bash
 # Clone the repository
 git clone https://github.com/basher83/zammad-mcp.git
 cd zammad-mcp
 
-# Run the setup script
-# On macOS/Linux:
-./scripts/setup.sh
+# Install the pinned tools from mise.toml (Python, uv, prek, git-cliff, and others)
+mise install
 
-# On Windows (PowerShell):
-.\scripts\setup.ps1
+# Install the Python dependencies from uv.lock into .venv
+mise run setup
+
+# Install the pre-commit hooks
+mise run hooks-install
 ```
 
-For manual setup, see the [Development](#development) section below.
+If mise asks you to trust the repository configuration, run `mise trust`. For more detail, see the [Development](#development) section below.
 
 ## Configuration
 
@@ -555,39 +557,21 @@ Use zammad_merge_tickets with:
 
 ### Setup
 
-#### Using Setup Scripts (Recommended)
+`mise run setup` is the only supported setup path. It runs `uv sync`, which installs the locked dependencies, including the `dev` group, the same way CI does.
 
 ```bash
 # Clone the repository
 git clone https://github.com/basher83/zammad-mcp.git
 cd zammad-mcp
 
-# Run the setup script
-# On macOS/Linux:
-./scripts/setup.sh
+# Install the pinned tools from mise.toml (Python, uv, prek, git-cliff, and others)
+mise install
 
-# On Windows (PowerShell):
-.\scripts\setup.ps1
-```
+# Install the Python dependencies from uv.lock into .venv
+mise run setup
 
-#### Manual Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/basher83/zammad-mcp.git
-cd zammad-mcp
-
-# Create a virtual environment with uv
-uv venv
-
-# Activate the virtual environment
-# On macOS/Linux:
-source .venv/bin/activate
-# On Windows:
-# .venv\Scripts\activate
-
-# Install in development mode
-uv pip install -e ".[dev]"
+# Install the pre-commit hooks
+mise run hooks-install
 ```
 
 ### Project Structure
@@ -626,10 +610,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for component boundaries and design const
 ### Running Tests
 
 ```bash
-# Install development dependencies
-uv pip install -e ".[dev]"
-
-# Run tests
+# Run tests (after mise run setup)
 uv run pytest
 
 # Run with coverage

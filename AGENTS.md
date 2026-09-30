@@ -406,7 +406,7 @@ If you violate any of these constraints, the output is considered incorrect.
 - These files were over the 200-line limit on 2026-09-30. They are exempt from section 8.3 until they are refactored. New and changed constructs in them must still obey sections 8.1 and 8.2.
   - `mcp_zammad/server.py`, `mcp_zammad/client.py`, `mcp_zammad/models.py`
   - `tests/test_server.py`, `tests/test_client_methods.py`, `tests/test_kb_readonly.py`, `tests/test_client.py`, `tests/test_models.py`, `tests/integration/test_http_transport.py`
-  - `scripts/bootstrap.sh`, `scripts/uv/coverage-report.py`, `scripts/uv/test-zammad.py`, `scripts/uv/security-scan.py`, `scripts/uv/dev-setup.py`, `scripts/uv/validate-env.py`
+  - `scripts/uv/coverage-report.py`, `scripts/uv/test-zammad.py`, `scripts/uv/security-scan.py`, `scripts/uv/validate-env.py`
 
 ### 8.1 Maximum Nesting Depth (≤ 3)
 
@@ -572,9 +572,9 @@ Repository-specific guidance for `basher83/Zammad-MCP`. This layer supplements t
 - `mise run pre-commit-run` invokes `prek run --all-files`; configured hooks may modify files.
 - Use `mise run changelog` for unreleased changelog updates and `mise run changelog-bump <version>` when preparing a release. Do not hand-edit released changelog sections.
 
-## Known automation inconsistency
+## Version pins and gates
 
-Last checked on 2026-09-30. `pyproject.toml` declares Python `>=3.10,<3.14`, and the test workflow matrix covers Python 3.10 to 3.13. `mise.toml` is the source of truth for the Python and uv versions. `.python-version` must match the `mise.toml` Python pin, because uv and the security workflow read `.python-version` and never read `mise.toml`. mise does not read `.python-version` unless `idiomatic_version_file_enable_tools` includes `python`, so neither tool keeps the two pins in sync. Now `mise.toml` pins Python 3.13.15 and `.python-version` pins 3.13.14, because Renovate PR #306 updated only `mise.toml`. `mise.toml` and the workflows pin uv 0.12.21, but the `uv-pre-commit` hook in `.pre-commit-config.yaml` pins 0.11.28. Coverage uses one 86% floor in `pyproject.toml`. `mise run markdown-lint` and pre-commit both run Rumdl with `.rumdl.toml`. Treat the Python and uv pin differences as automation-foundation defects. Reconcile the canonical versions before production TDD. Do not claim local/CI parity until you verify it.
+`pyproject.toml` declares Python `>=3.10,<3.14`, and the test workflow matrix covers Python 3.10 to 3.13. `mise.toml` is the source of truth for the Python and uv versions. uv and the `setup-python` step in the security workflow read `.python-version` and never read `mise.toml`, and mise does not read `.python-version` unless `idiomatic_version_file_enable_tools` includes `python`. `scripts/validate.sh` therefore checks that `.python-version`, the `setup-uv` workflow steps, and the `uv-pre-commit` hook match `mise.toml`, and fails when they differ. Renovate groups these pins so that one PR updates them together. The check compares the version in the `uv-pre-commit` comment, not the commit SHA, so keep the comment accurate when you change the SHA. Coverage uses one 86% floor in `pyproject.toml`. `mise run markdown-lint` and pre-commit both run Rumdl with `.rumdl.toml`.
 
 ## FastMCP contract
 

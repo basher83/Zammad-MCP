@@ -93,40 +93,6 @@ uv run pytest --cov=mcp_zammad --cov-report=xml
 - 0: Coverage meets the target
 - 1: Coverage file missing or unreadable, or coverage below the target
 
-### dev-setup.py
-
-Interactive development environment setup wizard.
-
-**Usage:**
-
-```bash
-./dev-setup.py
-
-# Quick setup with minimal prompts
-./dev-setup.py --quick
-
-# Only check requirements without running setup
-./dev-setup.py --check-only
-
-# Run with uv directly
-uv run scripts/uv/dev-setup.py
-```
-
-**Setup Flow:**
-
-1. **System Check**: Verifies Python version, Git, and project structure
-1. **UV Installation**: Checks for UV and offers to install if missing
-1. **Virtual Environment**: Creates or recreates .venv
-1. **Configuration**: Interactive prompts for Zammad credentials
-1. **Dependencies**: Installs all project and dev dependencies
-1. **Validation**: Runs basic checks to ensure setup success
-1. **Next Steps**: Shows helpful commands and resources
-
-**Exit Codes:**
-
-- 0: Setup completed successfully
-- 1: Setup failed or was cancelled
-
 ### security-scan.py
 
 Unified security scanner that consolidates multiple security tools into a single actionable report.
@@ -215,7 +181,6 @@ These scripts can be executed in several ways:
 ### Direct Execution (Recommended for GNU/Linux)
 
 ```bash
-./dev-setup.py
 ./validate-env.py
 # etc.
 ```
@@ -223,7 +188,6 @@ These scripts can be executed in several ways:
 ### Using UV directly (Most Portable)
 
 ```bash
-uv run --script dev-setup.py
 uv run --script test-zammad.py
 # etc.
 ```
@@ -263,7 +227,7 @@ The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag i
 1. **Create an alias**:
 
    ```bash
-   alias dev-setup='uv run --script ~/path/to/dev-setup.py'
+   alias validate-env='uv run --script ~/path/to/validate-env.py'
    ```
 
 1. **Create a wrapper script**:
@@ -275,7 +239,6 @@ The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag i
 
 ## Available Scripts
 
-- **dev-setup.py**: Interactive development environment setup wizard
 - **test-zammad.py**: Test Zammad API connections and operations
 - **validate-env.py**: Validate environment configuration
 - **coverage-report.py**: Generate enhanced coverage reports

@@ -23,6 +23,26 @@
             "allowedVersions": "<3.14"
         },
         {
+            "description": "Update the Python pins in mise.toml and .python-version in one PR (scripts/validate.sh fails when they differ)",
+            "matchManagers": [
+                "mise",
+                "pyenv"
+            ],
+            "matchDepNames": [
+                "python"
+            ],
+            "groupName": "python version pins"
+        },
+        {
+            "description": "Update the uv pins in mise.toml, the setup-uv steps, and the uv-pre-commit hook in one PR (scripts/validate.sh fails when they differ)",
+            "matchDepNames": [
+                "uv",
+                "astral-sh/uv",
+                "astral-sh/uv-pre-commit"
+            ],
+            "groupName": "uv version pins"
+        },
+        {
             "description": "Require approval for major Zammad API updates",
             "matchPackageNames": [
                 "zammad-py"

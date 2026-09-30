@@ -6,19 +6,12 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
 
 ### Prerequisites
 
-- Python 3.10 through 3.13
-- `uv` package manager:
-  ```bash
-  # macOS/Linux
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  
-  # Windows
-  powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-  ```
+- [mise](https://mise.jdx.dev/getting-started.html). `mise install` installs the pinned Python, uv, prek, git-cliff, and the other tools in `mise.toml`. The `mise run` commands in this guide need it.
 
 ### Getting Started
 
 1. Fork the repository
+
 2. Clone your fork:
 
    ```bash
@@ -26,45 +19,24 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
    cd zammad-mcp
    ```
 
-#### Quick Start (Recommended)
-
-Use the interactive setup wizard for the easiest setup experience:
-
-```bash
-./scripts/uv/dev-setup.py
-```
-
-This wizard will guide you through all setup steps including UV installation, virtual environment creation, and configuration.
-
-#### Manual Setup
-
-If you prefer manual setup:
-
-1. (Optional) Install recommended development tools:
+3. Install the tools and dependencies:
 
    ```bash
-   # Install eza, ripgrep, and ensure uv is available
-   ./scripts/bootstrap.sh
+   mise install            # pinned tools from mise.toml
+   mise run setup          # uv sync from uv.lock into .venv
+   mise run hooks-install  # pre-commit hooks
    ```
 
-2. Run the Python environment setup script:
+   If mise asks you to trust the repository configuration, run `mise trust`.
 
-   ```bash
-   # macOS/Linux
-   ./scripts/setup.sh
-   
-   # Windows
-   .\scripts\setup.ps1
-   ```
-
-3. Create a `.env` file with your Zammad credentials:
+4. Create a `.env` file with your Zammad credentials:
 
    ```env
    ZAMMAD_URL=https://your-instance.zammad.com/api/v1
    ZAMMAD_HTTP_TOKEN=your-api-token
    ```
 
-4. (Optional) Validate your environment configuration:
+5. (Optional) Validate your environment configuration:
 
    ```bash
    ./scripts/uv/validate-env.py

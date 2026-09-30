@@ -2,12 +2,13 @@
 # Canonical non-mutating validation gates for Zammad MCP.
 #
 # Usage:
-#   scripts/validate.sh lint          # format check + ruff + mypy (parallel)
+#   scripts/validate.sh lint          # version pins + format check + ruff + mypy (parallel)
 #   scripts/validate.sh test          # affected tests (diff vs base) or full suite
 #   scripts/validate.sh dev           # lint + affected tests (fast developer loop)
 #   scripts/validate.sh release       # lint + full coverage suite + package build
 #
-# Rules (format, lint, types, coverage floor) live in pyproject.toml; this
+# Rules (format, lint, types, coverage floor) live in pyproject.toml, and
+# tool versions live in mise.toml; this
 # script only decides *which* gates run and in what order. CI workflows call
 # the same subcommands so local and GitHub results match.
 #
@@ -27,6 +28,35 @@ CACHE_FLAG=()
 if [ "${VALIDATE_NO_CACHE:-0}" = "1" ]; then
   CACHE_FLAG=(--no-cache)
 fi
+
+# Version pins: mise.toml is the source of truth. uv and setup-python read
+# .python-version; setup-uv steps and the uv-pre-commit hook pin uv separately.
+mise_pin() { sed -n "s/^$1 = \"\(.*\)\"$/\1/p" mise.toml; }
+
+check_pin() {
+  local label="$1" want="$2" got="$3"
+  [ "$want" = "$got" ] && return 0
+  echo "❌ pins: $label is '$got', but mise.toml pins '$want'"
+  return 1
+}
+
+run_pins() {
+  local py uv pin status=0
+  py="$(mise_pin python)"
+  uv="$(mise_pin uv)"
+  if [ -z "$py" ] || [ -z "$uv" ]; then
+    echo "❌ pins: cannot read the python and uv pins from mise.toml [tools]"
+    return 1
+  fi
+  check_pin .python-version "$py" "$(tr -d '[:space:]' < .python-version)" || status=1
+  pin="$(grep -A2 'astral-sh/uv-pre-commit' .pre-commit-config.yaml | sed -n 's/.*# \([0-9.]*\)$/\1/p')"
+  check_pin "the uv-pre-commit hook" "$uv" "$pin" || status=1
+  while IFS= read -r pin; do
+    check_pin "a setup-uv step in .github/workflows" "$uv" "$pin" || status=1
+  done < <(grep -h -A2 'astral-sh/setup-uv@' .github/workflows/*.yml | sed -n 's/^ *version: "\(.*\)"$/\1/p')
+  [ "$status" -eq 0 ] && echo "📌 pins: Python $py and uv $uv match mise.toml"
+  return "$status"
+}
 
 run_lint() {
   echo "🔎 lint: ruff format --check, ruff check, mypy (parallel)"
@@ -100,10 +130,10 @@ run_build() {
 # Each gate runs as a plain statement so `set -e` aborts on the first failure.
 # (`a && b` lists are exempt from errexit and would print a false "passed".)
 case "${1:-dev}" in
-  lint) run_lint ;;
+  lint) run_pins; run_lint ;;
   test) run_affected_tests ;;
-  dev) run_lint; run_affected_tests ;;
-  release) run_lint; run_full_tests; run_build ;;
+  dev) run_pins; run_lint; run_affected_tests ;;
+  release) run_pins; run_lint; run_full_tests; run_build ;;
   *) echo "usage: $0 {lint|test|dev|release}" >&2; exit 2 ;;
 esac
 echo "✅ validate ${1:-dev}: passed"
