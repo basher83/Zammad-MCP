@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.11.3",
+  "checkpoint_id": "01M3SGP97N7NXPBT85NF4FX43F",
+  "strategy": "manual-commit",
+  "branch": "chore/untrack-claude-local-settings",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 26,
+    "cache_creation_tokens": 73380,
+    "cache_read_tokens": 781415,
+    "output_tokens": 3366,
+    "api_call_count": 13
+  }
+}

@@ -1,0 +1,9 @@
+Make sure local is in sync with remote first. Then review PR 359 for post merge actions to execute from the initial pr msg and execute.
+
+---
+
+poll it and let me know once it clears
+
+---
+
+lets add that local settings file to gitignore and remove it from git history, it shouldn't be tracked
