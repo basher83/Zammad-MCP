@@ -4,7 +4,7 @@
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9cc0ebac926a4d56b0bdf2271d46bbf7)](https://app.codacy.com/gh/basher83/Zammad-MCP/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![Coverage](https://app.codacy.com/project/badge/Coverage/9cc0ebac926a4d56b0bdf2271d46bbf7)](https://app.codacy.com/gh/basher83/Zammad-MCP/dashboard)
 
-An MCP server that connects AI assistants to Zammad, providing tools for managing tickets, users, organizations, and attachments.
+An MCP server that connects AI assistants to Zammad, providing tools for managing tickets, users, organizations, attachments, and knowledge base content.
 
 > **Disclaimer**: This project is not affiliated with or endorsed by Zammad GmbH or the Zammad Foundation. This is an independent integration that uses the Zammad API.
 
@@ -44,6 +44,14 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
 - **Webhook Events** (HTTP transport only)
   - `zammad_list_events` - Poll ticket events delivered by Zammad webhooks (see [Webhook Events](#webhook-events-http-transport-only))
 
+- **Knowledge Base** (read-only, requires `knowledge_base.reader` or `knowledge_base.editor` permission)
+  - `zammad_list_knowledge_bases` - List all knowledge bases
+  - `zammad_get_knowledge_base` - Get details of one knowledge base by ID
+  - `zammad_get_kb_category` - Get a knowledge base category by ID
+  - `zammad_list_kb_answers` - List answers in a knowledge base category
+  - `zammad_search_kb_answers` - Case-insensitive substring search of answer titles and bodies
+  - `zammad_get_kb_answer` - Get an answer by ID with its resolved title and body
+
 ### Resources
 
 Access Zammad data directly:
@@ -52,6 +60,9 @@ Access Zammad data directly:
 - `zammad://user/{id}` - User profile information
 - `zammad://organization/{id}` - Organization details
 - `zammad://queue/{group}` - Ticket queue for a group
+- `zammad://kb/{kb_id}` - Knowledge base details
+- `zammad://kb/{kb_id}/category/{category_id}` - Knowledge base category
+- `zammad://kb/{kb_id}/answer/{answer_id}` - Knowledge base answer with title and body
 
 ### Prompts
 
@@ -323,8 +334,7 @@ Or if you have it installed locally:
 {
   "mcpServers": {
     "zammad": {
-      "command": "python",
-      "args": ["-m", "mcp_zammad"],
+      "command": "mcp-zammad",
       "env": {
         "ZAMMAD_URL": "https://your-instance.zammad.com/api/v1",
         "ZAMMAD_HTTP_TOKEN": "your-api-token"
@@ -337,16 +347,19 @@ Or if you have it installed locally:
 ### Standalone Usage
 
 ```bash
-# Run the server
-python -m mcp_zammad
+# Run the server from a repository checkout
+uv run mcp-zammad
 
 # Or with environment variables
-ZAMMAD_URL=https://instance.zammad.com/api/v1 ZAMMAD_HTTP_TOKEN=token python -m mcp_zammad
+ZAMMAD_URL=https://instance.zammad.com/api/v1 ZAMMAD_HTTP_TOKEN=token uv run mcp-zammad
 ```
 
 ### HTTP Transport (Remote/Cloud Deployment)
 
 The server supports Streamable HTTP transport for remote deployments.
+
+For reverse proxy, systemd, Docker Compose, and cloud deployment, read the
+[HTTP Transport Deployment Guide](docs/deployment/http-transport.md).
 
 #### Environment Configuration
 
@@ -441,7 +454,7 @@ Configure your MCP client to use HTTP transport:
 #### Security Considerations
 
 1. **Local Development**: Use `MCP_HOST=127.0.0.1` (localhost only)
-2. **Production**: Implement authentication (see [Security](#security))
+2. **Production**: Implement authentication at the proxy or platform boundary (see [Authentication](docs/deployment/http-transport.md#1-authentication))
 3. **HTTPS**: Use reverse proxy for TLS
 4. **Firewall**: Restrict access to trusted networks
 5. **Host/Origin Validation**: Configure this at the authenticated proxy; the server does not add it automatically
@@ -482,13 +495,13 @@ Retention is process-local and bounded (1000 events, oldest evicted first) and i
 
 ### Search for Open Tickets
 
-```plaintext
+```text
 Use zammad_search_tickets with state="open" to find all open tickets
 ```
 
 ### Create a Support Ticket
 
-```plaintext
+```text
 Use zammad_create_ticket with:
 - title: "Customer needs help with login"
 - group: "Support"
@@ -498,7 +511,7 @@ Use zammad_create_ticket with:
 
 ### Update and Respond to a Ticket
 
-```plaintext
+```text
 1. Use zammad_get_ticket with ticket_id=123 to see the full conversation
 2. Use zammad_add_article to add your response
 3. Use zammad_update_ticket to change state to "pending reminder" with a pending_time (e.g. "2026-07-01T08:00:00Z")
@@ -506,13 +519,13 @@ Use zammad_create_ticket with:
 
 ### Analyze Escalated Tickets
 
-```plaintext
+```text
 Use the escalation_summary prompt to get a report of all tickets approaching escalation
 ```
 
 ### Upload Attachments to a Ticket
 
-```plaintext
+```text
 Use zammad_add_article with attachments parameter:
 - ticket_id: 123
 - body: "See attached documentation"
@@ -529,7 +542,7 @@ Use zammad_add_article with attachments parameter:
 
 Useful for collapsing recurring auto-generated tickets (cron failures, monitoring noise) into one incident. The source ticket's articles move to the target and the source is closed as "merged". This cannot be undone.
 
-```plaintext
+```text
 Use zammad_merge_tickets with:
 - source_ticket_id: 123          # internal ID of the ticket to merge away
 - target_ticket_number: "20002"  # display number of the surviving ticket
@@ -578,22 +591,36 @@ uv pip install -e ".[dev]"
 
 ### Project Structure
 
-```plaintext
+```text
 zammad-mcp/
 ├── mcp_zammad/
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── server.py      # MCP server implementation
-│   ├── client.py      # Zammad API client wrapper
-│   └── models.py      # Pydantic models
+│   ├── __init__.py             # Package version
+│   ├── __main__.py             # Entry point for the mcp-zammad command
+│   ├── server.py               # MCP server: tools, resources, prompts, lifecycle
+│   ├── client.py               # Zammad API client wrapper
+│   ├── models.py               # Pydantic models for Zammad entities
+│   ├── config.py               # Transport configuration
+│   ├── tool_params.py          # Expose Pydantic parameter models as flat tool arguments
+│   ├── docstring_templates.py  # Helpers for MCP tool docstrings
+│   ├── audit.py                # Opt-in JSON Lines audit logging
+│   ├── audit_middleware.py     # FastMCP middleware that audits tool calls
+│   ├── logging_config.py       # Logging configuration helpers
+│   ├── events.py               # Bounded in-memory retention of webhook events
+│   ├── webhooks.py             # Webhook signature validation and payload normalization
+│   ├── resilience.py           # Resilient transport wrapper around the HTTP session
+│   ├── resilience_config.py    # Rate limit, retry, and circuit breaker configuration
+│   ├── resilience_retry.py     # Retry policy for safe HTTP methods
+│   └── resilience_state.py     # Rate limiter and circuit breaker state
 ├── tests/
 ├── scripts/
-│   └── uv/            # UV single-file scripts
+│   └── uv/                     # UV single-file scripts
 ├── pyproject.toml
 ├── README.md
 ├── Dockerfile
 └── .env.example
 ```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for component boundaries and design constraints.
 
 ### Running Tests
 
@@ -620,7 +647,12 @@ uv run ruff check mcp_zammad tests
 # Type checking
 uv run mypy mcp_zammad
 
-# Run all quality checks
+# Canonical non-mutating gates (scripts/validate.sh)
+mise run validate          # lint + affected tests
+mise run validate-release  # lint + full coverage suite + build (same as the CI validate job)
+
+# Full quality run. This command modifies files: it formats code and applies Ruff fixes.
+# It also writes bandit, pip-audit, and coverage reports.
 ./scripts/quality-check.sh
 ```
 
@@ -707,6 +739,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code standards, te
 
 ## Documentation
 
+- [Documentation index](docs/README.md) — Index of all documentation
+- [HTTP Transport Deployment Guide](docs/deployment/http-transport.md) — Reverse proxy, systemd, Compose, and cloud deployment
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Technical design
 - [SECURITY.md](SECURITY.md) — Security policy
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Development guidelines
