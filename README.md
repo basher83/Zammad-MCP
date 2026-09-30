@@ -122,7 +122,7 @@ The project publishes Docker images with semantic versioning:
 
 ```bash
 # Recommended for production - pin to specific version
-docker pull ghcr.io/basher83/zammad-mcp:1.0.0
+docker pull ghcr.io/basher83/zammad-mcp:1.2.0
 ```
 
 View all versions on [GitHub Container Registry](https://github.com/basher83/Zammad-MCP/pkgs/container/zammad-mcp).
