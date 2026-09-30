@@ -8,7 +8,7 @@ The Zammad MCP Server is built on the Model Context Protocol (MCP) to provide AI
 
 ## Architecture Diagram
 
-```plaintext
+```text
 ┌─────────────────┐     ┌─────────────────┐
 │  Claude/AI      │     │  MCP Client     │
 │  Assistant      │────▶│  (Claude App)   │
@@ -49,8 +49,8 @@ The main server implementation using FastMCP framework.
 
 **Key Features:**
 
-- 21 tools for comprehensive Zammad operations
-- 4 resources with URI-based access pattern
+- 31 tools for comprehensive Zammad operations
+- 7 resources with URI-based access pattern
 - 3 pre-configured prompts for common scenarios
 - Lifespan management for proper initialization
 
@@ -94,7 +94,7 @@ Comprehensive Pydantic models ensuring type safety and validation.
 
 **Model Hierarchy:**
 
-```plaintext
+```text
 BaseModel
 ├── Ticket
 │   ├── state: StateBrief | str | None
@@ -120,6 +120,30 @@ BaseModel
 - Extra field handling (`extra = "forbid"`)
 - Union types for expanded fields (handles both object and string representations)
 - Custom validators for complex fields
+
+### Module Map
+
+One row per module in `mcp_zammad/`. Each responsibility is the first line of the module docstring.
+
+| Module | Responsibility |
+|--------|----------------|
+| `__init__.py` | Zammad MCP Server - Model Context Protocol server for Zammad ticket system |
+| `__main__.py` | Entry point for the Zammad MCP server |
+| `audit.py` | Opt-in JSON Lines audit logging for security-relevant MCP operations |
+| `audit_middleware.py` | FastMCP middleware that audits every tool invocation |
+| `client.py` | Zammad API client wrapper for the MCP server |
+| `config.py` | Configuration for MCP server transport |
+| `docstring_templates.py` | Helper functions for generating MCP tool docstrings per best practices |
+| `events.py` | Bounded in-memory retention of normalized Zammad webhook events |
+| `logging_config.py` | Logging configuration helpers for Zammad MCP |
+| `models.py` | Pydantic models for Zammad entities |
+| `resilience.py` | Resilient transport wrapper around the `requests.Session` that zammad-py uses for every call |
+| `resilience_config.py` | Environment-backed configuration for client-side rate limiting, retries, and circuit breaking |
+| `resilience_retry.py` | Retry policy for safe HTTP methods: which outcomes retry, how long to wait, and the attempt loop |
+| `resilience_state.py` | Process-local rate limiter and circuit breaker state driven by an injected monotonic clock |
+| `server.py` | Zammad MCP Server implementation |
+| `tool_params.py` | Expose Pydantic parameter models as flat MCP tool arguments |
+| `webhooks.py` | Zammad webhook delivery boundary: signature validation and payload normalization |
 
 ## Data Flow
 
@@ -276,7 +300,13 @@ MCP errors include:
 
 - Environment variable configuration
 - No credential logging
-- HTTPS enforcement for API calls
+- TLS certificate verification on by default. The client accepts `http://` and `https://` URLs and
+  disables verification only when you set `ZAMMAD_INSECURE` to `1`, `true`, `yes`, or `on` (for trusted
+  self-signed or internal certificate chains). The client logs a warning when verification is off.
+- URL scheme and hostname validation for `ZAMMAD_URL` (`ZammadClient._validate_url`). The client warns
+  and audits when the host is `localhost` or a private or loopback IP literal, but does not block it.
+- Opt-in audit logging (`mcp_zammad/audit.py`, `mcp_zammad/audit_middleware.py`): JSON Lines events for
+  every tool invocation, Zammad connection attempts, and URL security checks.
 - Resilience layer (`mcp_zammad/resilience*.py`): `ZammadClient` replaces the `zammad_py`
   `requests.Session` with a `ResilientSession`, so every API call passes through one boundary that
   applies an opt-in fixed-window rate limiter, exponential backoff with `Retry-After` support for
@@ -286,23 +316,23 @@ MCP errors include:
 ### Needed Improvements
 
 1. **Input Validation**
-   - URL validation to prevent SSRF
+   - SSRF hardening for `ZAMMAD_URL` (current validation checks scheme and hostname only and does not
+     block local or private targets)
    - Input sanitization for user data
    - Parameter bounds checking
-
-1. **Audit Logging**
-   - Operation logging
-   - Security event tracking
-   - Compliance support
 
 ## Extension Points
 
 ### Adding New Tools
 
-1. Define tool function with `@mcp.tool()` decorator
-1. Implement using `get_zammad_client()`
-1. Return Pydantic model instance
-1. Add tests with mocked client
+1. Define a parameters model in `models.py` that extends `StrictBaseModel`
+1. Register the tool inside a `ZammadMCPServer._setup_*` method with
+   `@self.mcp.tool(annotations=_read_only_annotations("Title"))` stacked over `@flat_params(ParamsModel)`.
+   Use `_write_annotations`, `_idempotent_write_annotations`, or `_destructive_write_annotations` for
+   write operations
+1. Call `self.get_client()` for the client and return a `str` through `truncate_response()`
+1. Add tests through the public FastMCP boundary with a mocked `ZammadClient`. See the
+   `zammad_list_knowledge_bases` example in [CONTRIBUTING.md](CONTRIBUTING.md#1-new-tools)
 
 ### Adding New Resources
 
@@ -322,7 +352,7 @@ MCP errors include:
 
 ### Test Structure
 
-```plaintext
+```text
 tests/
 ├── test_server.py      # Main test suite
 ├── conftest.py         # Shared fixtures
