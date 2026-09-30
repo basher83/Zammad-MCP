@@ -7,3 +7,7 @@ poll it and let me know once it clears
 ---
 
 lets add that local settings file to gitignore and remove it from git history, it shouldn't be tracked
+
+---
+
+yeah no rewrite needed i just wanted to stop tracking it going forward no need to clean git history
