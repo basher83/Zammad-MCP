@@ -76,7 +76,7 @@
 - Address review findings on resilience, webhooks, events and CI aggregate
 - *(deps)* Cap fastmcp <4 and mcp <2 in project dependencies
 - *(renovate)* Match the mise Python cap by dependency name
-- *(package)* Report the distribution version from __version__
+- *(package)* Report the distribution version from `__version__`
 
 ### 💼 Other
 
@@ -178,6 +178,7 @@
 - Keep one canonical validation job and flatten new tool docstrings
 - *(changelog)* Treat only vN.N.N tags as releases
 - *(mise)* Keep released changelog sections intact in changelog-bump
+- *(changelog)* Wrap dunder names in backticks
 
 ### 🛡️ Security
 
