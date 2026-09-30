@@ -398,6 +398,16 @@ If you violate any of these constraints, the output is considered incorrect.
 
 ## 8. Code Structure Constraints (Strict, Non-Negotiable)
 
+### 8.0 Scope
+
+- Sections 8.1 to 8.7 apply to code only: Python and shell source under `mcp_zammad/`, `tests/`, and `scripts/`.
+- They do not apply to documentation, generated files, or configuration. This includes Markdown (`README.md`, `CHANGELOG.md`, `AGENTS.md`, `docs/`, `.claude/`), YAML, TOML, and JSON files. `.rumdl.toml` sets the Markdown policy.
+- The limits apply to new constructs and to constructs that a change modifies. A change does not have to refactor constructs that it does not touch.
+- These files were over the 200-line limit on 2026-09-30. They are exempt from section 8.3 until they are refactored. New and changed constructs in them must still obey sections 8.1 and 8.2.
+  - `mcp_zammad/server.py`, `mcp_zammad/client.py`, `mcp_zammad/models.py`
+  - `tests/test_server.py`, `tests/test_client_methods.py`, `tests/test_kb_readonly.py`, `tests/test_client.py`, `tests/test_models.py`, `tests/integration/test_http_transport.py`
+  - `scripts/bootstrap.sh`, `scripts/uv/coverage-report.py`, `scripts/uv/test-zammad.py`, `scripts/uv/security-scan.py`, `scripts/uv/dev-setup.py`, `scripts/uv/validate-env.py`
+
 ### 8.1 Maximum Nesting Depth (≤ 3)
 
 - All production code MUST have a maximum nesting depth of 3.
@@ -480,7 +490,7 @@ If you violate any of these constraints, the output is considered incorrect.
 ### 8.7 Enforcement
 
 - These are hard constraints, not guidelines
-- Any violation MUST be resolved immediately
+- Any violation within the scope of section 8.0 MUST be resolved immediately
 - No exceptions for "readability" or "performance" without restructuring
 - Code that violates these constraints is considered invalid and incomplete
 
@@ -564,7 +574,7 @@ Repository-specific guidance for `basher83/Zammad-MCP`. This layer supplements t
 
 ## Known automation inconsistency
 
-Last checked on 2026-09-30. `pyproject.toml` declares Python `>=3.10,<3.14`, and the test workflow matrix covers Python 3.10 to 3.13. `mise.toml` pins Python 3.13.15, but `.python-version` pins 3.13.14, and the security workflow reads `.python-version`. `mise.toml` and the workflows pin uv 0.12.21, but the `uv-pre-commit` hook in `.pre-commit-config.yaml` pins 0.11.28. Coverage uses one 86% floor in `pyproject.toml`. `mise run markdown-lint` and pre-commit both run Rumdl with `.rumdl.toml`. Treat the Python and uv pin differences as automation-foundation defects. Reconcile the canonical versions before production TDD. Do not claim local/CI parity until you verify it.
+Last checked on 2026-09-30. `pyproject.toml` declares Python `>=3.10,<3.14`, and the test workflow matrix covers Python 3.10 to 3.13. `mise.toml` is the source of truth for the Python and uv versions. `.python-version` must match the `mise.toml` Python pin, because uv and the security workflow read `.python-version` and never read `mise.toml`. mise does not read `.python-version` unless `idiomatic_version_file_enable_tools` includes `python`, so neither tool keeps the two pins in sync. Now `mise.toml` pins Python 3.13.15 and `.python-version` pins 3.13.14, because Renovate PR #306 updated only `mise.toml`. `mise.toml` and the workflows pin uv 0.12.21, but the `uv-pre-commit` hook in `.pre-commit-config.yaml` pins 0.11.28. Coverage uses one 86% floor in `pyproject.toml`. `mise run markdown-lint` and pre-commit both run Rumdl with `.rumdl.toml`. Treat the Python and uv pin differences as automation-foundation defects. Reconcile the canonical versions before production TDD. Do not claim local/CI parity until you verify it.
 
 ## FastMCP contract
 
