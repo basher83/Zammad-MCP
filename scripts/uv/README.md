@@ -2,7 +2,9 @@
 
 This directory contains UV single-file scripts that provide development and operational tools for the Zammad MCP project.
 
-## Environment Validation
+## Scripts
+
+### validate-env.py
 
 Validates the Zammad MCP Server environment configuration before startup.
 
@@ -88,11 +90,14 @@ uv run pytest --cov=mcp_zammad --cov-report=xml
 
 **Exit Codes:**
 
-## Script Execution
+- 0: Coverage meets the target
+- 1: Coverage file missing or unreadable, or coverage below the target
 
-These scripts can be executed in several ways:
+### dev-setup.py
 
-### Direct Execution (Recommended for GNU/Linux)
+Interactive development environment setup wizard.
+
+**Usage:**
 
 ```bash
 ./dev-setup.py
@@ -203,6 +208,18 @@ Interactive CLI for testing Zammad API connections and operations without the MC
 # etc.
 ```
 
+## Script Execution
+
+These scripts can be executed in several ways:
+
+### Direct Execution (Recommended for GNU/Linux)
+
+```bash
+./dev-setup.py
+./validate-env.py
+# etc.
+```
+
 ### Using UV directly (Most Portable)
 
 ```bash
@@ -228,10 +245,12 @@ The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag i
 - ❌ **Alpine (BusyBox)**: No `-S` flag support
 - ❌ **FreeBSD/OpenBSD**: No `-S` flag support
 
-  1. Create a new `.py` file in this directory
-  1. Add the shebang: `#!/usr/bin/env -S uv run --script`
-  1. Add script metadata with dependencies
-  1. Make it executable: `chmod +x script.py`
+### Adding a New Script
+
+1. Create a new `.py` file in this directory
+1. Add the shebang: `#!/usr/bin/env -S uv run --script`
+1. Add script metadata with dependencies
+1. Make it executable: `chmod +x script.py`
 
 ### Workarounds for Non-GNU Systems
 
@@ -261,6 +280,7 @@ The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag i
 - **validate-env.py**: Validate environment configuration
 - **coverage-report.py**: Generate enhanced coverage reports
 - **security-scan.py**: Run consolidated security scans
+- **utils.py**: Shared helper module imported by the scripts. It is not a standalone script.
 
 ## Script Dependencies
 

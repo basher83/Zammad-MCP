@@ -110,7 +110,13 @@ ZAMMAD_HTTP_TOKEN=abc123token
 #### Network Security
 
 - **Use HTTPS in production** - the client permits `http://` for development and trusted internal environments
-- **Verify SSL certificates** - don't disable SSL verification
+- **Keep TLS verification enabled** - `ZAMMAD_INSECURE=true` disables TLS certificate verification for the
+  upstream Zammad connection. The client verifies TLS certificates by default. Set `ZAMMAD_INSECURE` only for trusted
+  self-signed or internal certificate chains.
+- **Protect the HTTP transport listener** - the server has no inbound MCP client authentication. `ZAMMAD_*`
+  credentials authenticate the server to Zammad only. `MCP_HOST` defaults to `127.0.0.1`. Keep that default, or
+  put the listener behind an authenticated reverse proxy. See the
+  [HTTP Transport Deployment Guide](docs/deployment/http-transport.md#1-authentication).
 - **Network isolation** - run in isolated environments when possible
 - **Firewall rules** - restrict outbound connections to necessary endpoints only
 
@@ -237,8 +243,10 @@ This project employs multiple layers of security scanning:
 #### Static Analysis
 
 - ✅ **Bandit**: Identifies common security issues in Python code (active in CI)
-- ✅ **CodeQL**: GitHub's automatic security analysis (enabled by default)
-- ✅ **Codacy**: Comprehensive static analysis and code quality (active in CI)
+- **CodeQL**: GitHub code scanning setting. The repository contains no CodeQL workflow, so the repository
+  security settings show its current state.
+- **Codacy**: Not a CI scan. The tests workflow uploads coverage to Codacy only if you configure
+  `CODACY_PROJECT_TOKEN`. PR #369 removed the no-op Codacy SARIF workflow.
 - ✅ **Semgrep**: Pattern-based vulnerability detection (active in pre-commit and local quality checks)
 
 #### Dependency Scanning
@@ -267,7 +275,7 @@ locally and in CI, without advisory exclusions.
 # Individual security scans
 uv run pip-audit               # Check for vulnerable packages
 uv run bandit -r mcp_zammad    # Static security analysis
-uv run pre-commit run semgrep --all-files  # Pattern-based scanning
+prek run semgrep --all-files   # Pattern-based scanning
 
 # Docker image scanning
 docker scout cves ghcr.io/basher83/zammad-mcp:latest
@@ -277,11 +285,12 @@ docker scout cves ghcr.io/basher83/zammad-mcp:latest
 
 ### Required Secrets
 
-For the security scanning workflow to function properly, configure the following secrets in your repository:
+The security scanning workflow (`security-scan.yml`) needs no repository secrets beyond `GITHUB_TOKEN`:
 
-- **`CODACY_PROJECT_TOKEN`**: For Codacy security analysis (optional)
-  - Available from your Codacy project settings
 - **`GITHUB_TOKEN`**: Automatically provided by GitHub Actions
+- **`CODACY_PROJECT_TOKEN`**: Optional. It only enables the coverage upload step in the tests workflow
+  (`tests.yml`). The security scanning workflow does not use it.
+  - Available from your Codacy project settings
 
 ### Security Workflow
 
@@ -298,34 +307,14 @@ Install pre-commit hooks for local security checks:
 
 ```bash
 # Install hooks
-uv run pre-commit install
+mise run hooks-install
 
 # Run manually
-uv run pre-commit run --all-files
+mise run pre-commit-run
 ```
 
-The repository includes a comprehensive `.pre-commit-config.yaml` with security-focused hooks:
-
-```yaml
-repos:
-  - repo: https://github.com/PyCQA/bandit
-    hooks:
-      - id: bandit
-        args: ["-f", "json"]
-        exclude: ^tests/
-
-  - repo: https://github.com/semgrep/semgrep
-    hooks:
-      - id: semgrep
-        args: ["--config=auto", "--error"]
-
-  - repo: local
-    hooks:
-      - id: pip-audit
-        name: pip-audit
-        entry: uv
-        args: ["run", "pip-audit", "--format=json"]
-```
+The hook definitions live in [`.pre-commit-config.yaml`](.pre-commit-config.yaml). The security-relevant hook ids
+are `bandit`, `semgrep`, and `pip-audit`. `mise run hooks-install` also installs the Infisical secret-scan hook.
 
 Installed hooks run on commits made through Git normally. They can be bypassed explicitly, so CI and branch protection
 remain the authoritative enforcement boundary.
@@ -384,10 +373,12 @@ This security policy may be updated periodically. Major changes will be announce
 
 ---
 
-**Last Updated**: 2025-08-11
-**Version**: 1.1.0
+**Last Updated**: 2026-09-30
+**Version**: 1.2.0
 
 **Changelog**:
 
+- v1.2.0 (2026-09-30): Fixed CI scanner and secret descriptions, added HTTP listener and TLS verification
+  guidance, replaced the pre-commit excerpt with a link
 - v1.1.0 (2025-08-11): Enhanced vulnerability reporting, added CVE process, expanded security tools documentation
 - v1.0.0 (2025-07-08): Initial security policy
