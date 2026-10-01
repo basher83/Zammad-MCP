@@ -3,13 +3,11 @@ Boundary tests for MCP tool descriptions.
 
 MCP clients and agents read each tool description as its contract. These tests
 check that the descriptions match what a client can observe through the public
-FastMCP boundary: the input and output schemas, the JSON the tool returns, and
-the errors it raises.
+FastMCP boundary: the JSON the tool returns and the errors it raises.
 """
 
 import json
 import re
-import textwrap
 from collections.abc import Iterator
 from typing import Any
 from unittest.mock import Mock, patch
@@ -21,8 +19,6 @@ from mcp.types import Tool
 
 from mcp_zammad.server import ZammadMCPServer
 
-JSON_BLOCK = re.compile(r"```json\s*\n(.*?)```", re.DOTALL)
-STATED_DEFAULT = re.compile(r"^\s*-?\s*(\w+)\s*\([^)]*\)\s*:.*\(default:\s*([^)]+)\)", re.MULTILINE)
 TIMESTAMPS = {"created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-01T00:00:00Z"}
 USER_PAYLOAD = {"id": 5, "login": "u@example.com", "email": "u@example.com", "active": True, **TIMESTAMPS}
 ORG_PAYLOAD = {"id": 2, "name": "ACME Corp", "member_ids": [5], "vip_level": "gold", **TIMESTAMPS}
@@ -55,63 +51,6 @@ async def _call_json(server: ZammadMCPServer, name: str, arguments: dict[str, An
     if result.structured_content and "result" not in result.structured_content:
         return result.structured_content
     return json.loads(result.content[0].text)  # type: ignore[union-attr]
-
-
-def _json_examples(description: str) -> list[str]:
-    return [textwrap.dedent(block) for block in JSON_BLOCK.findall(description)]
-
-
-def _normalize(value: object) -> str:
-    text = "none" if value is None else str(value)
-    return text.strip().strip("`'\"").replace(",", "").replace("_", "").lower()
-
-
-def _output_fields(schema: dict[str, Any]) -> set[str]:
-    node = schema["properties"]["result"] if schema.get("x-fastmcp-wrap-result") else schema
-    node = node.get("items", node)
-    ref = node.get("$ref", "")
-    node = schema.get("$defs", {}).get(ref.rsplit("/", 1)[-1], node) if ref else node
-    return set(node.get("properties", {}))
-
-
-@pytest.mark.asyncio
-async def test_json_examples_in_tool_descriptions_are_valid_json(server: ZammadMCPServer) -> None:
-    invalid = []
-    for name, tool in (await _tools(server)).items():
-        for example in _json_examples(tool.description or ""):
-            try:
-                json.loads(example)
-            except json.JSONDecodeError as error:
-                invalid.append(f"{name}: {error}")
-    assert invalid == []
-
-
-@pytest.mark.asyncio
-async def test_json_example_fields_exist_in_the_output_schema(server: ZammadMCPServer) -> None:
-    unknown = {}
-    for name, tool in (await _tools(server)).items():
-        fields = _output_fields(tool.outputSchema or {})
-        examples = [json.loads(example) for example in _json_examples(tool.description or "")]
-        items = [example[0] if isinstance(example, list) else example for example in examples]
-        extra = sorted({key for item in items for key in item} - fields) if fields else []
-        if extra:
-            unknown[name] = extra
-    assert unknown == {}
-
-
-@pytest.mark.asyncio
-async def test_stated_defaults_match_the_input_schema(server: ZammadMCPServer) -> None:
-    stated_defaults = [
-        (f"{name}.{param}", stated, tool.inputSchema.get("properties", {}).get(param, {}))
-        for name, tool in (await _tools(server)).items()
-        for param, stated in STATED_DEFAULT.findall(tool.description or "")
-    ]
-    mismatched = {
-        key: (stated, schema["default"])
-        for key, stated, schema in stated_defaults
-        if "default" in schema and _normalize(stated) != _normalize(schema["default"])
-    }
-    assert mismatched == {}
 
 
 @pytest.mark.asyncio

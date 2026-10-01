@@ -2044,7 +2044,7 @@ class ZammadMCPServer:
                     - ticket_id (int): Internal database ID (required, NOT display number)
                     - article_id (int): Article ID containing attachment (required)
                     - attachment_id (int): Attachment ID to download (required)
-                    - max_bytes (int | None): Maximum file size limit (default: None)
+                    - max_bytes (int | None): Maximum file size limit (default: 10000000); null disables the limit
 
             Returns:
                 str: Base64-encoded binary content of the attachment file.
