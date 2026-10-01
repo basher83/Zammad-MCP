@@ -9,10 +9,10 @@
 ## Read this first
 
 1. **Preserve the existing reviews.** “Approve” in an owner-authored comment is useful technical evidence even when GitHub could not accept self-approval. It is not formal `APPROVED`. A submitted review can also be `COMMENTED` while its text says approve/request changes. Historical approval, current review decision, exact reviewed SHA and current head are separate fields in [STATUS.md](STATUS.md) and [ledger.json](ledger.json).
-1. **Do not replay old requests after a fix.** #307, #323, #267, #312 and #341 have post-review changes without a later maintainer approval. In contrast, #336 and #338 were actually re-reviewed after fixes; their earlier blockers must not be revived.[20][48][50]
-1. **Do not let titles substitute for current evidence.** #323 now corrects stable seeded type IDs, despite its old name-based title/body. #342 now includes plugin retirement and dependency remediation beyond its original approved removal diff.[35][54]
-1. **A green list is not complete readiness.** #276/#291/#306/#342 each have 17 returned passing checks, yet #276's old approval is dismissed, #291 crosses runtime majors, #306 still proposes Python 3.14.7 against current `<3.14` policy, and #342 is conflicting with a materially expanded diff. Missing expected checks and branch rules were not waived.[14][18][19]
-1. **No new permission questions from stale labels.** #333's review explicitly treats its issue label as stale; #334's review explicitly leaves scope confirmation open. The ledger honors that distinction.[45][46]
+1. **Do not replay old requests after a fix.** #307, #323, #267, #312 and #341 have post-review changes without a later maintainer approval. In contrast, #336 and #338 were actually re-reviewed after fixes; their earlier blockers must not be revived.[20] [48] [50]
+1. **Do not let titles substitute for current evidence.** #323 now corrects stable seeded type IDs, despite its old name-based title/body. #342 now includes plugin retirement and dependency remediation beyond its original approved removal diff.[35] [54]
+1. **A green list is not complete readiness.** #276/#291/#306/#342 each have 17 returned passing checks, yet #276's old approval is dismissed, #291 crosses runtime majors, #306 still proposes Python 3.14.7 against current `<3.14` policy, and #342 is conflicting with a materially expanded diff. Missing expected checks and branch rules were not waived.[14] [18] [19]
+1. **No new permission questions from stale labels.** #333's review explicitly treats its issue label as stale; #334's review explicitly leaves scope confirmation open. The ledger honors that distinction.[45] [46]
 
 ## Priority, route and comment semantics
 
@@ -26,14 +26,14 @@
 
 | Order | Decision / communication | Recommended outcome |
 | --- | --- | --- |
-| D1 | #342 / #291 / #306 / #276 shared dependency and automation baseline | Keep authorized retirement, evaluate expanded #342 separately from its old approval; prefer bounded remediation before a deliberate runtime-major migration. Preserve current Python cap unless intentionally changed; keep surviving Actions/uv pins aligned.[54][18][19] |
-| D2 | #319 with #327 / #321 / #313 | Prefer #327's credited adoption, but explicitly communicate disposition of the originals and preserve #313 timeout work. Do not assume the issue's “done” narrative means merged delivery.[31][39][25] |
-| D3 | #320 with #322 / #330 / #325 | Confirm removal over stub. Prefer reviewed #322 plus retained incremental follow-up; compare #330's unique autospec work, and avoid deleting a helper needed by incoming merge/bulk tools.[32][34][37] |
-| D4 | #311 contract and new #345 escalation report | Answer nullable/source-labelled stats proposal; acknowledge offer of a focused escalation-deadline fix. Do not conflate either with #323's classification correction.[23][57][35] |
-| D5 | #309 with #336 / updated #312 | Prefer re-reviewed #336; resolve contributor credit/supersession rather than retaining two implementations in the active queue.[21][48][24] |
-| D6 | #15 / #334 | Confirm or defer the implemented one-tool bounded best-effort MVP; record once, not a new implementation plan. #339 is already-reviewed tag-bound follow-up.[2][46][51] |
-| D7 | #198 with updated #267 / unreviewed #344 / parked #200 | Select one read-only carrier after comparing changed #267; preserve create/write follow-up scope. A wrapper/modular preference for #344 is not approval of its unreviewed diff.[6][13][56] |
-| D8 | #278 reporters | Link reviewed hybrid implementation #335 and coordinate already-offered live validation; do not reopen a settled design choice.[15][47] |
+| D1 | #342 / #291 / #306 / #276 shared dependency and automation baseline | Keep authorized retirement, evaluate expanded #342 separately from its old approval; prefer bounded remediation before a deliberate runtime-major migration. Preserve current Python cap unless intentionally changed; keep surviving Actions/uv pins aligned.[54] [18] [19] |
+| D2 | #319 with #327 / #321 / #313 | Prefer #327's credited adoption, but explicitly communicate disposition of the originals and preserve #313 timeout work. Do not assume the issue's “done” narrative means merged delivery.[31] [39] [25] |
+| D3 | #320 with #322 / #330 / #325 | Confirm removal over stub. Prefer reviewed #322 plus retained incremental follow-up; compare #330's unique autospec work, and avoid deleting a helper needed by incoming merge/bulk tools.[32] [34] [37] |
+| D4 | #311 contract and new #345 escalation report | Answer nullable/source-labelled stats proposal; acknowledge offer of a focused escalation-deadline fix. Do not conflate either with #323's classification correction.[23] [57] [35] |
+| D5 | #309 with #336 / updated #312 | Prefer re-reviewed #336; resolve contributor credit/supersession rather than retaining two implementations in the active queue.[21] [48] [24] |
+| D6 | #15 / #334 | Confirm or defer the implemented one-tool bounded best-effort MVP; record once, not a new implementation plan. #339 is already-reviewed tag-bound follow-up.[2] [46] [51] |
+| D7 | #198 with updated #267 / unreviewed #344 / parked #200 | Select one read-only carrier after comparing changed #267; preserve create/write follow-up scope. A wrapper/modular preference for #344 is not approval of its unreviewed diff.[6] [13] [56] |
+| D8 | #278 reporters | Link reviewed hybrid implementation #335 and coordinate already-offered live validation; do not reopen a settled design choice.[15] [47] |
 
 ## PR inventory — ranked, all open PRs
 
@@ -108,11 +108,11 @@ Issue implementation links below are not automatic dependency edges. Open featur
 
 ## Queue entry recommendations
 
-- **Already-reviewed, no new discussion needed:** begin later readiness preparation for #310, #318 and #287; preserve approved incremental #326 and #331 after their parents. Carry enum stack verdicts and latest webhook approval rather than asking for another full review.[22][30][16]
-- **High-priority changed-head assessment:** #323 and #307; #332 needs conflict resolution plus reviewed-head reconciliation rather than another generic schema debate.[35][20][44]
-- **Do not queue both alternatives:** expansion (#327/#321/#313), deletion (#322/#330), ticket merge (#336/#312), read-only KB (#267/#344). Distinct follow-up work must survive any supersession.[39][42][48]
-- **Already-actionable author lane:** #314, #316, #337 and #329; #328 also needs parent/timeout coordination. Repeating existing requested changes is not useful maintainer work.[26][28][49]
-- **Administrative recommendations, not performed:** supersede #264 and #317 using fixes already on main; retire #257/#289 only after the digest producer is removed. Keep Renovate dashboard #3 open.[12][29][1]
+- **Already-reviewed, no new discussion needed:** begin later readiness preparation for #310, #318 and #287; preserve approved incremental #326 and #331 after their parents. Carry enum stack verdicts and latest webhook approval rather than asking for another full review.[22] [30] [16]
+- **High-priority changed-head assessment:** #323 and #307; #332 needs conflict resolution plus reviewed-head reconciliation rather than another generic schema debate.[35] [20] [44]
+- **Do not queue both alternatives:** expansion (#327/#321/#313), deletion (#322/#330), ticket merge (#336/#312), read-only KB (#267/#344). Distinct follow-up work must survive any supersession.[39] [42] [48]
+- **Already-actionable author lane:** #314, #316, #337 and #329; #328 also needs parent/timeout coordination. Repeating existing requested changes is not useful maintainer work.[26] [28] [49]
+- **Administrative recommendations, not performed:** supersede #264 and #317 using fixes already on main; retire #257/#289 only after the digest producer is removed. Keep Renovate dashboard #3 open.[12] [29] [1]
 
 ## Fresh completion verification
 
