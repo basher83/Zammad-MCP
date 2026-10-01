@@ -32,19 +32,11 @@ dependencies = [
     "requests>=2.32.0",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=9.0.3",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=7.1.0",
-    "ruff>=0.15.10",
-    "mypy>=1.20.1",
-    "pip-audit>=2.6.0",
-    "bandit[sarif]>=1.9.4",
-    "defusedxml>=0.7.1",
-    "pre-commit>=4.5.1",
-    "types-requests>=2.32.0",
-]
+[project.urls]
+Homepage = "https://github.com/basher83/Zammad-MCP"
+Repository = "https://github.com/basher83/Zammad-MCP"
+Issues = "https://github.com/basher83/Zammad-MCP/issues"
+Changelog = "https://github.com/basher83/Zammad-MCP/blob/main/CHANGELOG.md"
 
 [project.scripts]
 mcp-zammad = "mcp_zammad.__main__:main"

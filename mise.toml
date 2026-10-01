@@ -117,7 +117,6 @@ echo "  5. Push: git push && git push --tags"
 description = "Clean development environment"
 run = """
 rm -rf .venv
-rm -rf requirements.lock
 """
 
 [tasks.python-upgrade]

@@ -117,7 +117,9 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             
             # Coverage badge
-            COVERAGE=$COVERAGE uv run python -c "import os; cov = float(os.environ['COVERAGE']); print('✅ **Status**: Meets coverage target (86%)' if cov >= 86 else '❌ **Status**: Below coverage target (86%)')" >> $GITHUB_STEP_SUMMARY
+            # The floor comes from pyproject.toml ([tool.coverage.report] fail_under), the gate's source of truth
+            FLOOR=$(sed -n 's/^fail_under = //p' pyproject.toml)
+            COVERAGE=$COVERAGE FLOOR=$FLOOR uv run python -c "import os; cov = float(os.environ['COVERAGE']); floor = float(os.environ['FLOOR']); print(f'✅ **Status**: Meets coverage target ({floor:g}%)' if cov >= floor else f'❌ **Status**: Below coverage target ({floor:g}%)')" >> $GITHUB_STEP_SUMMARY
             
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "📈 Coverage details available in [Codacy](https://app.codacy.com/gh/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY

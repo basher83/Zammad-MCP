@@ -36,11 +36,11 @@ jobs:
         run: |
           uv sync --dev --frozen
 
-      - name: Run Bandit (HIGH/CRITICAL only)
+      - name: Run Bandit (HIGH severity)
         run: |
-          # Full recursive scan of the entire codebase
-          # --severity-level high: Only fail on HIGH and CRITICAL severity issues
-          echo "Running Bandit security scan (HIGH/CRITICAL only)..."
+          # Recursive scan of mcp_zammad/
+          # --severity-level high: fail only on HIGH severity issues (Bandit has no CRITICAL level)
+          echo "Running Bandit security scan (HIGH severity)..."
           uv run bandit -r mcp_zammad/ --severity-level high -f json -o bandit-report.json
 
       - name: Generate Bandit SARIF report

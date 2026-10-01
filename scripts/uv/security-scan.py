@@ -26,7 +26,7 @@ Usage:
     ./security-scan.py --tool pip-audit   # Run specific tool only
     ./security-scan.py --format sarif     # Output in SARIF format
     ./security-scan.py --severity high    # Show only high severity issues
-    ./security-scan.py --fix              # Apply automatic fixes where possible
+    ./security-scan.py --fix              # Not implemented yet: prints a notice only
     uv run security-scan.py              # Run without making executable
 """
 
