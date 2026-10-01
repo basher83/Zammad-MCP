@@ -6,19 +6,12 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
 
 ### Prerequisites
 
-- Python 3.10 through 3.13
-- `uv` package manager:
-  ```bash
-  # macOS/Linux
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  
-  # Windows
-  powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-  ```
+- [mise](https://mise.jdx.dev/getting-started.html). `mise install` installs the pinned Python, uv, prek, git-cliff, and the other tools in `mise.toml`. The `mise run` commands in this guide need it.
 
 ### Getting Started
 
 1. Fork the repository
+
 2. Clone your fork:
 
    ```bash
@@ -26,45 +19,24 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
    cd zammad-mcp
    ```
 
-#### Quick Start (Recommended)
-
-Use the interactive setup wizard for the easiest setup experience:
-
-```bash
-./scripts/uv/dev-setup.py
-```
-
-This wizard will guide you through all setup steps including UV installation, virtual environment creation, and configuration.
-
-#### Manual Setup
-
-If you prefer manual setup:
-
-1. (Optional) Install recommended development tools:
+3. Install the tools and dependencies:
 
    ```bash
-   # Install eza, ripgrep, and ensure uv is available
-   ./scripts/bootstrap.sh
+   mise install            # pinned tools from mise.toml
+   mise run setup          # uv sync into .venv
+   mise run hooks-install  # pre-commit hooks
    ```
 
-2. Run the Python environment setup script:
+   If mise asks you to trust the repository configuration, run `mise trust`.
 
-   ```bash
-   # macOS/Linux
-   ./scripts/setup.sh
-   
-   # Windows
-   .\scripts\setup.ps1
-   ```
-
-3. Create a `.env` file with your Zammad credentials:
+4. Create a `.env` file with your Zammad credentials:
 
    ```env
    ZAMMAD_URL=https://your-instance.zammad.com/api/v1
    ZAMMAD_HTTP_TOKEN=your-api-token
    ```
 
-4. (Optional) Validate your environment configuration:
+5. (Optional) Validate your environment configuration:
 
    ```bash
    ./scripts/uv/validate-env.py
@@ -75,8 +47,8 @@ If you prefer manual setup:
 ### Running the Server
 
 ```bash
-# Development mode
-uv run python -m mcp_zammad
+# Development mode (installed command from pyproject.toml)
+uv run mcp-zammad
 
 ```
 
@@ -85,7 +57,10 @@ uv run python -m mcp_zammad
 Before submitting a PR, ensure your code passes all quality checks:
 
 ```bash
-# Run comprehensive quality checks (recommended)
+# Fast non-mutating developer gate: lint + affected tests (CI runs the release variant)
+mise run validate
+
+# Run comprehensive quality checks (recommended before a PR; this formats and fixes files)
 ./scripts/quality-check.sh
 
 # Or run individual checks
@@ -99,9 +74,9 @@ uv run pip-audit                       # Dependency vulnerability audit
 # Run tests
 uv run pytest --cov=mcp_zammad
 
-# Install and run pre-commit hooks
-uv run pre-commit install
-uv run pre-commit run --all-files
+# Install and run pre-commit hooks (prek, configured in mise.toml)
+mise run hooks-install
+mise run pre-commit-run
 ```
 
 ### Testing Guidelines
@@ -153,21 +128,19 @@ The repository includes several GitHub Actions workflows that run automatically 
 |----------|---------|----------|------------------|
 | **Tests and Coverage** | Runs tests and reports coverage | Push, PR to main | None |
 | **Security Scan** | Python security analysis | Push, PR to main, Weekly (Mon 9:00 UTC) | None |
-| **Build and Publish Docker** | Builds and publishes Docker images | Push to main, tags, Manual | None (uses GITHUB_TOKEN) |
-| **Copilot Setup Steps** | Development environment setup | Manual only | None |
+| **Build and Publish Docker** | Builds and publishes Docker images | Push to main, tags, Manual, PR to main (build only) | None (uses GITHUB_TOKEN) |
 
 ### Workflow Details
 
 #### 1. Tests and Coverage (`tests.yml`)
 
 - **Purpose**: Ensures code quality and functionality
-- **What it does**:
-  - Runs the full test suite with pytest
-  - Generates coverage reports
-  - Uploads coverage results as artifacts
-  - Comments coverage on PRs (if configured)
-- **Failure conditions**: Tests fail or coverage drops below threshold
-- **Fork Compatibility**: Workflow automatically handles missing secrets in forked repositories without failing
+- **Jobs**:
+  - `validate`: runs `./scripts/validate.sh release` (lint, full coverage suite, package build) on Python 3.13
+  - `tests`: runs the full pytest suite with coverage on a Python 3.10, 3.11, 3.12, and 3.13 matrix. It uploads coverage reports as artifacts and writes a coverage summary to the job summary
+  - `test-and-coverage`: aggregate required check that fails unless `validate` and every `tests` matrix job succeed
+- **Failure conditions**: Any gate in `validate` fails, tests fail, or coverage drops below the `fail_under` floor in `pyproject.toml`
+- **Codacy upload**: The `tests` job uploads `coverage.xml` to Codacy only when three conditions are true. The job runs on the Python 3.13 matrix leg, the run is not manual, and the `CODACY_PROJECT_TOKEN` secret is present. Forks and Dependabot PRs pass without the secret
 
 #### 2. Security Scan (`security-scan.yml`)
 
@@ -177,7 +150,7 @@ The repository includes several GitHub Actions workflows that run automatically 
   - **pip-audit**: Dependency vulnerability scanning
 - **Reports**: Uploads security reports as artifacts and to GitHub Security tab
 - **Configuration**: No additional secrets required
-- **Fork Compatibility**: Workflow automatically handles missing secrets in forked repositories without failing
+- **Fork Compatibility**: The job runs only in `basher83/Zammad-MCP`. Forks skip it through a repository guard
 
 #### 3. Build and Publish Docker (`docker-publish.yml`)
 
@@ -189,25 +162,19 @@ The repository includes several GitHub Actions workflows that run automatically 
 - **Registry**: Publishes to GitHub Container Registry (ghcr.io)
 - **Multi-platform**: Builds for linux/amd64 and linux/arm64
 
-#### 4. Copilot Setup Steps (`copilot-setup-steps.yml`)
+### Setting Up Optional Secrets
 
-- **Purpose**: Development environment setup guide
-- **Usage**: Manual trigger only - provides setup instructions
-- **Useful for**: New contributors getting started
-
-### Setting Up Required Secrets
-
-To configure the required secrets:
+No workflow requires a repository secret. To enable Codacy coverage reporting:
 
 1. Go to Settings → Secrets and variables → Actions
-2. Add the following secrets:
-   - **`CODACY_PROJECT_TOKEN`**: Get from your Codacy project settings
+2. Add the following secret:
+   - **`CODACY_PROJECT_TOKEN`** (optional): Get from your Codacy project settings. When the secret is absent, the workflow skips the upload step.
 
 ### Workflow Best Practices
 
 - All workflows use pinned action versions with SHA hashes for security
 - Dependencies are installed with `uv sync --dev --frozen` for reproducibility
-- Security scans use `continue-on-error: true` to capture reports even on failure
+- The security scan fails the job on Bandit HIGH/CRITICAL findings and on pip-audit vulnerabilities. Only the "Generate Bandit SARIF report" step uses `continue-on-error: true`, so the Security tab upload runs even when that report step fails
 - Test workflows should fail fast on errors
 - Use job summaries (`$GITHUB_STEP_SUMMARY`) for clear status reporting
 
@@ -252,39 +219,53 @@ test: add coverage for error cases
 
 ### 1. New Tools
 
-Add to `server.py` using the `@mcp.tool()` decorator:
+Register the tool inside a `ZammadMCPServer._setup_*` method in `server.py`. Define a parameters model in `models.py`, stack `@self.mcp.tool(...)` over `@flat_params(...)` from `mcp_zammad/tool_params.py`, and get the client with `self.get_client()`. Choose the annotation helper that matches the operation: `_read_only_annotations`, `_write_annotations`, `_idempotent_write_annotations`, or `_destructive_write_annotations`. This example follows `zammad_list_knowledge_bases`:
 
 ```python
-@mcp.tool()
-def new_tool_name(param1: str, param2: int) -> ReturnType:
-    """Clear description of what the tool does.
-    
-    Args:
-        param1: Description of param1
-        param2: Description of param2
-        
-    Returns:
-        Description of return value
+@self.mcp.tool(annotations=_read_only_annotations("List Knowledge Bases"))
+@flat_params(ListKnowledgeBasesParams)
+def zammad_list_knowledge_bases(params: ListKnowledgeBasesParams) -> str:
+    """List all knowledge bases available in Zammad.
+
+    Note:
+        Requires knowledge_base.reader or knowledge_base.editor permission.
     """
-    client = get_zammad_client()
-    # Implementation
+    client = self.get_client()
+    kbs = client.list_knowledge_bases()
+    if params.response_format == ResponseFormat.JSON:
+        result = json.dumps({"items": kbs, "count": len(kbs)}, indent=2, default=str)
+    else:
+        lines = ["# Knowledge Bases", "", f"Found {len(kbs)} knowledge base(s)", ""]
+        for kb in kbs:
+            lines.append(f"## KB ID: {kb.get('id', 'N/A')}")
+            lines.append(f"- **Active**: {kb.get('active', False)}")
+            lines.append("")
+        result = "\n".join(lines)
+    return truncate_response(result)
 ```
+
+The real tool also prints the custom address and root category count for each knowledge base.
+
+Test the tool through the public FastMCP boundary (for example `await server.mcp.get_tool("zammad_list_knowledge_bases")` or a `fastmcp.Client` call) with a mocked `ZammadClient`. Do not assert against private registries.
 
 ### 2. New Models
 
 Define in `models.py` using Pydantic:
 
 ```python
+from pydantic import BaseModel, ConfigDict
+
+
 class NewModel(BaseModel):
     """Model description."""
-    
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
     field_name: str
     optional_field: int | None = None
-    
-    class Config:
-        """Pydantic config."""
-        extra = "forbid"
 ```
+
+Request parameter models extend `StrictBaseModel` in `models.py`, which already sets this `model_config`.
 
 ### 3. New API Methods
 
@@ -322,24 +303,33 @@ Releases are managed through git tags, which automatically trigger Docker image 
 git checkout main
 git pull origin main
 
-# Run all quality checks
-./scripts/quality-check.sh
+# Run the release gates: lint + full coverage suite + build
+mise run validate-release
 
-# Update CHANGELOG.md with release notes
-# Update version in pyproject.toml if needed
+# Generate the release section in CHANGELOG.md from git history (git-cliff).
+# Replace X.Y.Z with the new version, without the "v" prefix.
+mise run changelog-bump X.Y.Z
 ```
+
+`changelog-bump` rewrites only the unreleased section of `CHANGELOG.md` and prints the next steps. Follow them:
+
+1. Review `CHANGELOG.md`
+1. Update the version in `pyproject.toml`: `uv version X.Y.Z`
+1. Commit: `git add CHANGELOG.md pyproject.toml uv.lock && git commit -m 'chore(release): prepare for vX.Y.Z'`
+
+Then create and push the tag as described in the next step.
 
 #### 2. Create and Push a Version Tag
 
 ```bash
-# Create a semantic version tag (vX.Y.Z format)
-git tag v1.0.0 -m "Release version 1.0.0"
+# Create an annotated semantic version tag (vX.Y.Z format, for example v1.2.0)
+git tag -a v1.2.0 -m "Release v1.2.0"
 
 # For pre-releases
-git tag v1.0.0-beta.1 -m "Pre-release version 1.0.0-beta.1"
+git tag -a v1.2.0-beta.1 -m "Pre-release v1.2.0-beta.1"
 
-# Push the tag to trigger Docker builds
-git push origin v1.0.0
+# Push the commit and the tag to trigger Docker builds
+git push && git push --tags
 ```
 
 #### 3. Automated Docker Publishing
@@ -348,10 +338,10 @@ Once the tag is pushed, the GitHub Actions workflow automatically:
 
 - Builds Docker images for multiple platforms (linux/amd64, linux/arm64)
 - Creates the following tags in GitHub Container Registry:
-  - `ghcr.io/basher83/zammad-mcp:1.0.0` (exact version)
-  - `ghcr.io/basher83/zammad-mcp:1.0` (minor version)
+  - `ghcr.io/basher83/zammad-mcp:1.2.0` (exact version)
+  - `ghcr.io/basher83/zammad-mcp:1.2` (minor version)
   - `ghcr.io/basher83/zammad-mcp:1` (major version)
-  - `ghcr.io/basher83/zammad-mcp:latest` (if this is the latest release)
+- Release tags do not update `latest`. Pushes to `main` produce the `latest` tag.
 
 #### 4. Create GitHub Release
 
@@ -359,8 +349,8 @@ After the Docker images are built:
 
 1. Go to [Releases](https://github.com/basher83/Zammad-MCP/releases)
 2. Click "Draft a new release"
-3. Select your tag (e.g., v1.0.0)
-4. Add release title and notes from CHANGELOG.md
+3. Select your tag (e.g., v1.2.0)
+4. Add the release title and copy the notes from the matching `CHANGELOG.md` section
 5. Publish the release
 
 ### Version Numbering Guidelines
@@ -377,10 +367,10 @@ For testing releases before making them stable:
 
 ```bash
 # Beta releases
-git tag v1.0.0-beta.1
+git tag -a v1.2.0-beta.1 -m "Pre-release v1.2.0-beta.1"
 
 # Release candidates
-git tag v1.0.0-rc.1
+git tag -a v1.2.0-rc.1 -m "Pre-release v1.2.0-rc.1"
 ```
 
 ## Priority Areas for Contribution
@@ -389,19 +379,14 @@ git tag v1.0.0-rc.1
 
 - ✅ Maintain at least the configured 86% coverage gate
 - Fix unused parameters in functions
-- Implement custom exception classes
-- Add proper URL validation
+- SSRF hardening for `ZAMMAD_URL` (the client validates the URL scheme and hostname and warns on local or private addresses, but does not block them)
 
 ### Short Term
 
-- Add attachment support
-- Implement caching layer
 - Add config file support
-- Optimize `get_ticket_stats` performance
 
 ### Long Term
 
-- Webhook support for real-time updates
 - SLA management features
 - Async Zammad client
 

@@ -2,7 +2,9 @@
 
 This directory contains UV single-file scripts that provide development and operational tools for the Zammad MCP project.
 
-## Environment Validation
+## Scripts
+
+### validate-env.py
 
 Validates the Zammad MCP Server environment configuration before startup.
 
@@ -88,39 +90,8 @@ uv run pytest --cov=mcp_zammad --cov-report=xml
 
 **Exit Codes:**
 
-## Script Execution
-
-These scripts can be executed in several ways:
-
-### Direct Execution (Recommended for GNU/Linux)
-
-```bash
-./dev-setup.py
-
-# Quick setup with minimal prompts
-./dev-setup.py --quick
-
-# Only check requirements without running setup
-./dev-setup.py --check-only
-
-# Run with uv directly
-uv run scripts/uv/dev-setup.py
-```
-
-**Setup Flow:**
-
-1. **System Check**: Verifies Python version, Git, and project structure
-1. **UV Installation**: Checks for UV and offers to install if missing
-1. **Virtual Environment**: Creates or recreates .venv
-1. **Configuration**: Interactive prompts for Zammad credentials
-1. **Dependencies**: Installs all project and dev dependencies
-1. **Validation**: Runs basic checks to ensure setup success
-1. **Next Steps**: Shows helpful commands and resources
-
-**Exit Codes:**
-
-- 0: Setup completed successfully
-- 1: Setup failed or was cancelled
+- 0: Coverage meets the target
+- 1: Coverage file missing or unreadable, or coverage below the target
 
 ### security-scan.py
 
@@ -203,10 +174,20 @@ Interactive CLI for testing Zammad API connections and operations without the MC
 # etc.
 ```
 
+## Script Execution
+
+These scripts can be executed in several ways:
+
+### Direct Execution (Recommended for GNU/Linux)
+
+```bash
+./validate-env.py
+# etc.
+```
+
 ### Using UV directly (Most Portable)
 
 ```bash
-uv run --script dev-setup.py
 uv run --script test-zammad.py
 # etc.
 ```
@@ -228,10 +209,12 @@ The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag i
 - ❌ **Alpine (BusyBox)**: No `-S` flag support
 - ❌ **FreeBSD/OpenBSD**: No `-S` flag support
 
-  1. Create a new `.py` file in this directory
-  1. Add the shebang: `#!/usr/bin/env -S uv run --script`
-  1. Add script metadata with dependencies
-  1. Make it executable: `chmod +x script.py`
+### Adding a New Script
+
+1. Create a new `.py` file in this directory
+1. Add the shebang: `#!/usr/bin/env -S uv run --script`
+1. Add script metadata with dependencies
+1. Make it executable: `chmod +x script.py`
 
 ### Workarounds for Non-GNU Systems
 
@@ -244,7 +227,7 @@ The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag i
 1. **Create an alias**:
 
    ```bash
-   alias dev-setup='uv run --script ~/path/to/dev-setup.py'
+   alias validate-env='uv run --script ~/path/to/validate-env.py'
    ```
 
 1. **Create a wrapper script**:
@@ -256,11 +239,11 @@ The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag i
 
 ## Available Scripts
 
-- **dev-setup.py**: Interactive development environment setup wizard
 - **test-zammad.py**: Test Zammad API connections and operations
 - **validate-env.py**: Validate environment configuration
 - **coverage-report.py**: Generate enhanced coverage reports
 - **security-scan.py**: Run consolidated security scans
+- **utils.py**: Shared helper module imported by the scripts. It is not a standalone script.
 
 ## Script Dependencies
 

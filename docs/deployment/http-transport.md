@@ -26,6 +26,20 @@ mcp-zammad
 
 Server available at: `http://127.0.0.1:8000/mcp`
 
+Check that the listener runs:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+Expected response:
+
+```json
+{"status":"healthy","transport":"http"}
+```
+
+This check proves only that the HTTP listener runs. It does not prove that the server can reach Zammad.
+
 ### Docker Deployment
 
 ```bash
@@ -88,8 +102,34 @@ server {
         proxy_cache off;
         proxy_read_timeout 86400s;
     }
+
+    # Zammad webhook ingress (optional, see Webhooks below)
+    location = /webhooks/zammad {
+        proxy_pass http://127.0.0.1:8000/webhooks/zammad;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Health check
+    location = /health {
+        proxy_pass http://127.0.0.1:8000/health;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
 ```
+
+**Webhooks:** The server accepts Zammad webhook deliveries at `POST /webhooks/zammad`. Set
+`ZAMMAD_WEBHOOK_SECRET` to the HMAC SHA1 Signature Token of the Zammad webhook. The route returns `503` until
+you set the secret. A missing or invalid `X-Hub-Signature` header returns `401`. Omit the `/webhooks/zammad`
+location if you do not use webhooks. See the README section
+[Webhook Events](../../README.md#webhook-events-http-transport-only) for the Zammad setup.
 
 Enable and reload:
 
@@ -137,8 +177,6 @@ The following is a hardened illustrative Compose configuration. It differs from 
 `docker-compose.yml`, which publishes host port 9146 on all interfaces.
 
 ```yaml
-version: '3.8'
-
 services:
   zammad-mcp:
     image: ghcr.io/basher83/zammad-mcp:latest
@@ -235,9 +273,6 @@ configure one at a proxy, service mesh, or platform boundary:
 ```bash
 # Health check endpoint
 curl http://localhost:8000/health
-
-# Metrics (if implemented)
-curl http://localhost:8000/metrics
 ```
 
 ## Troubleshooting

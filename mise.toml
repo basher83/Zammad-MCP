@@ -33,7 +33,7 @@ uv sync
 echo "🪝 Installing pre-commit hooks..."
 infisical scan install --pre-commit-hook || echo "⚠️  Infisical not available, skipping..."
 if ! command -v coderabbit >/dev/null 2>&1; then
-  echo "ℹ️  CodeRabbit CLI not installed. See mise.toml for installation instructions."
+  echo "ℹ️  CodeRabbit CLI not installed (optional, for local CodeRabbit reviews)."
 else
   echo "✅ coderabbit CLI already installed."
 fi

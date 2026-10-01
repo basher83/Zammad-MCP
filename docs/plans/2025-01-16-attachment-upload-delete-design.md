@@ -2,7 +2,7 @@
 
 **Date:** 2025-01-16
 **Issue:** #14 - Feature: Add attachment support for tickets
-**Status:** Approved for implementation
+**Status:** Historical. Implemented in v1.0.0 (PR #122). Version 1.2.0 removed `zammad_delete_attachment` because Zammad has no such endpoint (issue #320, PRs #322 and #348).
 
 ## Overview
 

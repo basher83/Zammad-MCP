@@ -26,7 +26,6 @@ exclude = [
     "dist",
     "build",
     ".claude/**",
-    "docs/ai-docs",
     "docs/dev",
     "docs/plans/**",
     ".git",

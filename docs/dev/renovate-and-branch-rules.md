@@ -28,39 +28,7 @@ GitHub treats Dependabot-triggered `pull_request` workflows like forked PRs: the
 
 ### 2.1 Repo-level Renovate config
 
-`renovate.json` in this repo:
-
-```jsonc
-{
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "local>basher83/renovate-config",
-    "local>basher83/renovate-config//presets/python-mcp.json",
-    "local>basher83/renovate-config//presets/github-actions-security.json",
-    "local>basher83/renovate-config//presets/docker.json"
-  ],
-  "labels": [
-    "dependencies",
-    "renovate"
-  ],
-  "assignees": [
-    "basher83"
-  ],
-  "commitMessagePrefix": "chore(deps):",
-  "packageRules": [
-    {
-      "description": "Require approval for major Zammad API updates",
-      "matchPackageNames": [
-        "zammad-py"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "dependencyDashboardApproval": true
-    }
-  ]
-}
-```
+[`renovate.json`](../../renovate.json) in this repo extends the central config and three presets, and adds four package rules. Read the file for the exact JSON.
 
 Key points:
 
@@ -72,8 +40,12 @@ Key points:
   - Are labeled with `dependencies` and `renovate`.
   - Are assigned to `@basher83`.
   - Use `chore(deps):` as the commit message prefix.
-- Extra repo‑specific rule:
+- Extra repo‑specific rules:
+  - Renovate does not propose Python 3.14 or later (`allowedVersions: "<3.14"`). This matches `requires-python` in `pyproject.toml`.
+  - The Python pins in `mise.toml` and `.python-version` update in one PR (group `python version pins`).
+  - The uv pins in `mise.toml`, the `setup-uv` workflow steps, and the `uv-pre-commit` hook update in one PR (group `uv version pins`).
   - Major updates to `zammad-py` require explicit approval in the Dependency Dashboard.
+- `mise.toml` is the source of truth for the Python and uv versions. `scripts/validate.sh` fails when another file pins a different version, so a PR that updates only one pin fails CI.
 
 ---
 

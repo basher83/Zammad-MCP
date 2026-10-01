@@ -398,6 +398,17 @@ If you violate any of these constraints, the output is considered incorrect.
 
 ## 8. Code Structure Constraints (Strict, Non-Negotiable)
 
+### 8.0 Scope
+
+- Sections 8.1 to 8.7 apply to code only: Python and shell source under `mcp_zammad/`, `tests/`, and `scripts/`.
+- They do not apply to documentation, generated files, or configuration. This includes Markdown (`README.md`, `CHANGELOG.md`, `AGENTS.md`, `docs/`, `.claude/`), YAML, TOML, and JSON files. `.rumdl.toml` sets the Markdown policy.
+- The limits apply to new constructs and to constructs that a change modifies. A change does not have to refactor constructs that it does not touch.
+- Docstring and comment changes do not make a construct a changed construct.
+- These files were over the 200-line limit on 2026-09-30. They are exempt from section 8.3 until they are refactored. New and changed constructs in them must still obey sections 8.1 and 8.2.
+  - `mcp_zammad/server.py`, `mcp_zammad/client.py`, `mcp_zammad/models.py`
+  - `tests/test_server.py`, `tests/test_client_methods.py`, `tests/test_kb_readonly.py`, `tests/test_client.py`, `tests/test_models.py`, `tests/integration/test_http_transport.py`
+  - `scripts/uv/coverage-report.py`, `scripts/uv/test-zammad.py`, `scripts/uv/security-scan.py`, `scripts/uv/validate-env.py`
+
 ### 8.1 Maximum Nesting Depth (≤ 3)
 
 - All production code MUST have a maximum nesting depth of 3.
@@ -480,7 +491,7 @@ If you violate any of these constraints, the output is considered incorrect.
 ### 8.7 Enforcement
 
 - These are hard constraints, not guidelines
-- Any violation MUST be resolved immediately
+- Any violation within the scope of section 8.0 MUST be resolved immediately
 - No exceptions for "readability" or "performance" without restructuring
 - Code that violates these constraints is considered invalid and incomplete
 
@@ -556,14 +567,21 @@ Repository-specific guidance for `basher83/Zammad-MCP`. This layer supplements t
 ## Tooling and validation
 
 - Use `uv` for Python dependency and command execution. Use `mise run setup` for repository setup.
+- `mise run validate` runs the fast non-mutating developer gates (`./scripts/validate.sh dev`: format check, lint, types, affected tests). `mise run validate-release` runs the release gates (`./scripts/validate.sh release`: the same lint gates, the full coverage suite, and a package build). The CI `validate` job runs the release gates.
 - Cheap non-mutating checks are `uv run ruff format --check mcp_zammad tests`, `uv run ruff check mcp_zammad tests`, `uv run mypy mcp_zammad`, and focused `uv run pytest <path>`.
 - `./scripts/quality-check.sh` is mutating: it formats code, applies Ruff fixes, writes security and coverage reports, and runs the full suite with an 86% coverage floor. Do not use it when a read-only validation was requested.
 - `mise run pre-commit-run` invokes `prek run --all-files`; configured hooks may modify files.
 - Use `mise run changelog` for unreleased changelog updates and `mise run changelog-bump <version>` when preparing a release. Do not hand-edit released changelog sections.
 
-## Known automation inconsistency
+## Version pins and gates
 
-`pyproject.toml` declares Python `>=3.10,<3.14`, while `mise.toml` pins Python 3.14.4 and GitHub test/security workflows select Python 3.14. Coverage enforcement also differs: the local quality script requires 86%, while the test workflow requires 65%. Markdown policy diverges too: pre-commit uses Rumdl with `.rumdl.toml`, while `mise run markdown-lint` invokes markdownlint-cli2 without equivalent configuration. Treat these as automation-foundation defects: reconcile the canonical versions and gates before production TDD, and do not claim local/CI parity until it is verified.
+`pyproject.toml` declares Python `>=3.10,<3.14`, and the test workflow matrix covers Python 3.10 to 3.13. `mise.toml` is the source of truth for the Python and uv versions. uv and the `setup-python` step in the security workflow read `.python-version` and never read `mise.toml`, and mise does not read `.python-version` unless `idiomatic_version_file_enable_tools` includes `python`. `scripts/validate.sh` therefore checks that `.python-version`, the `setup-uv` workflow steps, and the `uv-pre-commit` hook match `mise.toml`, and fails when they differ. Renovate groups these pins so that one PR updates them together. The check compares the version in the `uv-pre-commit` comment, not the commit SHA, so keep the comment accurate when you change the SHA. Coverage uses one 86% floor in `pyproject.toml`. `mise run markdown-lint` and pre-commit both run Rumdl with `.rumdl.toml`.
+
+## Git
+
+- Write commit messages in Conventional Commits format (`type(scope): summary`). `cliff.toml` builds the changelog from them and drops commits that do not match.
+- Do not bypass the pre-commit hooks with `--no-verify`. Fix the failure and commit again.
+- Ask before you push, force-push, rewrite published history, or delete a remote branch.
 
 ## FastMCP contract
 
@@ -571,6 +589,7 @@ Repository-specific guidance for `basher83/Zammad-MCP`. This layer supplements t
 - Supported transports are `stdio` and `http`. Stdio is the default. HTTP requires `MCP_PORT`; `MCP_HOST` defaults to `127.0.0.1`.
 - Pass HTTP host and port to `mcp.run(transport="http", host=..., port=...)`; do not pass them to `FastMCP()`.
 - Keep tool annotations accurate: distinguish read-only, write, idempotent-write, and destructive operations.
+- MCP clients see only the first docstring paragraphs of a tool, up to its `Args:` or `Parameters:` section. FastMCP drops the rest. Without a parameter section, clients see the whole docstring. Put what an agent needs there: when to use the tool, what to use instead, and requirements or errors. `tests/test_tool_descriptions.py` checks this text through the MCP boundary.
 - Register tools, resources, and prompts through the `ZammadMCPServer` setup methods. Test observable MCP behavior through public FastMCP or process boundaries; do not add new assertions against private registries.
 
 ## Configuration and security invariants

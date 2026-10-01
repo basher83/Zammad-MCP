@@ -1,5 +1,7 @@
 # Repository Audit Report — 2026-07-11
 
+> **Status:** Historical snapshot from 2026-07-11. Some findings are now resolved and some remain open. Check each claim against the current tree before you act on it.
+
 ## Scope and method
 
 This audit compared the repository to `AGENTS.md`, treating that file as the source of truth. Independent passes covered

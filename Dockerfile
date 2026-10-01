@@ -86,5 +86,5 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Switch back to appuser
 USER appuser
 
-# Enable hot reload for development
+# Unbuffered stdout and stderr so development logs appear immediately
 ENV PYTHONUNBUFFERED=1

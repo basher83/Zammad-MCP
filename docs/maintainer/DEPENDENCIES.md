@@ -1,5 +1,7 @@
 # Dependency and overlap map
 
+> **Status:** Historical snapshot. PRs #346, #347, #348, and #349 merged on 2026-09-29 and executed this triage. On 2026-09-30 the repository had no open PRs. Do not use this page as the current PR state.
+
 This is queue design, not instructions to execute a PR workflow. Arrows below are explicitly typed; a shared filename or Gitcrawl similarity score is not proof of a dependency. Canonical choices are recommendations, not GitHub dispositions already performed.
 
 ## Recommended queue shape

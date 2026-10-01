@@ -1,5 +1,7 @@
 # Current-head and existing-review evidence
 
+> **Status:** Historical snapshot. PRs #346, #347, #348, and #349 merged on 2026-09-29 and executed this triage. On 2026-09-30 the repository had no open PRs. Do not use this page as the current PR state.
+
 Repository: basher83/Zammad-MCP. Snapshot window: 2026-09-25T07:43:21.521751+00:00 — 2026-09-25T07:43:32.436390+00:00.
 
 This is a record of existing verdicts, not a new review. Blank GitHub reviewDecision does not erase approval text; COMMENTED and DISMISSED are not APPROVED. Check counts include only returned checks. All-pass does not assert expected/required workflow completeness. Exact check links and discussion excerpts are in ledger.json.

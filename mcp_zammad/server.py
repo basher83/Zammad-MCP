@@ -1565,6 +1565,10 @@ class ZammadMCPServer:
         def zammad_search_tickets(params: TicketSearchParams) -> str:
             """Search for tickets with filters and pagination.
 
+            Combine a free-text query with state, priority, group, owner (login), and customer
+            (email) filters. Search by ticket number here to get the internal ID that other tools
+            need. With a known ID use zammad_get_ticket.
+
             Args:
                 params (TicketSearchParams): Validated search parameters containing:
                     - query (str | None): Search string (matches title, body, tags)
@@ -1667,6 +1671,10 @@ class ZammadMCPServer:
         def zammad_get_ticket(params: GetTicketParams) -> str:
             """Get detailed information about a specific ticket by ID.
 
+            Use the internal ticket ID, not the ticket number shown in Zammad; if you only have
+            the number, find the ID with zammad_search_tickets. An unknown ID raises an error that
+            explains the difference.
+
             Parameters:
                 ticket_id (int): Internal database ID (NOT display number) (required)
                 include_articles (bool): Include ticket articles/comments (default: True)
@@ -1752,6 +1760,11 @@ class ZammadMCPServer:
         def zammad_create_ticket(params: TicketCreate) -> Ticket:
             """Create a new ticket in Zammad with initial article.
 
+            The customer must already exist in Zammad; create one with zammad_create_user if
+            needed. Group, state, and priority take names from zammad_list_groups,
+            zammad_list_ticket_states, and zammad_list_ticket_priorities. To comment on an
+            existing ticket use zammad_add_article.
+
             Args:
                 params (TicketCreate): Validated ticket creation parameters containing:
                     - title (str): Ticket title/subject (required)
@@ -1815,6 +1828,9 @@ class ZammadMCPServer:
         @flat_params(TicketUpdateParams)
         def zammad_update_ticket(params: TicketUpdateParams) -> Ticket:
             """Update an existing ticket's fields.
+
+            Use the internal ticket ID. State, priority, and group take names; the customer must
+            already exist. To comment use zammad_add_article; to tag use zammad_add_ticket_tag.
 
             Args:
                 params (TicketUpdateParams): Validated update parameters containing:
@@ -1880,6 +1896,10 @@ class ZammadMCPServer:
         @flat_params(ArticleCreate)
         def zammad_add_article(params: ArticleCreate) -> Article:
             """Add an article (comment/note/email) to an existing ticket with optional attachments.
+
+            Use the internal ticket_id, not the ticket number. Set internal=true for a note that
+            only agents see. text/plain bodies are HTML-escaped before sending. To open a ticket
+            use zammad_create_ticket; to change ticket fields use zammad_update_ticket.
 
             Args:
                 params (ArticleCreate): Validated article creation parameters containing:
@@ -1964,6 +1984,10 @@ class ZammadMCPServer:
         def zammad_get_article_attachments(params: GetArticleAttachmentsParams) -> list[Attachment]:
             """Get list of attachments for a specific article in a ticket.
 
+            Returns metadata only: id, filename, size, content_type, and created_at. Only
+            article_id is looked up; ticket_id is not checked. To get file content use
+            zammad_download_attachment.
+
             Args:
                 params (GetArticleAttachmentsParams): Validated parameters containing:
                     - ticket_id (int): Internal database ID (required, NOT display number)
@@ -2011,12 +2035,16 @@ class ZammadMCPServer:
         def zammad_download_attachment(params: DownloadAttachmentParams) -> str:
             """Download attachment file content from a ticket article.
 
+            Returns the file content as base64. max_bytes defaults to 10,000,000; a larger file
+            raises an error unless you raise the limit or pass null for no limit. Get the IDs from
+            zammad_get_article_attachments.
+
             Args:
                 params (DownloadAttachmentParams): Validated parameters containing:
                     - ticket_id (int): Internal database ID (required, NOT display number)
                     - article_id (int): Article ID containing attachment (required)
                     - attachment_id (int): Attachment ID to download (required)
-                    - max_bytes (int | None): Maximum file size limit (default: None)
+                    - max_bytes (int | None): Maximum file size limit (default: 10000000); null disables the limit
 
             Returns:
                 str: Base64-encoded binary content of the attachment file.
@@ -2104,6 +2132,9 @@ class ZammadMCPServer:
         def zammad_add_ticket_tag(params: TagOperationParams) -> TagOperationResult:
             """Add a tag to a ticket (idempotent operation).
 
+            Adding a tag the ticket already has changes nothing. Use the internal ticket_id. To
+            remove a tag use zammad_remove_ticket_tag.
+
             Args:
                 params (TagOperationParams): Validated parameters containing:
                     - ticket_id (int): Internal database ID (required, NOT display number)
@@ -2143,6 +2174,9 @@ class ZammadMCPServer:
         @flat_params(TagOperationParams)
         def zammad_remove_ticket_tag(params: TagOperationParams) -> TagOperationResult:
             """Remove a tag from a ticket (idempotent operation).
+
+            Removing a tag the ticket does not have changes nothing. Use the internal ticket_id.
+            To add a tag use zammad_add_ticket_tag.
 
             Args:
                 params (TagOperationParams): Validated parameters containing:
@@ -2186,6 +2220,9 @@ class ZammadMCPServer:
         @flat_params(TicketExportParams)
         def zammad_export_tickets(params: TicketExportParams) -> str:
             """Export tickets with conversation articles to a JSONL file for AI training.
+
+            The tool fails when ZAMMAD_EXPORT_DIR is not set, and output_path must resolve inside
+            that directory.
 
             Fetches tickets in batches, retrieves all articles for each ticket,
             strips HTML to plain text, and writes one JSON line per ticket.
@@ -2269,6 +2306,10 @@ class ZammadMCPServer:
         def zammad_bulk_update_tickets(params: BulkTicketUpdateParams) -> BulkUpdateResult:
             """Apply the same changes to up to 100 tickets in one call (update, assign, tag, close).
 
+            Supply at least one field, tag, or note. The call is not atomic: successful_ticket_ids
+            lists tickets where every requested action succeeded, and failed lists the others with
+            their errors. For one ticket use zammad_update_ticket.
+
             Parameters:
                 ticket_ids (list[int]): 1-100 unique internal database IDs (NOT display numbers) (required)
                 title, state, priority, owner, group, time_unit: Same semantics as zammad_update_ticket
@@ -2317,6 +2358,9 @@ class ZammadMCPServer:
         @flat_params(GetUserParams)
         def zammad_get_user(params: GetUserParams) -> str:
             """Get detailed information about a specific user by ID.
+
+            Use the internal user ID; to find a user by email or name use zammad_search_users. For
+            the authenticated account use zammad_get_current_user.
 
             Parameters:
                 user_id (int): User's internal database ID (required)
@@ -2375,6 +2419,9 @@ class ZammadMCPServer:
         @flat_params(SearchUsersParams)
         def zammad_search_users(params: SearchUsersParams) -> str:
             """Search for users by query string with pagination.
+
+            Use it to find users by email, name, or other text. With a known ID use
+            zammad_get_user.
 
             Args:
                 params (SearchUsersParams): Validated search parameters containing:
@@ -2452,6 +2499,9 @@ class ZammadMCPServer:
         def zammad_create_user(params: UserCreate) -> User:
             """Create a new user (customer) in Zammad.
 
+            Search with zammad_search_users first to avoid duplicates. A new user can then be the
+            customer of zammad_create_ticket.
+
             Args:
                 params (UserCreate): User creation parameters:
                     - email (str): Email address (required)
@@ -2483,6 +2533,9 @@ class ZammadMCPServer:
         @flat_params(GetOrganizationParams)
         def zammad_get_organization(params: GetOrganizationParams) -> str:
             """Get detailed information about a specific organization by ID.
+
+            Use the internal organization ID; to find one by name use zammad_search_organizations.
+            Returns the standard organization fields; custom attributes are not included.
 
             Args:
                 params (GetOrganizationParams): Validated parameters containing:
@@ -2537,6 +2590,9 @@ class ZammadMCPServer:
         @flat_params(SearchOrganizationsParams)
         def zammad_search_organizations(params: SearchOrganizationsParams) -> str:
             """Search for organizations by query string with pagination.
+
+            Use it to find organizations by name or other text. With a known ID use
+            zammad_get_organization.
 
             Args:
                 params (SearchOrganizationsParams): Validated search parameters containing:
@@ -2609,40 +2665,13 @@ class ZammadMCPServer:
         def zammad_get_current_user() -> User:
             """Get information about the currently authenticated user.
 
-            Args:
-                None (uses authentication token from environment)
+            Use it to check which Zammad account the server's configured credentials belong to.
+            The result is a User object with fields such as id, login, firstname, lastname,
+            email, organization_id, and active. For another user use zammad_get_user or
+            zammad_search_users.
 
             Returns:
-                User: Complete user object for authenticated user with schema:
-
-                ```json
-                {
-                    "id": 2,
-                    "login": "agent@company.com",
-                    "firstname": "Agent",
-                    "lastname": "Smith",
-                    "email": "agent@company.com",
-                    "organization": {"id": 1, "name": "Internal"},
-                    "active": true,
-                    "roles": ["Agent", "Admin"],
-                    "created_at": "2022-01-01T00:00:00Z"
-                }
-                ```
-
-            Examples:
-                - Use when: "Who am I?" -> no parameters needed
-                - Use when: "Show my user info" -> no parameters needed
-                - Use when: "What are my permissions?" -> check roles in response
-                - Don't use when: Getting other users (use zammad_get_user or zammad_search_users)
-
-            Error Handling:
-                - Returns "Error: Invalid authentication" if token invalid/expired
-                - Returns "Error: Permission denied" if token lacks user access
-
-            Note:
-                This is useful for checking authentication status and current user permissions.
-                Uses ZAMMAD_HTTP_TOKEN from environment for authentication.
-                Returns expanded user object including roles and organization.
+                User: The authenticated user.
             """
             client = self.get_client()
             user_data = client.get_current_user()
@@ -2903,6 +2932,10 @@ class ZammadMCPServer:
         def zammad_get_ticket_stats(params: GetTicketStatsParams) -> TicketStats:
             """Get aggregated ticket statistics with counts by state.
 
+            Scans matching tickets page by page, so it can be slow on large instances;
+            counts_truncated is true when the scan hit its limit. An unknown group name returns
+            zero counts, not an error; check names with zammad_list_groups.
+
             Args:
                 params (GetTicketStatsParams): Validated parameters containing:
                     - group (str | None): Filter by group name
@@ -2970,6 +3003,9 @@ class ZammadMCPServer:
         def zammad_list_groups(params: ListParams) -> str:
             """Get complete list of all available groups (cached).
 
+            List all groups instead of searching. Group names work
+            in zammad_create_ticket, zammad_update_ticket, and zammad_search_tickets.
+
             Args:
                 params (ListParams): Validated parameters containing:
                     - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
@@ -3033,6 +3069,9 @@ class ZammadMCPServer:
         @flat_params(ListParams)
         def zammad_list_ticket_states(params: ListParams) -> str:
             """Get complete list of all available ticket states (cached).
+
+            List all states instead of searching. State names work
+            in zammad_create_ticket, zammad_update_ticket, and zammad_search_tickets.
 
             Args:
                 params (ListParams): Validated parameters containing:
@@ -3105,6 +3144,9 @@ class ZammadMCPServer:
         def zammad_list_ticket_priorities(params: ListParams) -> str:
             """Get complete list of all available ticket priorities (cached).
 
+            List all priorities instead of searching. Priority
+            names work in zammad_create_ticket, zammad_update_ticket, and zammad_search_tickets.
+
             Args:
                 params (ListParams): Validated parameters containing:
                     - response_format (ResponseFormat): Output format - markdown or json (default: markdown)
@@ -3170,6 +3212,9 @@ class ZammadMCPServer:
         @flat_params(ListParams)
         def zammad_list_tags(params: ListParams) -> str:
             """Get all tags defined in the Zammad system.
+
+            Requires the admin.tag permission, which regular agents do not have. For the tags of
+            one ticket use zammad_get_ticket_tags.
 
             Args:
                 params (ListParams): Validated parameters containing:
@@ -3258,6 +3303,8 @@ class ZammadMCPServer:
         @flat_params(GetTicketTagsParams)
         def zammad_get_ticket_tags(params: GetTicketTagsParams) -> str:
             """Get tags assigned to a specific ticket.
+
+            Use the internal ticket ID. To list every tag in the system use zammad_list_tags.
 
             Args:
                 params (GetTicketTagsParams): Validated parameters containing:
@@ -3494,7 +3541,7 @@ class ZammadMCPServer:
         """Register read-only Knowledge Base tools.
 
         Failure semantics: client-level errors (network/HTTP) are propagated as
-        exceptions (e.g. :class:`ZammadAPIError`) so MCP surfaces them as
+        exceptions (e.g. ZammadAPIError) so MCP surfaces them as
         actual tool errors instead of returning successful string payloads.
         """
         self._setup_kb_info_tools()
@@ -3510,7 +3557,7 @@ class ZammadMCPServer:
             """List all knowledge bases available in Zammad.
 
             Errors (auth, network, HTTP 5xx, ...) are raised as
-            :class:`ZammadAPIError` so the MCP client sees a real tool error.
+            ZammadAPIError so the MCP client sees a real tool error.
 
             Note:
                 Requires knowledge_base.reader or knowledge_base.editor permission.
@@ -3576,7 +3623,8 @@ class ZammadMCPServer:
         def zammad_list_kb_answers(params: ListKBAnswersParams) -> str:
             """List answers within a KB category.
 
-            Each item exposes the resolved title via the ``_title`` key.
+            Each item has the resolved title in _title and the plain-text body in _body. Requires
+            knowledge_base.reader or knowledge_base.editor permission.
             """
             client = self.get_client()
             answers = client.list_kb_answers(params.kb_id, params.category_id)
@@ -3590,6 +3638,9 @@ class ZammadMCPServer:
         @flat_params(SearchKBAnswersParams)
         def zammad_search_kb_answers(params: SearchKBAnswersParams) -> str:
             """Case-insensitive substring search of KB answers (title and body).
+
+            Each result also carries its _category_id. Requires knowledge_base.reader or
+            knowledge_base.editor permission.
 
             Searches across all root categories of the KB by default, or only
             the given ``category_id`` and its descendants when provided.
@@ -3609,7 +3660,11 @@ class ZammadMCPServer:
         @self.mcp.tool(annotations=_read_only_annotations("Get KB Answer"))
         @flat_params(GetKBAnswerParams)
         def zammad_get_kb_answer(params: GetKBAnswerParams) -> str:
-            """Get a knowledge base answer by ID, including resolved title and body."""
+            """Get a knowledge base answer by ID, including resolved title and body.
+
+            Requires knowledge_base.reader or knowledge_base.editor permission. Find answer IDs
+            with zammad_list_kb_answers or zammad_search_kb_answers.
+            """
             client = self.get_client()
             result_payload = client.get_kb_answer_with_content(params.kb_id, params.answer_id)
             answer = result_payload["answer"]

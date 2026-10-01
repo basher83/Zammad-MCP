@@ -23,6 +23,7 @@ Every paginated JSON response must include:
     "has_more": bool,         # Whether more pages exist
     "next_page": int | None,  # Next page number if has_more
     "next_offset": int | None # Next offset if has_more
+    "_meta": {}               # Pre-allocated; truncate_response() writes truncation flags here
 }
 ```
 
@@ -42,15 +43,24 @@ response = {
 
 ### ✅ CORRECT: True total or None
 
+This is the shipped `_format_tickets_json` in `mcp_zammad/server.py`:
+
 ```python
-# DO THIS
 def _format_tickets_json(tickets: list[Ticket], total: int | None, page: int, per_page: int) -> str:
-    response = {
+    response: dict[str, Any] = {
         "items": [ticket.model_dump() for ticket in tickets],
-        "total": total,  # From API if available, None otherwise
+        "total": total,  # None when true total is unknown
         "count": len(tickets),
-        ...
+        "page": page,
+        "per_page": per_page,
+        "offset": (page - 1) * per_page,
+        "has_more": len(tickets) == per_page,  # heuristic when total unknown
+        "next_page": page + 1 if len(tickets) == per_page else None,
+        "next_offset": page * per_page if len(tickets) == per_page else None,
+        "_meta": {},  # Pre-allocated for truncation flags
     }
+
+    return json.dumps(response, indent=2, default=str)
 ```
 
 **When to use None:**
@@ -59,39 +69,49 @@ def _format_tickets_json(tickets: list[Ticket], total: int | None, page: int, pe
 - Expensive to compute total
 - Streaming/dynamic results
 
-**When total is None, include metadata:**
-
-```python
-"_meta": {
-    "total_unknown": True,
-    "reason": "Zammad API does not provide total count for searches"
-}
-```
+**Current state:** The Zammad search endpoint returns no total, so `zammad_search_tickets`, `zammad_search_users` and `zammad_search_organizations` always pass `total=None`. `_format_users_json` and `_format_organizations_json` use the same shape. There is no `_meta.total_unknown` flag. `total: null` is the signal that the total is unknown.
 
 ---
 
-### ❌ WRONG: Inaccurate has_more heuristic
+### has_more heuristic
+
+The shipped formatters compute `has_more` from the page size only:
 
 ```python
-# UNRELIABLE
-"has_more": len(tickets) == per_page  # Could be wrong!
+"has_more": len(tickets) == per_page,  # heuristic when total unknown
 ```
 
-**Problem:** If last page happens to have exactly per_page items, agents will try to fetch non-existent page.
+**Limitation:** If the last page has exactly `per_page` items, the agent requests one more page and receives an empty result. Zammad does not expose a total, so the project accepts this. An empty page (`count: 0`) is the end signal for the agent.
 
-### ✅ CORRECT: Compute from total when available
+**If a future endpoint exposes a true total**, compute `has_more` from it and keep the heuristic only as the `None` fallback:
 
 ```python
-# ACCURATE when total is known
 "has_more": (page * per_page < total) if total is not None else (len(tickets) == per_page)
 ```
 
-**For complete lists (groups, states, priorities):**
+Do not document total-aware `has_more` as already implemented. It is not.
+
+**For complete lists (groups, states, priorities, tags)** `_format_list_json` returns everything on page 1:
 
 ```python
-"has_more": False,  # Always false for cached complete lists
-"next_page": None,
-"total": len(items)  # Exact count available
+    # Since these are complete cached lists, pagination shows all items on page 1
+    total = len(sorted_items)
+    page = 1
+    per_page = total
+    offset = 0
+
+    response: dict[str, Any] = {
+        "items": [item.model_dump() for item in sorted_items],  # type: ignore[attr-defined]
+        "total": total,
+        "count": total,
+        "page": page,
+        "per_page": per_page,
+        "offset": offset,
+        "has_more": False,  # Always false for complete lists
+        "next_page": None,
+        "next_offset": None,
+        "_meta": {},  # Pre-allocated for truncation flags
+    }
 ```
 
 ---
@@ -100,7 +120,7 @@ def _format_tickets_json(tickets: list[Ticket], total: int | None, page: int, pe
 
 ```python
 # DESTROYS JSON
-def _truncate_response(content: str, limit: int) -> str:
+def truncate_response(content: str, limit: int) -> str:
     if len(content) > limit:
         return content[:limit] + "\n\n⚠️ **Truncated**"  # Invalid JSON!
 ```
@@ -109,111 +129,146 @@ def _truncate_response(content: str, limit: int) -> str:
 
 ### ✅ CORRECT: Structural truncation preserves JSON
 
+The public entry point is `truncate_response` in `mcp_zammad/server.py`. It catches only the exceptions `json.loads` can raise and logs the fallback:
+
 ```python
-def _truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
+def truncate_response(content: str, limit: int = CHARACTER_LIMIT) -> str:
+    """Truncate response with helpful message if over limit.
+
+    For JSON responses, preserves validity by shrinking arrays and adding metadata.
+    For markdown/text responses, appends a truncation warning.
+
+    Args:
+        content: The content to potentially truncate
+        limit: Maximum character limit (default: CHARACTER_LIMIT)
+
+    Returns:
+        Original content if under limit, truncated content with warning if over
+    """
     if len(content) <= limit:
         return content
 
-    # Detect and preserve JSON validity
-    stripped = content.lstrip()
-    if stripped.startswith("{"):
+    # Try to preserve JSON validity if the content is JSON
+    if content.lstrip().startswith(("{", "[")):
         try:
             obj = json.loads(content)
-            original_size = len(content)
+            return _truncate_json_response(content, obj, limit)
+        except (json.JSONDecodeError, TypeError) as e:
+            # fall back to plaintext truncation if JSON parsing fails
+            logger.debug("Failed to parse/truncate JSON response: %s", e, exc_info=True)
 
-            # Binary search to shrink items array
-            if "items" in obj and isinstance(obj["items"], list):
-                items = obj["items"]
-                left, right = 0, len(items)
-
-                while left < right:
-                    mid = (left + right + 1) // 2
-                    obj["items"] = items[:mid]
-                    if len(json.dumps(obj, indent=2, default=str)) <= limit:
-                        left = mid
-                    else:
-                        right = mid - 1
-
-                obj["items"] = items[:left]
-
-            # Add truncation metadata
-            meta = obj.setdefault("_meta", {})
-            meta.update({
-                "truncated": True,
-                "original_size": original_size,
-                "original_count": len(items),
-                "limit": limit,
-                "note": "Response truncated; use pagination or filters"
-            })
-
-            return json.dumps(obj, indent=2, default=str)
-        except Exception:
-            pass  # Fall through to markdown truncation
-
-    # Markdown truncation for non-JSON
-    truncated = content[:limit]
-    truncated += "\n\n⚠️ **Response Truncated**\n"
-    truncated += f"Size {len(content)} exceeds limit {limit}.\n"
-    truncated += "Use pagination (page/per_page) or filters."
-    return truncated
+    # Plaintext/Markdown truncation
+    return _truncate_text_response(content, limit)
 ```
+
+`_truncate_json_response` shrinks `items` with a binary search (`_find_max_items_for_limit`), switches to compact serialization when the payload is far over the limit, and records what happened in `_meta`:
+
+```python
+def _truncate_json_response(content: str, obj: dict[str, Any], limit: int) -> str:
+    """Truncate JSON response preserving validity.
+
+    Args:
+        content: Original content string
+        obj: Parsed JSON object
+        limit: Character limit
+
+    Returns:
+        Truncated JSON string
+    """
+    original_size = len(content)
+    use_compact = original_size > limit * 1.2
+
+    # Attempt to shrink the "items" array if present
+    if "items" in obj and isinstance(obj["items"], list):
+        original_items = obj["items"]
+        max_items = _find_max_items_for_limit(obj, original_items, limit, use_compact=use_compact)
+        obj["items"] = original_items[:max_items]
+
+    # Add metadata about truncation
+    meta = obj.setdefault("_meta", {})
+    meta.update(
+        {
+            "truncated": True,
+            "original_size": original_size,
+            "limit": limit,
+            "note": "Response truncated; reduce page/per_page or add filters.",
+        }
+    )
+
+    # Ensure final JSON (including metadata) fits under limit
+    if "items" in obj and isinstance(obj["items"], list):
+        json_str = _serialize_json(obj, use_compact=use_compact)
+        while obj["items"] and len(json_str) > limit:
+            obj["items"].pop()
+            json_str = _serialize_json(obj, use_compact=use_compact)
+
+    return _serialize_json(obj, use_compact=use_compact)
+```
+
+`CHARACTER_LIMIT` is a module constant (`CHARACTER_LIMIT = 25000`). No code reads it from the environment.
 
 ## Implementation Checklist
 
 When implementing paginated tools:
 
 - [ ] Accept `page` and `per_page` parameters (validate with Pydantic)
-- [ ] Get `total` from API if available, otherwise None
-- [ ] Compute `has_more` accurately from total or use heuristic
+- [ ] Take `total` from the API if available, otherwise None
+- [ ] Compute `has_more` from `total` when known. Otherwise use the `len(items) == per_page` heuristic
 - [ ] Include all required metadata fields
 - [ ] Support both JSON and markdown formats
-- [ ] Implement structural JSON truncation
+- [ ] Return through `truncate_response()` so JSON stays valid
 - [ ] Test with: empty results, single page, multiple pages, exact per_page match
 - [ ] Document in docstring that total may be None
 
 ## Examples from Codebase
 
-### search_tickets (server.py:481-516)
+The `ZammadMCPServer._setup_*` methods register the tools. The `@self.mcp.tool(...)` decorator wraps `@flat_params(Model)`. Without `flat_params` the tool advertises one nested `params` object that MCP clients cannot send (see `mcp_zammad/tool_params.py`).
+
+### `zammad_search_tickets` (in `_setup_ticket_tools`)
 
 ```python
-@mcp.tool(...)
+@self.mcp.tool(annotations=_read_only_annotations("Search Tickets"))
+@flat_params(TicketSearchParams)
 def zammad_search_tickets(params: TicketSearchParams) -> str:
+    """Search for tickets with filters and pagination. ..."""
     client = self.get_client()
 
-    # Extract params (exclude response_format for API)
+    # Extract search parameters (exclude response_format for API call)
     search_params = params.model_dump(exclude={"response_format"}, exclude_none=True)
     tickets_data = client.search_tickets(**search_params)
 
-    tickets = [Ticket(**t) for t in tickets_data]
-
+    tickets = [Ticket(**ticket) for ticket in tickets_data]
+    ...
     # Format response
     if params.response_format == ResponseFormat.JSON:
-        # Note: total is None because Zammad doesn't provide it
         result = _format_tickets_json(tickets, None, params.page, params.per_page)
     else:
         result = _format_tickets_markdown(tickets, query_info)
 
-    return _truncate_response(result)
+    return truncate_response(result)
 ```
 
-### list_groups (server.py:1175-1192)
+### `zammad_list_groups` (in `_setup_system_tools`)
 
 ```python
-@mcp.tool(...)
+@self.mcp.tool(annotations=_read_only_annotations("List Groups"))
+@flat_params(ListParams)
 def zammad_list_groups(params: ListParams) -> str:
-    groups = self._get_cached_groups()  # Complete list
+    """Get complete list of all available groups (cached). ..."""
+    groups = self._get_cached_groups()
 
+    # Format response
     if params.response_format == ResponseFormat.JSON:
-        # For complete lists, total is known and has_more is always False
         result = _format_list_json(groups)
     else:
         result = _format_list_markdown(groups, "Group")
 
-    return _truncate_response(result)
+    return truncate_response(result)
 ```
 
 ## References
 
 - CodeRabbit PR #97 review: Pagination metadata issues
 - MCP Best Practices: Response format guidelines
-- server.py: `_format_tickets_json`, `_truncate_response`
+- `mcp_zammad/server.py`: `_format_tickets_json`, `_format_list_json`, `truncate_response`, `_truncate_json_response`, `_find_max_items_for_limit`
+- `mcp_zammad/tool_params.py`: `flat_params`
