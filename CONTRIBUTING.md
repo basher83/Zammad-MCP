@@ -68,11 +68,17 @@ uv run ruff format mcp_zammad tests    # Format code
 uv run ruff check mcp_zammad tests     # Lint code  
 uv run mypy mcp_zammad                 # Type checking
 uv run bandit -r mcp_zammad/           # Security scanning
-uv run pre-commit run semgrep --all-files # Security & quality
+prek run semgrep --all-files           # Security & quality
 uv run pip-audit                       # Dependency vulnerability audit
 
-# Run tests
+# Run tests (after mise run setup)
+uv run pytest
+
+# Run tests with coverage
 uv run pytest --cov=mcp_zammad
+
+# Release gates: lint + full coverage suite + build (same as the CI validate job)
+mise run validate-release
 
 # Install and run pre-commit hooks (prek, configured in mise.toml)
 mise run hooks-install
@@ -126,8 +132,8 @@ The repository includes several GitHub Actions workflows that run automatically 
 
 | Workflow | Purpose | Triggers | Required Secrets |
 |----------|---------|----------|------------------|
-| **Tests and Coverage** | Runs tests and reports coverage | Push, PR to main | None |
-| **Security Scan** | Python security analysis | Push, PR to main, Weekly (Mon 9:00 UTC) | None |
+| **Tests and Coverage** | Runs tests and reports coverage | Push, PR to main, Manual | None |
+| **Security Scan** | Python security analysis | Push, PR to main, Weekly (Mon 9:00 UTC), Manual | None |
 | **Build and Publish Docker** | Builds and publishes Docker images | Push to main, tags, Manual, PR to main (build only) | None (uses GITHUB_TOKEN) |
 
 ### Workflow Details
