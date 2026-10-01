@@ -205,6 +205,15 @@ Recommended minimum permissions for MCP tokens:
 - `ticket.agent` - For ticket operations
 - `user.agent` - For user lookups (if needed)
 - `organization.agent` - For organization data (if needed)
+- `knowledge_base.reader` - Only for the Knowledge Base tools and resources (if needed). It grants read access to
+  internal (unpublished) answers, not only public ones. Restrict the token's role per category in the Knowledge Base
+  permissions so it reads only the categories it needs.
+- `admin.tag` - Only for `zammad_list_tags`, which lists every tag in the system (if needed). It is an admin
+  permission: it also grants **Manage > Tags**, where the token can add and delete tags and change whether agents may
+  create tags. Grant it only when the tag listing is required.
+
+The Zammad [permissions reference](https://admin-docs.zammad.org/en/latest/manage/roles/permissions.html) describes
+each permission.
 
 Avoid granting admin permissions unless absolutely necessary.
 

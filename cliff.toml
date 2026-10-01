@@ -89,7 +89,7 @@ tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
 use_branch_tags = false
 # Order releases topologically instead of chronologically.
 topo_order = false
-# Order releases topologically instead of chronologically.
+# Order commits topologically instead of chronologically.
 topo_order_commits = true
 # Order of commits in each group/release within the changelog.
 # Allowed values: newest, oldest

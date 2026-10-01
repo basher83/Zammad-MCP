@@ -1,12 +1,16 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script --quiet
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """Extract CodeRabbit feedback from PRs and update learnings.
 
 Phase 3 automation script for systematic learning capture.
 
 Usage:
-    python extract_feedback.py --prs 10
-    python extract_feedback.py --pr-number 97
-    python extract_feedback.py --since "2025-01-01"
+    uv run --script extract_feedback.py --prs 10
+    uv run --script extract_feedback.py --pr-number 97
+    uv run --script extract_feedback.py --since "2025-01-01"
 
 Author: Claude Code + User
 Status: Stub for future implementation

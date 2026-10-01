@@ -25,11 +25,11 @@ echo "   uv run scripts/uv/security-scan.py"
 echo ""
 
 echo "🔒 Security scanning with bandit..."
-# Only fail on HIGH/CRITICAL issues (--severity-level HIGH)
+# Fail only on HIGH severity issues (Bandit has no CRITICAL level)
 if uv run bandit -r mcp_zammad/ --severity-level high -f json -o bandit-report.json; then
-    echo "✅ Bandit: No HIGH/CRITICAL security issues found"
+    echo "✅ Bandit: No HIGH severity issues found"
 else
-    echo "❌ Bandit: HIGH/CRITICAL security issues found - check bandit-report.json"
+    echo "❌ Bandit: HIGH severity issues found - check bandit-report.json"
     exit 1
 fi
 

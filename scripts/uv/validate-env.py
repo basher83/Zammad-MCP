@@ -16,13 +16,13 @@ This script checks that the environment is properly configured for the Zammad MC
 server including:
 - Environment variables are set correctly
 - Zammad API is reachable
-- Authentication credentials are valid
-- Required permissions are available
+- Authentication credentials are valid (one GET request to /users/me)
 
 Usage:
     ./validate-env.py              # Interactive mode with .env file
     ./validate-env.py --env-file custom.env
     ./validate-env.py --no-test-connection  # Skip connection test
+    ./validate-env.py --json       # Output results as JSON
     uv run validate-env.py         # Run without making executable
 """
 

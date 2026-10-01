@@ -162,7 +162,7 @@ Interactive CLI for testing Zammad API connections and operations without the MC
   - Search users by query
   - List groups, states, and priorities
 - **Performance Benchmarking**: Runs timed tests on common operations
-- **Multiple Auth Support**: HTTP token, OAuth2, or username/password
+- **Multiple Auth Support**: API token (`ZAMMAD_HTTP_TOKEN`), OAuth2 token, or username/password
 - **Rich Terminal UI**: Tables, progress bars, and formatted output
 - **Non-Interactive Mode**: Run specific operations from command line
 
@@ -200,14 +200,15 @@ When you run a UV script, UV automatically:
 
 ## Cross-Platform Considerations
 
-The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag is a GNU coreutils extension that allows passing multiple arguments through env.
+The scripts use the shebang `#!/usr/bin/env -S uv run --script`. The `-S` flag splits the rest of the line into separate arguments, so `env` can pass more than one argument to `uv`. GNU coreutils, FreeBSD, and macOS `env` support it. Some other `env` implementations do not.
 
 ### Platform Compatibility
 
 - ✅ **Linux (GNU coreutils)**: Full support
-- ❌ **macOS (BSD env)**: No `-S` flag support
+- ✅ **macOS**: Full support. The macOS `env(1)` man page documents `-S`
+- ✅ **FreeBSD**: Full support. The FreeBSD `env(1)` man page documents `-S`
+- ❌ **OpenBSD**: No `-S` flag support. `env(1)` documents only `-i` and `-u`
 - ❌ **Alpine (BusyBox)**: No `-S` flag support
-- ❌ **FreeBSD/OpenBSD**: No `-S` flag support
 
 ### Adding a New Script
 

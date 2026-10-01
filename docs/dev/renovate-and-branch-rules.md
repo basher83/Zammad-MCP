@@ -58,6 +58,8 @@ The overall philosophy:
 
 Below is how this breaks down by dependency type.
 
+Sections 3.1 to 3.3 describe the presets in [`basher83/renovate-config`](https://github.com/basher83/renovate-config). That repository is the source of truth for them, and this repository does not check them. Read the preset files before you rely on a specific rule below.
+
 ### 3.1 Python dependencies (`presets/python.json` & `python-mcp.json`)
 
 **Auto‑merge (PR merges & disappears, once checks pass):**

@@ -97,6 +97,7 @@ logger = logging.getLogger(__name__)
 # Constants
 MAX_PAGES_FOR_TICKET_SCAN = 1000
 MAX_TICKETS_PER_STATE_IN_QUEUE = 10
+QUEUE_PAGE_SIZE = 50
 
 # Zammad state type IDs. These are seeded and fixed by Zammad (see
 # db/seeds/ticket_state_types.rb): create_if_not_exists with explicit ids, so
@@ -1394,6 +1395,62 @@ def _run_bulk_ticket_update(client: ZammadClient, params: BulkTicketUpdateParams
     )
 
 
+def _queue_count_label(fetched: int) -> str:
+    """Label the queue ticket count without claiming a total for a full page.
+
+    Args:
+        fetched: Number of tickets on the fetched page, before the per-state display cap.
+
+    Returns:
+        "Tickets fetched: N", with " (first N)" appended when the page is full.
+    """
+    suffix = f" (first {QUEUE_PAGE_SIZE})" if fetched >= QUEUE_PAGE_SIZE else ""
+    return f"Tickets fetched: {fetched}{suffix}"
+
+
+def _format_queue_ticket(ticket: dict[str, Any]) -> list[str]:
+    """Format one queue ticket as three indented lines.
+
+    Args:
+        ticket: Raw ticket dictionary from search.
+
+    Returns:
+        Lines with number/ID/title, priority/customer, and creation time.
+    """
+    priority = ticket.get("priority", {})
+    priority_name = priority.get("name", "Unknown") if isinstance(priority, dict) else str(priority)
+    customer = ticket.get("customer", {})
+    customer_email = customer.get("email", "Unknown") if isinstance(customer, dict) else str(customer)
+    title = str(ticket.get("title", "No title"))
+    short = title[:50]
+    suffix = "..." if len(title) > len(short) else ""
+    return [
+        f"  #{ticket.get('number', 'N/A')} (ID: {ticket.get('id', 'N/A')}) - {short}{suffix}",
+        f"    Priority: {priority_name}, Customer: {customer_email}",
+        f"    Created: {ticket.get('created_at', 'Unknown')}",
+    ]
+
+
+def _format_queue_state(state: str, state_tickets: list[dict[str, Any]]) -> list[str]:
+    """Format one state section of the queue, capped at MAX_TICKETS_PER_STATE_IN_QUEUE.
+
+    Args:
+        state: State name used as the section heading.
+        state_tickets: Tickets in that state.
+
+    Returns:
+        Heading, ticket lines, an overflow note when capped, and a blank line.
+    """
+    lines = [f"{state.title()} ({len(state_tickets)} tickets):"]
+    for ticket in state_tickets[:MAX_TICKETS_PER_STATE_IN_QUEUE]:
+        lines.extend(_format_queue_ticket(ticket))
+    overflow = len(state_tickets) - MAX_TICKETS_PER_STATE_IN_QUEUE
+    if overflow > 0:
+        lines.append(f"    ... and {overflow} more tickets")
+    lines.append("")
+    return lines
+
+
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
 
@@ -1575,8 +1632,8 @@ class ZammadMCPServer:
                     - state (str | None): Filter by state name (e.g., "open", "closed")
                     - priority (str | None): Filter by priority name (e.g., "high")
                     - group (str | None): Filter by group name
-                    - owner (str | None): Filter by owner email/login
-                    - customer (str | None): Filter by customer email/login
+                    - owner (str | None): Filter by owner login (sent as owner.login:<value>)
+                    - customer (str | None): Filter by customer email (sent as customer.email:<value>)
                     - created_after (date | None): Only tickets created on/after YYYY-MM-DD
                     - created_before (date | None): Only tickets created on/before YYYY-MM-DD
                     - page (int): Page number (default: 1)
@@ -1599,7 +1656,7 @@ class ZammadMCPServer:
                 - **Created**: 2024-01-15T10:30:00Z
                 ```
 
-                JSON format:
+                JSON format (abbreviated example; items are full Ticket model dumps):
                 ```json
                 {
                     "items": [
@@ -1613,14 +1670,19 @@ class ZammadMCPServer:
                         }
                     ],
                     "total": null,
-                    "count": 20,
+                    "count": 25,
                     "page": 1,
-                    "per_page": 20,
+                    "per_page": 25,
+                    "offset": 0,
                     "has_more": true,
                     "next_page": 2,
-                    "next_offset": 20
+                    "next_offset": 25,
+                    "_meta": {}
                 }
                 ```
+
+                total is always null (Zammad search reports no total); has_more is the
+                heuristic count == per_page.
 
             Examples:
                 - Use when: "Find all open tickets" -> state="open"
@@ -1702,7 +1764,7 @@ class ZammadMCPServer:
                 ...
                 ```
 
-                JSON format:
+                JSON format (abbreviated example; the full Ticket model is dumped):
                 ```json
                 {
                     "id": 123,
@@ -1714,7 +1776,7 @@ class ZammadMCPServer:
                     "group": {"id": 3, "name": "Support"},
                     "created_at": "2024-01-15T10:30:00Z",
                     "updated_at": "2024-01-15T14:20:00Z",
-                    "articles": [...]
+                    "articles": [{"id": 456, "body": "...", "created_at": "2024-01-15T10:30:00Z"}]
                 }
                 ```
 
@@ -1725,9 +1787,10 @@ class ZammadMCPServer:
                 - Don't use when: You only have ticket number (search first to get ID)
 
             Error Handling:
-                - Returns TicketIdGuidanceError if ticket not found (suggests using search)
-                - Returns "Error: Permission denied" if no access to ticket
-                - Returns "Error: Invalid authentication" on 401 status
+                - Raises TicketIdGuidanceError (via _handle_ticket_not_found_error) when Zammad
+                  reports the ticket as not found; the message explains ID vs number
+                - Any other exception (Zammad HTTP error text for 401/403, network errors)
+                  propagates unchanged; FastMCP returns a tool error with the exception text
 
             Note:
                 ticket_id must be the internal database ID, NOT the display number.
@@ -1768,8 +1831,9 @@ class ZammadMCPServer:
             Args:
                 params (TicketCreate): Validated ticket creation parameters containing:
                     - title (str): Ticket title/subject (required)
-                    - group (str): Group name to assign ticket (required)
-                    - customer (str): Customer email or login (required, must exist in Zammad)
+                    - group (str): Group name or ID (required; forwarded to Zammad as-is)
+                    - customer (str): Customer email or ID (required, must exist in Zammad;
+                      forwarded to Zammad as-is)
                     - article_body (str): Initial article/comment body (required)
                     - state (str): State name (default: "new")
                     - priority (str): Priority name (default: "2 normal")
@@ -1799,9 +1863,13 @@ class ZammadMCPServer:
                 - Don't use when: Only adding comment (use zammad_add_article)
 
             Error Handling:
-                - Returns "Error: Validation failed" if required fields missing
-                - Returns "Error: Permission denied" if no create permissions
-                - Returns "Error: Resource not found" if group/customer/state invalid
+                - Missing or oversized fields fail Pydantic validation before any API call;
+                  FastMCP returns the validation error as a tool error
+                - Raises ValueError with customer guidance (check with zammad_search_users,
+                  create with zammad_create_user) when Zammad's error mentions the customer
+                  as not found / couldn't find / lookup
+                - Any other exception (Zammad HTTP error text for 401/403/422, e.g. unknown
+                  group or state) propagates; FastMCP returns a tool error with that text
 
             Note:
                 The customer must exist in Zammad before creating a ticket.
@@ -1872,10 +1940,11 @@ class ZammadMCPServer:
                 - Don't use when: Adding tags (use zammad_add_ticket_tag)
 
             Error Handling:
-                - Returns TicketIdGuidanceError if ticket not found (suggests using search)
-                - Returns "Error: Permission denied" if no update permissions
-                - Returns "Error: Validation failed" if field values invalid
-                - Returns "Error: Resource not found" if group/owner/customer doesn't exist
+                - Raises TicketIdGuidanceError (via _handle_ticket_not_found_error) when Zammad
+                  reports the ticket as not found; the message explains ID vs number
+                - Invalid field values fail Pydantic validation before any API call
+                - Any other exception (Zammad HTTP error text for 401/403/422, e.g. unknown
+                  group/owner/customer) propagates; FastMCP returns a tool error with that text
 
             Note:
                 ticket_id must be the internal database ID, NOT the display number.
@@ -1907,10 +1976,14 @@ class ZammadMCPServer:
                     - body (str): Article content/message (required)
                     - article_type (ArticleType): Article type - note, email, or phone (default: note)
                     - internal (bool): Internal note vs customer-visible (default: False)
+                    - sender (ArticleSender): Agent, Customer, or System (default: Agent)
                     - subject (str | None): Article subject (for emails)
-                    - content_type (str | None): text/plain or text/html (default: text/plain)
+                    - content_type (str | None): text/plain or text/html (default: text/plain).
+                      text/plain bodies are HTML-escaped (<, >, &) by ArticleCreate.sanitize_body;
+                      text/html bodies have script tags and javascript: URLs neutralized
                     - to (str | None): Email recipient (for email type)
                     - cc (str | None): Email CC recipients
+                    - time_unit (float | None): Time spent for time accounting (> 0)
                     - attachments (list[AttachmentUpload] | None): Optional attachments (max 10)
 
             Returns:
@@ -1937,9 +2010,10 @@ class ZammadMCPServer:
                 - Don't use when: Updating ticket fields (use zammad_update_ticket)
 
             Error Handling:
-                - Returns "Error: Validation failed" if body or type missing
-                - Returns "Error: Resource not found" if ticket_id invalid
-                - Returns "Error: Permission denied" if no article create permissions
+                - A missing body or an unknown article_type fails Pydantic validation before
+                  any API call
+                - Zammad errors (HTTP error text for 401/403/404, e.g. unknown ticket_id)
+                  propagate unchanged; FastMCP returns a tool error with that text
                 - Sanitizes HTML content if content_type is text/html
                 - Validates base64 encoding before upload
                 - Sanitizes filenames to prevent path traversal
@@ -2001,13 +2075,14 @@ class ZammadMCPServer:
                     {
                         "id": 789,
                         "filename": "screenshot.png",
-                        "size": "245678",
-                        "preferences": {
-                            "Content-Type": "image/png"
-                        }
+                        "size": 245678,
+                        "content_type": "image/png",
+                        "created_at": "2024-01-15T10:30:00Z"
                     }
                 ]
                 ```
+
+                size, content_type, and created_at are null when Zammad omits them.
 
             Examples:
                 - Use when: "List attachments for article 456 in ticket 123" -> ticket_id=123, article_id=456
@@ -2017,8 +2092,10 @@ class ZammadMCPServer:
 
             Error Handling:
                 - Returns empty list if article has no attachments
-                - Returns "Error: Resource not found" if ticket_id or article_id invalid
-                - Returns "Error: Permission denied" if no access to ticket/article
+                - ticket_id is validated (> 0) but never sent to Zammad: the client looks up
+                  article_id alone, so a wrong ticket_id does not produce an error
+                - Zammad errors (HTTP error text for 401/403/404, e.g. unknown article_id)
+                  propagate unchanged; FastMCP returns a tool error with that text
 
             Note:
                 ticket_id must be the internal database ID, NOT the display number.
@@ -2057,10 +2134,11 @@ class ZammadMCPServer:
                 - Don't use when: Attachment IDs unknown (list attachments first)
 
             Error Handling:
-                - Raises AttachmentDownloadError if download fails
+                - Raises AttachmentDownloadError if download fails; request errors (including
+                  Zammad HTTP errors for 401/403/404 on unknown IDs) and ValueErrors are wrapped
+                  into it with the original error text
                 - Raises AttachmentDownloadError if file exceeds max_bytes limit
-                - Returns "Error: Resource not found" if ticket_id/article_id/attachment_id invalid
-                - Returns "Error: Permission denied" if no access to attachment
+                - FastMCP returns the AttachmentDownloadError as a tool error with its text
 
             Note:
                 ticket_id must be the internal database ID, NOT the display number.
@@ -2157,8 +2235,8 @@ class ZammadMCPServer:
 
             Error Handling:
                 - Returns success=true even if tag already exists (idempotent)
-                - Returns "Error: Resource not found" if ticket_id invalid
-                - Returns "Error: Permission denied" if no tagging permissions
+                - Zammad errors (HTTP error text for 401/403/404, e.g. unknown ticket_id)
+                  propagate unchanged; FastMCP returns a tool error with that text
 
             Note:
                 ticket_id must be the internal database ID, NOT the display number.
@@ -2200,8 +2278,8 @@ class ZammadMCPServer:
 
             Error Handling:
                 - Returns success=true even if tag doesn't exist (idempotent)
-                - Returns "Error: Resource not found" if ticket_id invalid
-                - Returns "Error: Permission denied" if no tagging permissions
+                - Zammad errors (HTTP error text for 401/403/404, e.g. unknown ticket_id)
+                  propagate unchanged; FastMCP returns a tool error with that text
 
             Note:
                 ticket_id must be the internal database ID, NOT the display number.
@@ -2237,10 +2315,10 @@ class ZammadMCPServer:
                     - query (str | None): Free text search filter
                     - group (str | None): Filter by group name
                     - state (str | None): Filter by state name
-                    - created_after (str | None): Filter tickets created on/after date (YYYY-MM-DD)
-                    - created_before (str | None): Filter tickets created on/before date (YYYY-MM-DD)
-                    - delay_seconds (float): Delay between API calls (default: 0.5)
-                    - per_page (int): Batch size per page (default: 50)
+                    - created_after (date | None): Filter tickets created on/after date (YYYY-MM-DD)
+                    - created_before (date | None): Filter tickets created on/before date (YYYY-MM-DD)
+                    - delay_seconds (float): Delay between API calls, 0-10 (default: 0.5)
+                    - per_page (int): Batch size per page, 1-100 (default: 50)
                     - include_internal_articles (bool): Include internal notes (default: False)
                     - resume_from_page (int): Page to resume from (default: 1)
                     - max_tickets (int | None): Maximum tickets to export (default: None)
@@ -2248,6 +2326,11 @@ class ZammadMCPServer:
 
             Returns:
                 str: Markdown summary with file path, counts, elapsed time, and errors
+
+            Raises:
+                ValueError: If ZAMMAD_EXPORT_DIR is unset, does not exist or is not a
+                    directory, or the resolved output_path falls outside it (symlinks are
+                    resolved first). FastMCP returns the message as a tool error.
 
             JSONL record format (one per line):
                 ```json
@@ -2367,13 +2450,20 @@ class ZammadMCPServer:
                 response_format (ResponseFormat): Output format - markdown or json (default: markdown)
 
             Returns:
-                str: Formatted user information with the following schema:
-                     - Markdown format: Human-readable with sections for contact info, address, etc.
-                     - JSON format: Complete user object with all fields (id, login, firstname, lastname,
-                       email, organization, active, vip, contact_info, address, out_of_office, created_at,
-                       updated_at)
+                str: Formatted user information.
+                     - Markdown format: name, ID, login, email, active/vip/verified flags, then
+                       optional Organization, Contact, Address, Out of Office, and Notes sections,
+                       and a Metadata section (created, updated, last login)
+                     - JSON format: the User model (id, organization_id, login, email, firstname,
+                       lastname, image, web, phone, fax, mobile, department, street, zip, city,
+                       country, address, vip, verified, active, note, last_login, out_of_office*,
+                       created_by_id, updated_by_id, created_at, updated_at, organization,
+                       created_by, updated_by). Roles, preferences, and custom attributes are not
+                       part of the model and are dropped. The client call does not request
+                       expanded data, so organization/created_by/updated_by are usually null
+                       unless Zammad returns them.
 
-                Example JSON response:
+                Abbreviated example JSON response:
                 ```json
                 {
                     "id": 5,
@@ -2395,12 +2485,12 @@ class ZammadMCPServer:
                 - Don't use when: Getting current authenticated user (use zammad_get_current_user)
 
             Error Handling:
-                - Returns "Error: Resource not found" if user_id doesn't exist
-                - Returns "Error: Permission denied" if no access to user data
-                - Returns "Error: Invalid authentication" on 401 status
+                - Zammad errors (HTTP error text for 401/403/404, e.g. unknown user_id)
+                  propagate unchanged; FastMCP returns a tool error with that text
 
             Note:
-                Returns full user profile including organization, roles, and preferences.
+                Returns the standard User model fields only; roles, preferences, and custom
+                attributes are not included.
                 Use zammad_search_users if you need to find users by email or name.
             """
             client = self.get_client()
@@ -2446,7 +2536,8 @@ class ZammadMCPServer:
                 - **Active**: true
                 ```
 
-                JSON format:
+                JSON format (abbreviated example; items are full User model dumps and the
+                object also has offset, next_offset, and _meta):
                 ```json
                 {
                     "items": [
@@ -2521,9 +2612,10 @@ class ZammadMCPServer:
                 After creating, use their email in zammad_create_ticket's customer field.
 
             Error Handling:
-                - Returns "Error: Validation failed" if required fields missing or email invalid
-                - Returns "Error: Permission denied" if no create permissions
-                - Returns "Error: Email already exists" if user with email already exists
+                - A missing required field or an email without "@" and a dotted domain fails
+                  Pydantic validation before any API call
+                - Zammad errors (HTTP error text for 401/403/422, including a duplicate email)
+                  propagate unchanged; FastMCP returns a tool error with that text
             """
             client = self.get_client()
             user_data = client.create_user(**params.model_dump(exclude_none=True))
@@ -2544,10 +2636,15 @@ class ZammadMCPServer:
 
             Returns:
                 str: Formatted organization information.
-                     - Markdown format: Human-readable with sections for domain, members, notes
-                     - JSON format: Complete organization object with all fields
+                     - Markdown format: name, ID, active, shared, then optional Domain, Members,
+                       and Notes sections, and a Metadata section (created, updated)
+                     - JSON format: the Organization model (id, name, shared, domain,
+                       domain_assignment, active, note, created_by_id, updated_by_id, created_at,
+                       updated_at, created_by, updated_by, members). The client call does not
+                       request expanded data, so members/created_by/updated_by are usually null
+                       unless Zammad returns them. Custom attributes are dropped.
 
-                Example JSON response:
+                Abbreviated example JSON response:
                 ```json
                 {
                     "id": 2,
@@ -2566,12 +2663,12 @@ class ZammadMCPServer:
                 - Don't use when: Getting user's organization (included in zammad_get_user)
 
             Error Handling:
-                - Returns "Error: Resource not found" if org_id doesn't exist
-                - Returns "Error: Permission denied" if no access to organization data
-                - Returns "Error: Invalid authentication" on 401 status
+                - Zammad errors (HTTP error text for 401/403/404, e.g. unknown org_id)
+                  propagate unchanged; FastMCP returns a tool error with that text
 
             Note:
-                Returns full organization profile including custom fields.
+                Returns the standard Organization model fields only; custom attributes are
+                not included.
                 Use zammad_search_organizations if you need to find by name.
             """
             client = self.get_client()
@@ -2615,7 +2712,8 @@ class ZammadMCPServer:
                 - **Active**: true
                 ```
 
-                JSON format:
+                JSON format (abbreviated example; items are full Organization model dumps and
+                the object also has offset, next_offset, and _meta):
                 ```json
                 {
                     "items": [
@@ -2939,8 +3037,9 @@ class ZammadMCPServer:
             Args:
                 params (GetTicketStatsParams): Validated parameters containing:
                     - group (str | None): Filter by group name
-                    - start_date (datetime | None): Start date filter (not yet implemented)
-                    - end_date (datetime | None): End date filter (not yet implemented)
+                    - start_date (date | datetime | None): Start date filter (not yet implemented)
+                    - end_date (date | datetime | None): End date filter (not yet implemented;
+                      must not be before start_date)
 
             Returns:
                 TicketStats: Statistics object with schema:
@@ -2966,9 +3065,12 @@ class ZammadMCPServer:
                 - Don't use when: Need real-time counts (this scans all tickets via pagination)
 
             Error Handling:
-                - Returns counts with warning if max page limit reached (1000 pages)
-                - Returns "Error: Resource not found" if group name invalid
-                - Returns "Error: Permission denied" if no access to tickets
+                - Sets counts_truncated=true (and logs a warning) when the scan stops at the
+                  1000-page limit or a group-filtered scan reaches the 10,000-result search cap
+                - An unknown group name returns zero counts, not an error (the search matches
+                  nothing)
+                - Zammad errors (HTTP error text for 401/403) propagate unchanged; FastMCP
+                  returns a tool error with that text
 
             Note:
                 Uses pagination to scan tickets without loading all into memory.
@@ -3024,7 +3126,7 @@ class ZammadMCPServer:
                 - **Technical** (ID: 3)
                 ```
 
-                JSON format:
+                JSON format (abbreviated example; the object also has offset, next_page, next_offset, and _meta):
                 ```json
                 {
                     "items": [
@@ -3047,8 +3149,8 @@ class ZammadMCPServer:
 
             Error Handling:
                 - Returns empty list if no groups configured (unusual)
-                - Returns "Error: Permission denied" if no group access
-                - Returns "Error: Invalid authentication" on 401 status
+                - Zammad errors (HTTP error text for 401/403) propagate unchanged on the first,
+                  uncached call; FastMCP returns a tool error with that text
 
             Note:
                 Results are cached in memory for performance (cleared on server restart).
@@ -3092,7 +3194,7 @@ class ZammadMCPServer:
                 - **closed** (ID: 5)
                 ```
 
-                JSON format:
+                JSON format (abbreviated example; the object also has offset, next_page, next_offset, and _meta):
                 ```json
                 {
                     "items": [
@@ -3117,8 +3219,8 @@ class ZammadMCPServer:
 
             Error Handling:
                 - Returns empty list if no states configured (should never happen)
-                - Returns "Error: Permission denied" if no state access
-                - Returns "Error: Invalid authentication" on 401 status
+                - Zammad errors (HTTP error text for 401/403) propagate unchanged on the first,
+                  uncached call; FastMCP returns a tool error with that text
 
             Note:
                 Results are cached in memory for performance (cleared on server restart).
@@ -3165,7 +3267,7 @@ class ZammadMCPServer:
                 - **3 high** (ID: 3)
                 ```
 
-                JSON format:
+                JSON format (abbreviated example; the object also has offset, next_page, next_offset, and _meta):
                 ```json
                 {
                     "items": [
@@ -3189,8 +3291,8 @@ class ZammadMCPServer:
 
             Error Handling:
                 - Returns empty list if no priorities configured (should never happen)
-                - Returns "Error: Permission denied" if no priority access
-                - Returns "Error: Invalid authentication" on 401 status
+                - Zammad errors (HTTP error text for 401/403) propagate unchanged on the first,
+                  uncached call; FastMCP returns a tool error with that text
 
             Note:
                 Results are cached in memory for performance (cleared on server restart).
@@ -3234,7 +3336,7 @@ class ZammadMCPServer:
                 - **feature-request** (ID: 3, used 23 times)
                 ```
 
-                JSON format:
+                JSON format (abbreviated example; the object also has offset, next_page, next_offset, and _meta):
                 ```json
                 {
                     "items": [
@@ -3257,8 +3359,8 @@ class ZammadMCPServer:
                 - Don't use when: Getting tags for a specific ticket (use zammad_get_ticket_tags)
 
             Error Handling:
-                - Returns "Error: Permission denied" if user lacks admin.tag permission
-                - Returns "Error: Invalid authentication" on 401 status
+                - Raises requests.HTTPError (403 Forbidden) when the user lacks admin.tag
+                  permission, or for 401; FastMCP returns a tool error with that text
                 - Returns empty list if no tags defined in system
 
             Note:
@@ -3345,9 +3447,10 @@ class ZammadMCPServer:
                 - Don't use when: Adding/removing tags (use zammad_add_ticket_tag/zammad_remove_ticket_tag)
 
             Error Handling:
-                - Returns TicketIdGuidanceError if ticket not found
-                - Returns "Error: Permission denied" if no ticket access
-                - Returns "Error: Invalid authentication" on 401 status
+                - Raises TicketIdGuidanceError (via _handle_ticket_not_found_error) when a
+                  request error or ValueError says the ticket was not found
+                - Any other exception (Zammad HTTP error text for 401/403) propagates
+                  unchanged; FastMCP returns a tool error with that text
 
             Note:
                 Only returns tag names, not full tag metadata.
@@ -3488,50 +3591,19 @@ class ZammadMCPServer:
             """Get ticket queue for a specific group as a resource."""
             client = self.get_client()
             try:
-                # Search for tickets in the specified group with various states
-                tickets = client.search_tickets(group=group, per_page=50)
+                # One page only: the count label must not read as a total.
+                tickets = client.search_tickets(group=group, per_page=QUEUE_PAGE_SIZE)
 
                 if not tickets:
                     return f"Queue for group '{group}': No tickets found"
 
-                # Organize tickets by state
                 ticket_states: dict[str, list[dict[str, Any]]] = {}
                 for ticket in tickets:
-                    state_name = self._extract_state_name(ticket)
+                    ticket_states.setdefault(self._extract_state_name(ticket), []).append(ticket)
 
-                    if state_name not in ticket_states:
-                        ticket_states[state_name] = []
-                    ticket_states[state_name].append(ticket)
-
-                lines = [
-                    f"Queue for Group: {group}",
-                    f"Total Tickets: {len(tickets)}",
-                    "",
-                ]
-
-                # Add summary by state
+                lines = [f"Queue for Group: {group}", _queue_count_label(len(tickets)), ""]
                 for state, state_tickets in sorted(ticket_states.items()):
-                    lines.append(f"{state.title()} ({len(state_tickets)} tickets):")
-                    for ticket in state_tickets[:MAX_TICKETS_PER_STATE_IN_QUEUE]:  # Show first N tickets per state
-                        priority = ticket.get("priority", {})
-                        priority_name = priority.get("name", "Unknown") if isinstance(priority, dict) else str(priority)
-                        customer = ticket.get("customer", {})
-                        customer_email = (
-                            customer.get("email", "Unknown") if isinstance(customer, dict) else str(customer)
-                        )
-
-                        title = str(ticket.get("title", "No title"))
-                        short = title[:50]
-                        suffix = "..." if len(title) > len(short) else ""
-                        lines.append(
-                            f"  #{ticket.get('number', 'N/A')} (ID: {ticket.get('id', 'N/A')}) - {short}{suffix}"
-                        )
-                        lines.append(f"    Priority: {priority_name}, Customer: {customer_email}")
-                        lines.append(f"    Created: {ticket.get('created_at', 'Unknown')}")
-
-                    if len(state_tickets) > MAX_TICKETS_PER_STATE_IN_QUEUE:
-                        lines.append(f"    ... and {len(state_tickets) - MAX_TICKETS_PER_STATE_IN_QUEUE} more tickets")
-                    lines.append("")
+                    lines.extend(_format_queue_state(state, state_tickets))
 
                 return truncate_response("\n".join(lines))
             except (requests.exceptions.RequestException, ValueError, ValidationError) as e:
@@ -3752,11 +3824,17 @@ After drafting, you can use zammad_add_article to add the response to the ticket
             group_filter = f" for group '{group}'" if group else ""
             return f"""Please provide a summary of escalated tickets{group_filter}.
 
-Use zammad_search_tickets to find tickets with escalation times set. For each escalated ticket:
+zammad_search_tickets has no escalation filter. Use it with the group and state filters
+(for example state="open") and response_format="json", then keep the tickets whose
+first_response_escalation_at, update_escalation_at, or close_escalation_at field is set.
+Check _meta.truncated before you follow next_page. A truncated response drops tickets from
+items but keeps has_more and next_page, so following next_page would skip them. If it is true,
+lower per_page and restart from page 1. Follow next_page only from a response that is not
+truncated, while has_more is true. For each escalated ticket:
 1. Ticket number and title
-2. Escalation type (first response, update, or close)
+2. Escalation type (first response, update, or close) from the field that is set
 3. Time until escalation
-4. Current assignee
+4. Current assignee (owner)
 5. Recommended action
 
 Organize the results by urgency and provide actionable recommendations."""

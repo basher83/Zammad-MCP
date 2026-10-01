@@ -25,10 +25,3 @@ updates:
     labels:
       - "dependencies"
       - "area:python"
-    ignore:
-      # pip-audit >=2.10.0 currently conflicts with semgrep's tomli constraint
-      # under this resolver/index setup. Revisit as a dedicated tooling cleanup.
-      - dependency-name: "pip-audit"
-        update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"

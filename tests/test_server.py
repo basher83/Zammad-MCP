@@ -1703,7 +1703,7 @@ def test_resource_handlers(decorator_capturer):
     result = test_resources["zammad://queue/{group}"](group="Support")
 
     assert "Queue for Group: Support" in result
-    assert "Total Tickets: 2" in result
+    assert "Tickets fetched: 2" in result
     assert "Open (1 tickets):" in result
     assert "Closed (1 tickets):" in result
     assert "#12345 (ID: 1) - Test Issue 1" in result
@@ -2707,7 +2707,7 @@ class TestResourceHandlers:
 
         # Verify the output format
         assert "Queue for Group: Support" in result
-        assert "Total Tickets: 3" in result
+        assert "Tickets fetched: 3" in result
         assert "Open (2 tickets)" in result or "Open (2 Tickets)" in result
         assert "Closed (1 tickets)" in result or "Closed (1 Tickets)" in result
         assert "#10001" in result

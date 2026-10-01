@@ -157,7 +157,7 @@ mise run setup
 mise run hooks-install
 ```
 
-If mise asks you to trust the repository configuration, run `mise trust`. For more detail, see the [Development](#development) section below.
+If mise asks you to trust the repository configuration, run `mise trust`. The [Development](#development) section below links the contributor guides.
 
 ## Configuration
 
@@ -193,27 +193,13 @@ The server requires Zammad API credentials. Use a `.env` file:
    # Optional: Logging level (default: INFO)
    # Valid values: DEBUG, INFO, WARNING, ERROR, CRITICAL
    # LOG_LEVEL=INFO
-
-   # Optional: Audit logging (see "Audit Logging" below)
-   # ZAMMAD_AUDIT_LOG_ENABLED=true
-   # ZAMMAD_AUDIT_LOG_DESTINATION=stderr  # stderr (default), file, or syslog
-   # ZAMMAD_AUDIT_LOG_FILE=/var/log/mcp-zammad/audit.jsonl  # required for file
-   # Optional: Resilience (see "Rate Limiting" under Troubleshooting)
-   # ZAMMAD_RATE_LIMIT_ENABLED=false
-   # ZAMMAD_RATE_LIMIT_REQUESTS=60
-   # ZAMMAD_RATE_LIMIT_WINDOW=60
-   # ZAMMAD_MAX_RETRIES=3
-   # ZAMMAD_RETRY_BACKOFF_BASE=1.0
-   # ZAMMAD_CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
-   # ZAMMAD_CIRCUIT_BREAKER_RECOVERY_TIMEOUT=30
-
-   # Optional: Transport Configuration
-   # MCP_TRANSPORT=stdio  # Transport type: stdio (default) or http
-   # MCP_HOST=127.0.0.1   # Host address for HTTP transport
-   # MCP_PORT=8000        # Port number for HTTP transport
    ```
 
 1. The server will automatically load the `.env` file on startup.
+
+`.env.example` lists every optional variable with a comment. The
+[configuration reference](docs/reference/configuration.md) documents each variable with its default and allowed values.
+The optional features are summarized below.
 
 ### Transport Configuration (Optional)
 
@@ -225,59 +211,29 @@ The server requires Zammad API credentials. Use a `.env` file:
 
 ### Audit Logging (Optional)
 
-Audit logging is disabled by default. When enabled, the server writes one JSON object per line
-(JSON Lines) for every MCP tool call, each Zammad connection attempt at startup, and each URL
-security check that flags a local or private-network Zammad host.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ZAMMAD_AUDIT_LOG_ENABLED` | unset | Enable with `1`, `true`, `yes`, or `on` |
-| `ZAMMAD_AUDIT_LOG_DESTINATION` | `stderr` | `stderr`, `file`, or `syslog` |
-| `ZAMMAD_AUDIT_LOG_FILE` | - | Append target, required if destination is `file` |
-
-Example record:
-
-```json
-{"timestamp": "2026-09-08T12:00:00+00:00", "event_type": "tool_call", "action": "zammad_get_ticket", "success": true, "duration_ms": 12.5, "details": {}}
-```
-
-Event types are `tool_call`, `authentication`, and `security_validation`. Records never contain
-tool arguments, Zammad responses, credentials, or full URLs; failures are recorded by exception
-type only, and any `details` key containing `password`, `passwd`, `token`, `secret`, `authorization`,
-`credential`, `data`, `api_key`, `api-key`, or `apikey` is redacted. Audit output never uses stdout, so the default `stderr`
-destination is safe for the stdio transport. Invalid enabled configuration (unknown destination or
-missing file path) fails at startup.
+Audit logging is disabled by default. When `ZAMMAD_AUDIT_LOG_ENABLED` is set, the server writes one JSON Lines record
+per tool call, connection attempt, and URL security check to `stderr`, a file, or syslog, with secrets redacted.
+See [Audit logging](docs/reference/configuration.md#audit-logging) for the variables and the record format.
 
 ### Ticket Export (Optional)
 
-`zammad_export_tickets` is read-only against Zammad but writes a JSON Lines file on the host running
-the MCP server: one JSON object per ticket, with its title, group, state, priority, timestamps,
-optional tags, and conversation articles converted to plain text. It is intended for bulk exports
-that would exceed MCP response-size limits. Without filters it pages through the list endpoint (no
-result cap); with `query`, `group`, `state`, `created_after`, or `created_before` it uses the search
-endpoint, which Zammad caps at 10,000 results. Internal articles are excluded unless
-`include_internal_articles` is set, and tags cost one extra request per ticket when `include_tags`
-is set.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ZAMMAD_EXPORT_DIR` | unset | Directory exports are confined to. Export is disabled until it is set to an existing directory |
-
-Filesystem confinement: `output_path` must end in `.jsonl`. Relative paths are resolved inside
-`ZAMMAD_EXPORT_DIR`; absolute paths are accepted only if they resolve inside it. Symlinks are
-resolved before the containment check, so `..` traversal or a symlink pointing outside the directory
-is rejected. The file is opened in append mode and flushed per ticket, so an interrupted export can
-be continued with `resume_from_page`. Per-ticket failures are counted and reported in the summary
-without stopping the export.
+`zammad_export_tickets` writes a JSON Lines file on the host that runs the MCP server. It is disabled until
+`ZAMMAD_EXPORT_DIR` names an existing directory, and every output path must resolve inside that directory.
+See [Ticket export](docs/reference/configuration.md#ticket-export) for the variables, filters, and confinement rules.
 
 **Important**: Keep your `.env` file out of version control (already in `.gitignore`).
 
 ## Response Formats
 
-All data-returning tools support two output formats:
+Tools that return Markdown by default accept a `response_format` parameter with two values:
 
 - **Markdown** (default): Human-readable format optimized for LLM consumption
 - **JSON**: Machine-readable format with complete metadata
+
+These are the search, get, and list tools for tickets, users, organizations, groups, states, priorities, tags, and
+knowledge base content. The write tools, `zammad_get_article_attachments`, `zammad_download_attachment`,
+`zammad_get_current_user`, `zammad_get_ticket_stats`, `zammad_export_tickets`, and `zammad_list_events` return
+structured results and have no `response_format` parameter.
 
 Example:
 
@@ -317,7 +273,7 @@ Or using Docker:
   "mcpServers": {
     "zammad": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", 
+      "args": ["run", "--rm", "-i",
                "-e", "ZAMMAD_URL=https://your-instance.zammad.com/api/v1",
                "-e", "ZAMMAD_HTTP_TOKEN=your-api-token",
                "ghcr.io/basher83/zammad-mcp:latest"]
@@ -358,141 +314,22 @@ ZAMMAD_URL=https://instance.zammad.com/api/v1 ZAMMAD_HTTP_TOKEN=token uv run mcp
 
 ### HTTP Transport (Remote/Cloud Deployment)
 
-The server supports Streamable HTTP transport for remote deployments.
+The server supports Streamable HTTP transport for remote deployments. Set `MCP_TRANSPORT=http` and `MCP_PORT`.
+`MCP_HOST` defaults to `127.0.0.1`. The MCP endpoint is `/mcp` on that host and port.
 
-For reverse proxy, systemd, Docker Compose, and cloud deployment, read the
-[HTTP Transport Deployment Guide](docs/deployment/http-transport.md).
+⚠️ **SECURITY WARNING**: The server does not implement inbound MCP client authentication. `ZAMMAD_*` credentials
+authenticate the server to Zammad, not MCP clients. Bind to `0.0.0.0` only behind an authenticated TLS proxy or inside
+a network restricted to trusted clients.
 
-#### Environment Configuration
-
-Set these environment variables to enable HTTP transport:
-
-```bash
-export MCP_TRANSPORT=http    # Enable HTTP transport
-export MCP_HOST=127.0.0.1    # Host to bind (default: 127.0.0.1)
-export MCP_PORT=8000         # Port to listen on
-```
-
-#### Running with HTTP Transport
-
-**Direct Python:**
-
-```bash
-MCP_TRANSPORT=http \
-MCP_HOST=127.0.0.1 \
-MCP_PORT=8000 \
-ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
-ZAMMAD_HTTP_TOKEN=your-api-token \
-uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
-```
-
-**Docker:**
-
-```bash
-docker run -d \
-  --name zammad-mcp-http \
-  -p 8000:8000 \
-  -e MCP_TRANSPORT=http \
-  -e MCP_HOST=0.0.0.0 \
-  -e MCP_PORT=8000 \
-  -e ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
-  -e ZAMMAD_HTTP_TOKEN=your-api-token \
-  ghcr.io/basher83/zammad-mcp:latest
-```
-
-Access the MCP endpoint at `http://localhost:8000/mcp`.
-
-#### Production Deployment with Reverse Proxy
-
-⚠️ **SECURITY WARNING**: The server does not implement inbound MCP client authentication. `ZAMMAD_*`
-credentials authenticate the server to Zammad; they do not authenticate MCP clients. Bind to `0.0.0.0` only
-behind an authenticated TLS proxy or inside a network restricted to trusted clients.
-
-Use a reverse proxy for TLS and client authentication. The Caddy example below provides TLS only; add an
-authentication policy appropriate for your environment before exposing it outside a trusted network.
-
-**Example with Caddy:**
-
-```bash
-# Start the MCP server (binds to all interfaces for reverse proxy)
-MCP_TRANSPORT=http \
-MCP_HOST=0.0.0.0 \
-MCP_PORT=8000 \
-ZAMMAD_URL=https://your-instance.zammad.com/api/v1 \
-ZAMMAD_HTTP_TOKEN=your-api-token \
-uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
-```
-
-**Caddyfile configuration:**
-
-```caddy
-mcp.yourdomain.com {
-    reverse_proxy localhost:8000
-    # Caddy automatically handles HTTPS/TLS
-}
-```
-
-**Production checklist:**
-
-1. Use `MCP_HOST=0.0.0.0` only behind a reverse proxy
-2. Enable HTTPS/TLS via reverse proxy
-3. Implement authentication at the proxy or application layer
-4. Restrict access with firewall rules
-
-#### Client Configuration for HTTP
-
-Configure your MCP client to use HTTP transport:
-
-```json
-{
-  "mcpServers": {
-    "zammad": {
-      "url": "http://localhost:8000/mcp"
-    }
-  }
-}
-```
-
-#### Security Considerations
-
-1. **Local Development**: Use `MCP_HOST=127.0.0.1` (localhost only)
-2. **Production**: Implement authentication at the proxy or platform boundary (see [Authentication](docs/deployment/http-transport.md#1-authentication))
-3. **HTTPS**: Use reverse proxy for TLS
-4. **Firewall**: Restrict access to trusted networks
-5. **Host/Origin Validation**: Configure this at the authenticated proxy; the server does not add it automatically
+The [HTTP Transport Deployment Guide](docs/deployment/http-transport.md) covers running with Docker, reverse proxy,
+systemd, Docker Compose, cloud platforms, client configuration, and security.
 
 ### Webhook Events (HTTP Transport Only)
 
-Instead of repeatedly searching for changed tickets, Zammad can push ticket events to the server, and MCP clients poll
-them with `zammad_list_events`. This needs `MCP_TRANSPORT=http`; stdio mode has no inbound listener.
-
-1. **Configure a secret** (the endpoint answers `503` until it is set):
-
-   ```bash
-   export ZAMMAD_WEBHOOK_SECRET="$(openssl rand -hex 32)"
-   ```
-
-2. **Expose `POST /webhooks/zammad`** to your Zammad instance, behind TLS (reverse proxy). The signature proves the
-   payload came from Zammad but does not encrypt it.
-
-3. **Create the webhook in Zammad** (admin only): *Manage → Webhooks → New Webhook*
-   - Endpoint: `https://your-mcp-host/webhooks/zammad`
-   - HMAC SHA1 Signature Token: the same value as `ZAMMAD_WEBHOOK_SECRET`
-   - Keep the default JSON payload (the server reads `ticket.id`, `ticket.number`, `ticket.article_count`,
-     `ticket.updated_at`, and `article.id`)
-
-4. **Create a trigger** (*Manage → Triggers → New Trigger*) that fires on the ticket actions you care about and executes
-   the webhook.
-
-The server maps deliveries to `ticket.create` (first article), `ticket.article.create` (later articles), or
-`ticket.update` (no article in payload). Invalid or missing `X-Hub-Signature` headers return `401`; non-ticket or
-malformed payloads return `400`. Accepted deliveries return `202`, and the server keeps the
-`X-Zammad-Trigger` header value as the event `trigger`. Only identifiers and timestamps are retained — never article bodies.
-
-Retention is process-local and bounded (1000 events, oldest evicted first) and is lost on restart. Poll with
-`zammad_list_events`, which returns the oldest events after `since` first (up to `limit`); pass the returned
-`next_since` as `since` on the next call and repeat until `events` is empty, then fetch details with
-`zammad_get_ticket`.
+Zammad can push ticket events to `POST /webhooks/zammad`, and MCP clients poll them with `zammad_list_events`.
+This needs `MCP_TRANSPORT=http` and `ZAMMAD_WEBHOOK_SECRET`. Retention is in memory, bounded to 1000 events, and
+lost on restart. See [Webhook events](docs/deployment/http-transport.md#webhook-events) for the Zammad setup,
+the status codes, and the polling procedure.
 
 ## Examples
 
@@ -555,88 +392,9 @@ Use zammad_merge_tickets with:
 
 ## Development
 
-### Setup
-
-`mise run setup` is the only supported setup path. It runs `uv sync`, which installs the project dependencies, including the `dev` group. CI runs `uv sync --dev --frozen`, which installs exactly what `uv.lock` records and never changes it. A local `uv sync` can update `uv.lock` when the lockfile is out of date.
-
-```bash
-# Clone the repository
-git clone https://github.com/basher83/zammad-mcp.git
-cd zammad-mcp
-
-# Install the pinned tools from mise.toml (Python, uv, prek, git-cliff, and others)
-mise install
-
-# Install the Python dependencies into .venv (uv sync)
-mise run setup
-
-# Install the pre-commit hooks
-mise run hooks-install
-```
-
-### Project Structure
-
-```text
-zammad-mcp/
-├── mcp_zammad/
-│   ├── __init__.py             # Package version
-│   ├── __main__.py             # Entry point for the mcp-zammad command
-│   ├── server.py               # MCP server: tools, resources, prompts, lifecycle
-│   ├── client.py               # Zammad API client wrapper
-│   ├── models.py               # Pydantic models for Zammad entities
-│   ├── config.py               # Transport configuration
-│   ├── tool_params.py          # Expose Pydantic parameter models as flat tool arguments
-│   ├── docstring_templates.py  # Helpers for MCP tool docstrings
-│   ├── audit.py                # Opt-in JSON Lines audit logging
-│   ├── audit_middleware.py     # FastMCP middleware that audits tool calls
-│   ├── logging_config.py       # Logging configuration helpers
-│   ├── events.py               # Bounded in-memory retention of webhook events
-│   ├── webhooks.py             # Webhook signature validation and payload normalization
-│   ├── resilience.py           # Resilient transport wrapper around the HTTP session
-│   ├── resilience_config.py    # Rate limit, retry, and circuit breaker configuration
-│   ├── resilience_retry.py     # Retry policy for safe HTTP methods
-│   └── resilience_state.py     # Rate limiter and circuit breaker state
-├── tests/
-├── scripts/
-│   └── uv/                     # UV single-file scripts
-├── pyproject.toml
-├── README.md
-├── Dockerfile
-└── .env.example
-```
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for component boundaries and design constraints.
-
-### Running Tests
-
-```bash
-# Run tests (after mise run setup)
-uv run pytest
-
-# Run with coverage
-uv run pytest --cov=mcp_zammad
-```
-
-### Code Quality
-
-```bash
-# Format code
-uv run ruff format mcp_zammad tests
-
-# Lint
-uv run ruff check mcp_zammad tests
-
-# Type checking
-uv run mypy mcp_zammad
-
-# Canonical non-mutating gates (scripts/validate.sh)
-mise run validate          # lint + affected tests
-mise run validate-release  # lint + full coverage suite + build (same as the CI validate job)
-
-# Full quality run. This command modifies files: it formats code and applies Ruff fixes.
-# It also writes bandit, pip-audit, and coverage reports.
-./scripts/quality-check.sh
-```
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the development setup, the test commands, the quality gates, and the
+release process. [ARCHITECTURE.md](ARCHITECTURE.md) has the module map, the component boundaries, and the design
+constraints.
 
 ## API Token Generation
 
@@ -667,27 +425,12 @@ To generate an API token in Zammad:
 
 ### Rate Limiting
 
-The client wraps every Zammad request with retries, an optional client-side throttle, and a circuit breaker.
-
-| Variable | Default | Meaning |
-|----------|---------|---------|
-| `ZAMMAD_RATE_LIMIT_ENABLED` | `false` | Opt in to client-side throttling |
-| `ZAMMAD_RATE_LIMIT_REQUESTS` | `60` | Max requests per window (>= 1) |
-| `ZAMMAD_RATE_LIMIT_WINDOW` | `60` | Window length in seconds (> 0) |
-| `ZAMMAD_MAX_RETRIES` | `3` | Retries for safe reads; `0` disables |
-| `ZAMMAD_RETRY_BACKOFF_BASE` | `1.0` | Backoff seconds: `base * 2^attempt` |
-| `ZAMMAD_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Consecutive failures before failing fast |
-| `ZAMMAD_CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `30` | Seconds before requests are allowed again; one more failure re-opens the circuit |
-
-Behavior to be aware of:
-
-- Only `GET`/`HEAD`/`OPTIONS` are retried, on HTTP 429/500/502/503/504, connection errors, and timeouts.
-  Writes (`POST`/`PUT`/`PATCH`/`DELETE`) are sent exactly once so a slow Zammad never duplicates a ticket or article.
-- A `Retry-After` header expressed in seconds overrides the backoff (capped at 60s); other formats fall back to backoff.
-- Throttling and circuit state are per process. Multiple server instances do not share a budget.
-- When retries are exhausted or the circuit is open, tools return an `Error:` message naming the cause: a 429
-  outcome (or a throttled write) points at rate limiting and `ZAMMAD_RATE_LIMIT_ENABLED`; a 5xx outcome reports a
-  server error. Reduce request frequency, paginate, or enable throttling if you keep hitting Zammad's limits.
+The client retries safe reads, can throttle requests, and opens a circuit breaker after repeated failures.
+When retries are exhausted or the circuit is open, tools return an `Error:` message that names the cause. A 429
+outcome points at rate limiting and `ZAMMAD_RATE_LIMIT_ENABLED`. Reduce request frequency, paginate, or enable
+throttling if you keep hitting Zammad's limits. See
+[Rate limiting, retries, and circuit breaker](docs/reference/configuration.md#rate-limiting-retries-and-circuit-breaker)
+for the variables and the retry rules.
 
 ## Security
 
@@ -722,7 +465,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code standards, te
 ## Documentation
 
 - [Documentation index](docs/README.md) — Index of all documentation
-- [HTTP Transport Deployment Guide](docs/deployment/http-transport.md) — Reverse proxy, systemd, Compose, and cloud deployment
+- [HTTP Transport Deployment Guide](docs/deployment/http-transport.md) — Reverse proxy, systemd, Compose, cloud deployment, and webhook events
+- [Configuration reference](docs/reference/configuration.md) — Every environment variable with its default and allowed values
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Technical design
 - [SECURITY.md](SECURITY.md) — Security policy
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Development guidelines

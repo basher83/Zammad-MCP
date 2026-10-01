@@ -9,7 +9,8 @@ These documents describe the current server and repository.
 
 | Document | Use it to |
 |---|---|
-| [HTTP transport deployment](deployment/http-transport.md) | Deploy the HTTP transport behind a reverse proxy and troubleshoot access |
+| [HTTP transport deployment](deployment/http-transport.md) | Deploy the HTTP transport behind a reverse proxy, receive webhook events, and troubleshoot access |
+| [Configuration reference](reference/configuration.md) | Look up every environment variable with its default and allowed values |
 | [Renovate and branch rules](dev/renovate-and-branch-rules.md) | Understand dependency updates and branch protection |
 | [Architecture](../ARCHITECTURE.md) | Understand components, boundaries, and design constraints |
 | [Contributing](../CONTRIBUTING.md) | Set up development, validate changes, and contribute |
