@@ -194,7 +194,8 @@ Supports three authentication methods with precedence:
 ### Server Client State
 
 Each `ZammadMCPServer` stores its client on `self.client`. Tool handlers obtain the initialized instance through
-`self.get_client()`, which raises if startup has not completed.
+`self.get_client()`. If startup has not created the client yet, `get_client()` creates it on first use, without the
+startup connection check.
 
 ### Initialization Lifecycle
 
@@ -258,8 +259,8 @@ MCP errors include:
 
 ### Current Limitations
 
-1. **Blocking I/O**: Synchronous HTTP calls
-1. **No Pooling**: New connections for each request
+1. **Blocking I/O**: Synchronous HTTP calls. Each `ZammadClient` sends every request through one `requests.Session`
+   (wrapped by `ResilientSession`), so connections are reused, but one call blocks until it finishes.
 
 ### Optimizations Implemented
 
@@ -281,16 +282,8 @@ MCP errors include:
    - TTL-based expiration for different data types
    - Cache warming strategies
 
-1. **Connection Pooling**
-
-   ```python
-   httpx.Client(
-       limits=httpx.Limits(max_keepalive_connections=10)
-   )
-   ```
-
 1. **Async Implementation**
-   - Use `httpx.AsyncClient`
+   - Replace the synchronous zammad-py client with an async HTTP client such as `httpx.AsyncClient`
    - Concurrent request handling
    - Better resource utilization
 

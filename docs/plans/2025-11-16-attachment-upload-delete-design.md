@@ -1,6 +1,6 @@
 # Attachment Upload & Delete Feature Design
 
-**Date:** 2025-01-16
+**Date:** 2025-11-16. The file was first committed on 2025-11-17 UTC. It previously said 2025-01-16, which predates issue #14 (opened 2025-07-09) that it cites.
 **Issue:** #14 - Feature: Add attachment support for tickets
 **Status:** Historical. Implemented in v1.0.0 (PR #122). Version 1.2.0 removed `zammad_delete_attachment` because Zammad has no such endpoint (issue #320, PRs #322 and #348).
 

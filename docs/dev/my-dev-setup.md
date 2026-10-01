@@ -1,5 +1,7 @@
 # My Development Setup
 
+Personal maintainer notes for a GitHub Codespaces environment. You do not need them to develop this project. For the supported setup, read [CONTRIBUTING.md](../../CONTRIBUTING.md).
+
 ## Codespaces
 
 ### Tailscale
