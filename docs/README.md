@@ -28,9 +28,3 @@ Check each claim against the code and the [changelog](../CHANGELOG.md) before yo
 | [audits/](audits/) | Repository audits |
 | [bug-reports/](bug-reports/) | Bug reports with their fix status |
 | [maintainer/](maintainer/) | PR triage snapshots from September 2026. The JSON and CSV files are the source data for these pages. |
-
-## Tool references
-
-The [ai-docs/](ai-docs/) folder holds notes and copies of external tool documentation, for example Claude Code, uv, Codacy CLI, and the GitHub MCP server.
-These copies can be older than the upstream pages. Read the upstream documentation for current behavior.
-Some pages in this folder describe local setups that this repository does not include, for example `.claude/hooks/pre_tool_use.py`.

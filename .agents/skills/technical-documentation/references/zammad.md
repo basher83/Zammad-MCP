@@ -17,7 +17,7 @@ This repository uses Markdown pages and relative links. Inspect existing navigat
 | `SECURITY.md` | Find security policy and reporting instructions |
 | `CHANGELOG.md` | Find release history |
 | `docs/plans/`, `docs/audits/`, `docs/reviews/`, `docs/bug-reports/` | Read dated plans and evidence, not assume current behavior |
-| `docs/ai-docs/`, `docs/dev/` | Consult tooling references and developer notes within their stated scope |
+| `docs/dev/` | Consult tooling references and developer notes within their stated scope |
 
 Keep one recommended setup path near the start of the README.
 Link detailed deployment and contributor procedures from the relevant entry section.
