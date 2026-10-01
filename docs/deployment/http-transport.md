@@ -193,10 +193,16 @@ uvx --from git+https://github.com/basher83/zammad-mcp.git mcp-zammad
 
 If Caddy runs on the same host, keep `MCP_HOST=127.0.0.1` instead.
 
+> [!WARNING]
+> The MCP listener has no authentication. With `MCP_HOST=0.0.0.0`, any client that reaches port 8000 bypasses the proxy, its
+> TLS, and its authentication. Allow inbound traffic to port 8000 only from the Caddy host, for example with a firewall rule
+> or a private network.
+
 **Caddyfile configuration:**
 
 ```caddy
 mcp.yourdomain.com {
+    # Same host: localhost:8000. Separate host: the MCP server's private address, for example 10.0.0.5:8000.
     reverse_proxy localhost:8000
     # Caddy automatically handles HTTPS/TLS
 }
@@ -338,10 +344,12 @@ them with `zammad_list_events`. This needs `MCP_TRANSPORT=http`. Stdio mode has 
    the webhook.
 
 The server maps deliveries to `ticket.create` (first article), `ticket.article.create` (later articles), or
-`ticket.update` (no article in payload). Invalid or missing `X-Hub-Signature` headers return `401`. Non-ticket or
-malformed payloads return `400`. Accepted deliveries return `202`, and the server keeps the
-`X-Zammad-Trigger` header value as the event `trigger`. Only identifiers and timestamps are retained. Article bodies
-are never retained.
+`ticket.update` (no article in payload). Invalid or missing `X-Hub-Signature` headers return `401`. The server returns
+`400` when the body is not JSON, when it has no integer `ticket.id`, or when it has an article without an integer
+`article.id`. It does not reject other fields: an unparseable `ticket.updated_at` becomes `null`, and
+`ticket.number` is stored as a string. Accepted deliveries return `202`. The server keeps only the event type, ticket
+ID and number, article ID, the `X-Zammad-Trigger` header value as `trigger`, and the source and received timestamps.
+Article bodies are never retained.
 
 Retention is process-local and bounded (1000 events, oldest evicted first) and is lost on restart. Poll with
 `zammad_list_events`, which returns the oldest events after `since` first (up to `limit`). Pass the returned
@@ -413,12 +421,20 @@ The MCP endpoint is `/mcp` on the configured host and port, for example `http://
 ### Claude Desktop and claude.ai (HTTP)
 
 Claude Desktop and claude.ai add remote MCP servers through the Connectors settings, not through
-`claude_desktop_config.json`. The documented steps on 2026-10-01 are:
+`claude_desktop_config.json`. The steps below follow Anthropic's
+[custom connector guide](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp)
+as updated on 2026-08-11.
 
-1. Open Settings and click **Connectors**.
-2. Click **Add**, then **Add custom connector**.
+Free, Pro, and Max plans:
+
+1. Open **Customize > Connectors**.
+2. Click **+**, then **Add custom connector**.
 3. Enter the server URL, for example `https://mcp.your-domain.com/mcp`, and click **Add**.
 4. Complete the authentication that your proxy requires.
+
+Team and Enterprise plans: an owner adds the connector in **Organization settings > Connectors** (**Add**, then
+**Custom > Web**, then the server URL). Members then open **Customize > Connectors**, find the connector, and click
+**Connect**.
 
 The connector must reach the server over the internet, so this path needs the
 [production deployment](#production-deployment) with TLS and authentication.

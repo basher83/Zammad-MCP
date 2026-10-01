@@ -1395,17 +1395,17 @@ def _run_bulk_ticket_update(client: ZammadClient, params: BulkTicketUpdateParams
     )
 
 
-def _queue_count_label(shown: int) -> str:
+def _queue_count_label(fetched: int) -> str:
     """Label the queue ticket count without claiming a total for a full page.
 
     Args:
-        shown: Number of tickets on the fetched page.
+        fetched: Number of tickets on the fetched page, before the per-state display cap.
 
     Returns:
-        "Tickets shown: N", with " (first N)" appended when the page is full.
+        "Tickets fetched: N", with " (first N)" appended when the page is full.
     """
-    suffix = f" (first {QUEUE_PAGE_SIZE})" if shown >= QUEUE_PAGE_SIZE else ""
-    return f"Tickets shown: {shown}{suffix}"
+    suffix = f" (first {QUEUE_PAGE_SIZE})" if fetched >= QUEUE_PAGE_SIZE else ""
+    return f"Tickets fetched: {fetched}{suffix}"
 
 
 def _format_queue_ticket(ticket: dict[str, Any]) -> list[str]:
@@ -3827,7 +3827,10 @@ After drafting, you can use zammad_add_article to add the response to the ticket
 zammad_search_tickets has no escalation filter. Use it with the group and state filters
 (for example state="open") and response_format="json", then keep the tickets whose
 first_response_escalation_at, update_escalation_at, or close_escalation_at field is set.
-Page through the results if has_more is true. For each escalated ticket:
+Check _meta.truncated before you follow next_page. A truncated response drops tickets from
+items but keeps has_more and next_page, so following next_page would skip them. If it is true,
+lower per_page and restart from page 1. Follow next_page only from a response that is not
+truncated, while has_more is true. For each escalated ticket:
 1. Ticket number and title
 2. Escalation type (first response, update, or close) from the field that is set
 3. Time until escalation
