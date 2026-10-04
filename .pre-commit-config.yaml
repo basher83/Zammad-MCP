@@ -12,7 +12,7 @@ default_install_hook_types:
 repos:
   - repo: https://github.com/astral-sh/uv-pre-commit
     # uv version.
-    rev: "5403c16080c62d2568b9adab14249214641a9d1a"  # 0.12.21
+    rev: "a1785f8e81fe9936d828bef574e6db07e8c8c374"  # 0.12.23
     hooks:
       - id: uv-sync
 
