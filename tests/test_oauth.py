@@ -23,6 +23,7 @@ from mcp_zammad.server import ZammadMCPServer
 
 
 def _enabled_env(**overrides: str) -> dict[str, str]:
+    """Return a complete OAuth environment, with optional overrides."""
     env = {
         "ZAMMAD_MCP_OAUTH": "true",
         "MCP_TRANSPORT": "http",
@@ -118,28 +119,37 @@ def test_resource_url_is_the_mcp_connector_url() -> None:
 
 
 class _FakeResponse:
+    """HTTP response double for the Zammad user lookup."""
+
     def __init__(self, status_code: int, body: object) -> None:
+        """Store the status code and body the lookup will see."""
         self.status_code = status_code
         self._body = body
 
     def json(self) -> object:
+        """Return the body, or raise it when the body is an exception."""
         if isinstance(self._body, Exception):
             raise self._body
         return self._body
 
 
 class _FakeClient:
+    """HTTP client double that records the user lookup request."""
+
     def __init__(self, response: _FakeResponse) -> None:
+        """Store the response returned for every request."""
         self.response = response
         self.calls: list[tuple[str, dict[str, str]]] = []
 
     async def __aenter__(self) -> "_FakeClient":
+        """Enter the async client context."""
         return self
 
     async def __aexit__(self, *args: object) -> None:
-        return None
+        """Leave the async client context without suppressing exceptions."""
 
     async def get(self, url: str, headers: dict[str, str]) -> _FakeResponse:
+        """Record one GET and return the prepared response."""
         self.calls.append((url, headers))
         return self.response
 
