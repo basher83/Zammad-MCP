@@ -74,6 +74,7 @@ from .models import (
     UserBrief,
     UserCreate,
 )
+from .oauth_settings import OAuthSettings
 from .resilience import CircuitOpenError, RetryExhaustedError
 from .tool_params import flat_params
 from .webhooks import WebhookHandler
@@ -1478,10 +1479,21 @@ class ZammadMCPServer:
         self._connected_user_id: int | str | None = None
         # Load .env before reading audit settings so .env-sourced audit config takes effect.
         self._bootstrap_env()
+        self.oauth_settings = OAuthSettings.from_env()
         self.audit = audit_logger or AuditLogger(AuditConfig.from_env(os.environ))
         self.event_store = event_store if event_store is not None else EventStore()
-        # Create FastMCP with lifespan configured
-        self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
+        # Create FastMCP with lifespan configured. OAuth is attached only when
+        # ZAMMAD_MCP_OAUTH is enabled; otherwise the static credential path is unchanged.
+        auth = None
+        if self.oauth_settings.enabled:
+            self.oauth_settings.validate()
+            from .oauth import build_zammad_oauth_proxy  # noqa: PLC0415
+
+            auth = build_zammad_oauth_proxy(self.oauth_settings)
+        mcp_kwargs: dict[str, Any] = {"lifespan": self._create_lifespan()}
+        if auth is not None:
+            mcp_kwargs["auth"] = auth
+        self.mcp = FastMCP("zammad_mcp", **mcp_kwargs)
         if self.audit.enabled:
             self.mcp.add_middleware(AuditMiddleware(self.audit))
         self._setup_tools()
@@ -1534,14 +1546,57 @@ class ZammadMCPServer:
         return client
 
     def get_client(self) -> ZammadClient:
-        """Get the Zammad client, ensuring it's initialized."""
+        """Get the Zammad client for this call.
+
+        With ZAMMAD_MCP_OAUTH enabled, the client uses the Zammad access token
+        of the user who signed in through the harness. Otherwise it uses the
+        process-wide credentials.
+        """
+        if self.oauth_settings.enabled:
+            return self._oauth_user_client()
         if not self.client:
             logger.debug("Zammad client not initialized, performing lazy initialization")
             self.client = self._create_client(verify_connection=False)
         return self.client
 
+    def _oauth_user_client(self) -> ZammadClient:
+        """Build a Zammad client for the signed-in user.
+
+        The bearer token on the MCP request is the harness token. FastMCP swaps
+        it for the Zammad access token issued to that same person. Zammad then
+        applies that user's roles, groups, and permissions.
+        """
+        from fastmcp.server.dependencies import get_access_token  # noqa: PLC0415
+
+        access = get_access_token()
+        token = access.token if access is not None else ""
+        if not token:
+            raise RuntimeError(
+                "Zammad MCP OAuth is enabled, but this request is not signed in. "
+                "Connect from the harness so Zammad uses that user's permissions."
+            )
+        return ZammadClient(
+            url=self.oauth_settings.zammad_url,
+            oauth2_token=token,
+            insecure=self.oauth_settings.insecure,
+            use_env_credentials=False,
+            audit_logger=self.audit,
+        )
+
     async def initialize(self) -> None:
         """Initialize the Zammad client on server startup."""
+        if self.oauth_settings.enabled:
+            logger.info(
+                "MCP OAuth enabled. Zammad calls use the signed-in user's token. "
+                "Static ZAMMAD_HTTP_TOKEN, ZAMMAD_OAUTH2_TOKEN, and username/password are not used."
+            )
+            self.audit.log_event(
+                "authentication",
+                "zammad_oauth_mode",
+                success=True,
+                details={"mode": "per_user_oauth"},
+            )
+            return
         try:
             self.client = self._create_client(verify_connection=True)
         except Exception as exc:

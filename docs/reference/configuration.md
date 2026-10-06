@@ -38,6 +38,8 @@ The server fails at startup with a message that names the problem when:
 
 `ZAMMAD_*` credentials authenticate the server to Zammad.
 They do not authenticate MCP clients that connect to the server.
+The exception is per-user OAuth, which is off unless `ZAMMAD_MCP_OAUTH` is set.
+See [OAuth for remote harnesses](../deployment/oauth-harnesses.md).
 
 ## Logging
 
@@ -53,9 +55,27 @@ They do not authenticate MCP clients that connect to the server.
 | `MCP_HOST` | `127.0.0.1` | Host address for the HTTP transport. Ignored for stdio |
 | `MCP_PORT` | - | Port for the HTTP transport. Required when `MCP_TRANSPORT=http`. Must be an integer from 1 to 65535 |
 
-The server does not implement inbound MCP client authentication.
+Without `ZAMMAD_MCP_OAUTH`, the server does not authenticate MCP clients.
 Bind to `0.0.0.0` only behind an authenticated TLS proxy or inside a network restricted to trusted clients.
 See the [HTTP transport guide](../deployment/http-transport.md) for deployment steps.
+
+## Per-user OAuth (optional)
+
+OAuth is a second way to run the server, for remote MCP harnesses such as Claude.ai.
+It is not the default. Leave `ZAMMAD_MCP_OAUTH` unset to keep the static credential path above.
+
+When it is enabled, each person signs in through Zammad. Tool calls use that person's Zammad access token, so Zammad enforces that person's roles and groups. Static `ZAMMAD_HTTP_TOKEN`, `ZAMMAD_OAUTH2_TOKEN`, and username/password values are not used for those calls.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZAMMAD_MCP_OAUTH` | unset | Enable with `1`, `true`, `yes`, or `on`. Requires `MCP_TRANSPORT=http` |
+| `MCP_PUBLIC_URL` | - | Public origin of this server, with no path, for example `https://mcp.example.com`. Required when OAuth is enabled. The harness connector URL is `{MCP_PUBLIC_URL}/mcp` |
+| `ZAMMAD_OAUTH_CLIENT_ID` | - | Client id of an OAuth application created in Zammad. Required when OAuth is enabled |
+| `ZAMMAD_OAUTH_CLIENT_SECRET` | - | Client secret of that Zammad application. Required when OAuth is enabled |
+
+The Zammad application's callback URL is `{MCP_PUBLIC_URL}/auth/callback`.
+Setup for Claude.ai and the same class of harness is in
+[OAuth for remote harnesses](../deployment/oauth-harnesses.md).
 
 ## Webhook events (HTTP transport only)
 
