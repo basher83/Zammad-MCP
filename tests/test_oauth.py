@@ -103,7 +103,9 @@ def test_upstream_scope_is_only_full() -> None:
 
 def test_copy_scopes_uses_model_copy() -> None:
     """Authorization params keep every field except the scope list."""
-    original = SimpleNamespace(scopes=["offline_access"], state="abc", model_copy=lambda update: SimpleNamespace(**update))
+    original = SimpleNamespace(
+        scopes=["offline_access"], state="abc", model_copy=lambda update: SimpleNamespace(**update)
+    )
     # The helper prefers model_copy and returns that object unchanged aside from scopes.
     copied = _copy_scopes(original, ["full"])  # type: ignore[arg-type]
     assert copied.scopes == ["full"]
@@ -195,9 +197,16 @@ def test_per_user_client_ignores_the_static_token(mock_api: MagicMock) -> None:
     assert mock_api.call_args.kwargs["oauth2_token"] == "user-zammad-token"
 
 
+def _server_with_static_startup() -> ZammadMCPServer:
+    """Build a server whose startup ignores OAuth in the process environment."""
+    disabled = OAuthSettings(enabled=False)
+    with patch("mcp_zammad.server.OAuthSettings.from_env", return_value=disabled):
+        return ZammadMCPServer()
+
+
 def test_get_client_uses_the_signed_in_zammad_token(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tool calls inherit the Zammad user who completed OAuth."""
-    server = ZammadMCPServer()
+    server = _server_with_static_startup()
     server.oauth_settings = OAuthSettings.from_env(_enabled_env())
     monkeypatch.setattr(
         "fastmcp.server.dependencies.get_access_token",
@@ -217,7 +226,7 @@ def test_get_client_uses_the_signed_in_zammad_token(monkeypatch: pytest.MonkeyPa
 
 def test_get_client_requires_a_signed_in_user() -> None:
     """OAuth mode does not fall back to a shared Zammad credential."""
-    server = ZammadMCPServer()
+    server = _server_with_static_startup()
     server.oauth_settings = OAuthSettings.from_env(_enabled_env())
     with (
         patch("fastmcp.server.dependencies.get_access_token", return_value=None),
@@ -243,6 +252,8 @@ def test_discovery_matches_claude_ai_oauth(monkeypatch: pytest.MonkeyPatch) -> N
     assert body["registration_endpoint"].endswith("/register")
     assert body["authorization_endpoint"].endswith("/authorize")
     assert body["token_endpoint"].endswith("/token")
+    assert body["service_documentation"].endswith("/docs/deployment/oauth-harnesses.md")
+    assert "basher83/Zammad-MCP" in body["service_documentation"]
     assert body["code_challenge_methods_supported"] == ["S256"]
     assert resource.status_code == 200
     resource_body = resource.json()
