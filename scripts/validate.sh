@@ -68,7 +68,7 @@ affected_tests() {
   while IFS= read -r f; do
     case "$f" in
       tests/test_*.py | tests/*/test_*.py) tests+=("$f") ;;
-      scripts/check-pins.sh) tests+=(tests/test_pins_gate.py) ;;
+      scripts/check-pins.sh | tests/pins_gate_support.py) tests+=(tests/test_pins_gate.py) ;;
       mcp_zammad/*.py)
         local mod; mod="$(basename "$f" .py)"
         tests+=(tests/test_"$mod"*.py tests/test_server.py) ;;

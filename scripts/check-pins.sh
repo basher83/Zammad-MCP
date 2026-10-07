@@ -58,16 +58,20 @@ check_python_version_file() {
 # Fail when a workflow installs uv or Python outside mise.
 check_workflows() {
   local found
-  found="$(grep -lE 'uses: *(astral-sh/setup-uv|actions/setup-python)@' .github/workflows/*.yml || true)"
+  found="$(grep -rlE --include='*.yml' --include='*.yaml' 'uses: *(astral-sh/setup-uv|actions/setup-python)@' .github/workflows 2>/dev/null || true)"
   [ -z "$found" ] && return 0
   fail "a workflow installs uv or Python with setup-uv or setup-python: ${found//$'\n'/ }" \
     "CI must install the same tools as local setup, from mise.toml. Separate install steps carry their own version pins, which drift (#387)." \
     "Use jdx/mise-action as in .github/workflows/tests.yml. A job that needs another Python sets UV_PYTHON, as the tests matrix does."
 }
 
-# Fail unless mise.toml [env] points UV_PYTHON at the mise Python.
+# Fail unless the [env] section of mise.toml points UV_PYTHON at the mise Python.
 check_uv_python_env() {
-  grep -qxF 'UV_PYTHON = { value = "{{ tools.python.path }}", tools = true }' mise.toml && return 0
+  awk -v want='UV_PYTHON = { value = "{{ tools.python.path }}", tools = true }' '
+    /^\[/ { in_env = ($0 == "[env]") }
+    in_env && $0 == want { found = 1 }
+    END { exit !found }
+  ' mise.toml && return 0
   fail "mise.toml [env] does not set UV_PYTHON to the mise Python." \
     "Without it, uv picks any interpreter that matches requires-python, so local runs stop using the pinned Python." \
     "Keep this exact line in [env]: UV_PYTHON = { value = \"{{ tools.python.path }}\", tools = true }"
