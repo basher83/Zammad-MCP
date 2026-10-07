@@ -73,6 +73,7 @@ BREAKS: dict[str, tuple[Callable[[Path], None], str]] = {
     "python-version file": (_add_python_version, ".python-version"),
     "setup-uv step": (lambda r: replace(r, WORKFLOW_FILE, "jdx/mise-action", "astral-sh/setup-uv"), "setup-uv"),
     "setup-uv in .yaml workflow": (_setup_uv_in_yaml_workflow, "ci.yaml"),
+    "workflow scan fails": (lambda r: git(r, "rm", "-r", "-q", "-f", ".github"), "cannot scan"),
     "quoted setup-uv step": (
         lambda r: replace(r, WORKFLOW_FILE, "uses: jdx/mise-action@", 'uses: "astral-sh/setup-uv@'),
         "setup-uv",

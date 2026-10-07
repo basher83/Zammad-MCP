@@ -55,10 +55,16 @@ check_python_version_file() {
     "Change python in mise.toml [tools]. mise points uv at that Python through UV_PYTHON. Remove the file with 'git rm --cached .python-version'."
 }
 
-# Fail when a workflow installs uv or Python outside mise.
+# Fail when a workflow installs uv or Python outside mise, or when the scan itself fails.
 check_workflows() {
-  local found
-  found="$(grep -rlE --include='*.yml' --include='*.yaml' "uses:[[:space:]]*[\"']?(astral-sh/setup-uv|actions/setup-python)@" .github/workflows 2>/dev/null || true)"
+  local found rc=0
+  found="$(grep -rlE --include='*.yml' --include='*.yaml' "uses:[[:space:]]*[\"']?(astral-sh/setup-uv|actions/setup-python)@" .github/workflows)" || rc=$?
+  if [ "$rc" -gt 1 ]; then
+    fail "cannot scan .github/workflows (grep exited $rc; its error is printed above)." \
+      "A scan that did not run must not count as a pass." \
+      "Fix the error grep reports, for example a missing or unreadable .github/workflows directory."
+    return
+  fi
   [ -z "$found" ] && return 0
   fail "a workflow installs uv or Python with setup-uv or setup-python: ${found//$'\n'/ }" \
     "CI must install the same tools as local setup, from mise.toml. Separate install steps carry their own version pins, which drift (#387)." \
