@@ -29,29 +29,10 @@ if [ "${VALIDATE_NO_CACHE:-0}" = "1" ]; then
   CACHE_FLAG=(--no-cache)
 fi
 
-# Version pins: mise.toml is the source of truth. uv and setup-python read
-# .python-version; setup-uv steps and the uv-pre-commit hook pin uv separately.
+# Version pins: mise.toml is the source of truth. CI installs Python and uv from
+# it with jdx/mise-action, and mise points uv at its Python through UV_PYTHON.
+# The uv-pre-commit hook is the only other copy of a pin.
 mise_pin() { sed -n "s/^$1 = \"\(.*\)\"$/\1/p" mise.toml; }
-
-# Print "<workflow>:<job> <version>" for every astral-sh/setup-uv step, or
-# MISSING when the step has no explicit `version` input.
-setup_uv_versions() {
-  uv run --frozen python - .github/workflows/*.yml <<'PY'
-import sys
-from pathlib import Path
-
-import yaml
-
-jobs = [(path, name, job) for path in sys.argv[1:]
-        for name, job in (yaml.safe_load(Path(path).read_text()).get("jobs") or {}).items()]
-steps = [(f"{path}:{name}", step) for path, name, job in jobs for step in job.get("steps") or []]
-for label, step in steps:
-    if not str(step.get("uses", "")).startswith("astral-sh/setup-uv@"):
-        continue
-    version = (step.get("with") or {}).get("version")
-    print(label, "MISSING" if version is None else version)
-PY
-}
 
 check_pin() {
   local label="$1" want="$2" got="$3"
@@ -60,25 +41,31 @@ check_pin() {
   return 1
 }
 
-run_pins() {
-  local py uv pin steps step status=0
-  py="$(mise_pin python)"
-  uv="$(mise_pin uv)"
-  if [ -z "$py" ] || [ -z "$uv" ]; then
-    echo "❌ pins: cannot read the python and uv pins from mise.toml [tools]"
+# Fail when a workflow installs Python or uv outside mise, or when a second
+# Python pin (.python-version) returns.
+check_no_side_pins() {
+  local found
+  found="$(grep -lE 'uses: *(astral-sh/setup-uv|actions/setup-python)@' .github/workflows/*.yml || true)"
+  if [ -n "$found" ]; then
+    echo "❌ pins: install Python and uv with jdx/mise-action, not setup-uv or setup-python: ${found//$'\n'/ }"
     return 1
   fi
-  check_pin .python-version "$py" "$(tr -d '[:space:]' < .python-version)" || status=1
+  [ ! -e .python-version ] && return 0
+  echo "❌ pins: .python-version is a second Python pin that uv reads when UV_PYTHON is unset; delete it"
+  return 1
+}
+
+run_pins() {
+  local uv pin status=0
+  uv="$(mise_pin uv)"
+  if [ -z "$uv" ]; then
+    echo "❌ pins: cannot read the uv pin from mise.toml [tools]"
+    return 1
+  fi
   pin="$(grep -A2 'astral-sh/uv-pre-commit' .pre-commit-config.yaml | sed -n 's/.*# \([0-9.]*\)$/\1/p')"
   check_pin "the uv-pre-commit hook" "$uv" "$pin" || status=1
-  if ! steps="$(setup_uv_versions)"; then
-    echo "❌ pins: cannot parse the setup-uv steps in .github/workflows"
-    return 1
-  fi
-  while read -r step pin; do
-    [ -n "$step" ] && { check_pin "setup-uv in $step" "$uv" "$pin" || status=1; }
-  done <<<"$steps"
-  [ "$status" -eq 0 ] && echo "📌 pins: Python $py and uv $uv match mise.toml"
+  check_no_side_pins || status=1
+  [ "$status" -eq 0 ] && echo "📌 pins: the uv-pre-commit hook matches uv $uv in mise.toml; CI installs from mise.toml"
   return "$status"
 }
 

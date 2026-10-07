@@ -17,17 +17,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - name: Install Python and uv from mise.toml
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
-          version: "0.12.23"
-          enable-cache: true
+          version: "2026.10.3"
+          install_args: python uv
+
+      - name: Restore uv cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/uv
+          key: uv-validate-${{ runner.os }}-${{ hashFiles('uv.lock') }}
 
       - name: Install dependencies
-        run: uv sync --dev --frozen --python "3.13"
+        run: uv sync --dev --frozen
 
       - name: Run canonical release validation
         run: ./scripts/validate.sh release
+
+      - name: Prune uv cache before it is saved
+        run: uv cache prune --ci
 
   tests:
     # Same gates as `scripts/validate.sh release` tests: full suite with the
@@ -40,25 +49,44 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     permissions:
       contents: read
-      
+    env:
+      # Each leg tests its own interpreter. uv installs it when it is missing.
+      UV_PYTHON: ${{ matrix.python-version }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - name: Install uv from mise.toml
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
-          version: "0.12.23"
-          enable-cache: true
+          version: "2026.10.3"
+          install_args: uv
+          # The mise environment sets UV_PYTHON to the pinned 3.13 interpreter
+          # and would override the matrix value, so do not export it.
+          env: false
+          export_path: false
+          add_shims_to_path: false
 
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - name: Put the pinned uv on PATH
+        run: dirname "$(mise which uv)" >> "$GITHUB_PATH"
+
+      - name: Restore uv cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
-          python-version: ${{ matrix.python-version }}
+          path: ~/.cache/uv
+          key: uv-tests-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
 
       - name: Install dependencies
+        run: uv sync --dev --frozen
+
+      - name: Check that the leg runs the requested interpreter
         run: |
-          uv sync --dev --frozen --python "${{ matrix.python-version }}"
+          actual="$(uv run --frozen python -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+          if [ "$actual" != "$UV_PYTHON" ]; then
+            echo "::error::matrix leg $UV_PYTHON runs Python $actual"
+            exit 1
+          fi
 
       - name: Run tests with coverage
         run: |
@@ -126,6 +154,9 @@ jobs:
           else
             echo "❌ Coverage report not generated" >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Prune uv cache before it is saved
+        run: uv cache prune --ci
 
   test-and-coverage:
     # Aggregate check: the main ruleset requires this exact context, which the
