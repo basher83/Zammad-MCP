@@ -1,8 +1,6 @@
-"""Contract tests for the version-pins gate in scripts/check-pins.sh.
+"""Contract tests for the version-pins gate (pre-commit hook and CI) in scripts/check-pins.sh.
 
-The gate runs as a pre-commit hook and in CI. Each failure must tell the
-reader, often an agent, what is wrong, why the rule exists and what to do
-instead, so that the rule survives without anyone reading AGENTS.md first.
+Each failure must tell the reader, often an agent, what is wrong, why the rule exists and what to do instead.
 """
 
 import shutil
@@ -33,6 +31,9 @@ version = "3.13.16"
 
 [[tools.uv]]
 version = "0.12.23"
+
+[[tools.prek]]
+version = "0.5.4"
 """
 
 PRE_COMMIT = """repos:
@@ -48,12 +49,27 @@ WORKFLOW = """jobs:
 
 
 def _git(repo: Path, *args: str) -> None:
-    """Run a git command in the fixture repository."""
+    """Run a git command in the fixture repository.
+
+    Args:
+        repo: Root of the fixture repository.
+        *args: Arguments passed to git.
+
+    Raises:
+        subprocess.CalledProcessError: If git exits with a nonzero status.
+    """
     subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
 
 
 def _replace(repo: Path, name: str, old: str, new: str) -> None:
-    """Replace text in a fixture file and stage the result."""
+    """Replace text in a fixture file and stage the result.
+
+    Args:
+        repo: Root of the fixture repository.
+        name: Path of the file, relative to the repository root.
+        old: Text to replace.
+        new: Replacement text.
+    """
     path = repo / name
     path.write_text(path.read_text().replace(old, new))
     _git(repo, "add", name)
@@ -61,7 +77,14 @@ def _replace(repo: Path, name: str, old: str, new: str) -> None:
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    """Create a git repository whose pins follow every rule."""
+    """Create a git repository whose pins follow every rule.
+
+    Args:
+        tmp_path: Temporary directory provided by pytest.
+
+    Returns:
+        The root of the new repository, with every file staged.
+    """
     (tmp_path / ".github" / "workflows").mkdir(parents=True)
     (tmp_path / ".github" / "workflows" / "ci.yml").write_text(WORKFLOW)
     (tmp_path / "mise.toml").write_text(MISE_TOML)
@@ -73,7 +96,14 @@ def repo(tmp_path: Path) -> Path:
 
 
 def _run_gate(repo: Path) -> subprocess.CompletedProcess[str]:
-    """Run the pins gate the way the pre-commit hook does."""
+    """Run the pins gate the way the pre-commit hook does.
+
+    Args:
+        repo: Root of the fixture repository.
+
+    Returns:
+        The completed process, with stdout and stderr captured as text.
+    """
     return subprocess.run(["bash", str(SCRIPT)], cwd=repo, capture_output=True, text=True, check=False)
 
 
@@ -86,11 +116,21 @@ def test_repository_that_follows_the_rules_passes(repo: Path) -> None:
 
 
 def _add_python_version(repo: Path) -> None:
+    """Commit a .python-version file to the fixture repository.
+
+    Args:
+        repo: Root of the fixture repository.
+    """
     (repo / ".python-version").write_text("3.13.16\n")
     _git(repo, "add", ".python-version")
 
 
 def _drop_lockfile(repo: Path) -> None:
+    """Remove mise.lock from the fixture repository.
+
+    Args:
+        repo: Root of the fixture repository.
+    """
     _git(repo, "rm", "-q", "-f", "mise.lock")
 
 
@@ -105,10 +145,23 @@ BREAKS: dict[str, tuple[Callable[[Path], None], str]] = {
         "setup-python",
     ),
     "UV_PYTHON removed": (lambda r: _replace(r, "mise.toml", "UV_PYTHON", "# UV_PYTHON"), "UV_PYTHON"),
+    "UV_PYTHON wrong value": (
+        lambda r: _replace(r, "mise.toml", '"{{ tools.python.path }}"', '"/tmp/{{ tools.python.path }}"'),
+        "UV_PYTHON",
+    ),
     "lockfile removed": (_drop_lockfile, "mise.lock"),
     "lockfile behind mise.toml": (lambda r: _replace(r, "mise.toml", '"3.13.16"', '"3.13.17"'), "mise lock"),
+    "tool missing from lockfile": (
+        lambda r: _replace(r, "mise.toml", 'prek = "0.5.4"', 'prek = "0.5.4"\nfd = "10.5.0"'),
+        "fd",
+    ),
     "floating tool version": (lambda r: _replace(r, "mise.toml", '"0.5.4"', '"latest"'), "prek"),
+    "version prefix": (lambda r: _replace(r, "mise.toml", '"0.5.4"', '"0"'), "prek"),
     "hook comment drift": (lambda r: _replace(r, ".pre-commit-config.yaml", "# 0.12.23", "# 0.12.22"), "uv-pre-commit"),
+    "uv hook missing": (
+        lambda r: _replace(r, ".pre-commit-config.yaml", "astral-sh/uv-pre-commit", "astral-sh/other"),
+        "uv-pre-commit",
+    ),
     "uv pin missing": (lambda r: _replace(r, "mise.toml", 'uv = "0.12.23"', ""), "uv pin"),
 }
 
@@ -121,7 +174,7 @@ def test_each_break_fails_with_reason_and_remedy(repo: Path, name: str) -> None:
 
     result = _run_gate(repo)
 
-    assert result.returncode == 1
+    assert result.returncode == 1, result.stdout + result.stderr
     assert subject in result.stdout
     assert "Why:" in result.stdout
     assert "Instead:" in result.stdout
