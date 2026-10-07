@@ -84,7 +84,7 @@ jobs:
         run: |
           actual="$(uv run --frozen python -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
           if [ "$actual" != "$UV_PYTHON" ]; then
-            echo "::error::matrix leg $UV_PYTHON runs Python $actual"
+            echo "::error::matrix leg $UV_PYTHON runs Python $actual. Something overrides UV_PYTHON: a .python-version file, or the mise environment exported by mise-action (keep env: false and export_path: false in this job). See #387."
             exit 1
           fi
 

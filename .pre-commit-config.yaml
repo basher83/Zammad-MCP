@@ -74,6 +74,16 @@ repos:
 
   - repo: local
     hooks:
+      # Same check as `scripts/validate.sh` in CI. Its failure message
+      # explains each rule, so an agent learns why before it retries (#387).
+      - id: version-pins
+        name: Tool versions come only from mise.toml
+        entry: scripts/check-pins.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
+
       - id: pip-audit
         name: pip-audit
         entry: uv

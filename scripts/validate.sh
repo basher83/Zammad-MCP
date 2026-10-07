@@ -29,45 +29,9 @@ if [ "${VALIDATE_NO_CACHE:-0}" = "1" ]; then
   CACHE_FLAG=(--no-cache)
 fi
 
-# Version pins: mise.toml is the source of truth. CI installs Python and uv from
-# it with jdx/mise-action, and mise points uv at its Python through UV_PYTHON.
-# The uv-pre-commit hook is the only other copy of a pin.
-mise_pin() { sed -n "s/^$1 = \"\(.*\)\"$/\1/p" mise.toml; }
-
-check_pin() {
-  local label="$1" want="$2" got="$3"
-  [ "$want" = "$got" ] && return 0
-  echo "❌ pins: $label is '$got', but mise.toml pins '$want'"
-  return 1
-}
-
-# Fail when a workflow installs Python or uv outside mise, or when a second
-# Python pin (.python-version) returns.
-check_no_side_pins() {
-  local found
-  found="$(grep -lE 'uses: *(astral-sh/setup-uv|actions/setup-python)@' .github/workflows/*.yml || true)"
-  if [ -n "$found" ]; then
-    echo "❌ pins: install Python and uv with jdx/mise-action, not setup-uv or setup-python: ${found//$'\n'/ }"
-    return 1
-  fi
-  [ ! -e .python-version ] && return 0
-  echo "❌ pins: .python-version is a second Python pin that uv reads when UV_PYTHON is unset; delete it"
-  return 1
-}
-
-run_pins() {
-  local uv pin status=0
-  uv="$(mise_pin uv)"
-  if [ -z "$uv" ]; then
-    echo "❌ pins: cannot read the uv pin from mise.toml [tools]"
-    return 1
-  fi
-  pin="$(grep -A2 'astral-sh/uv-pre-commit' .pre-commit-config.yaml | sed -n 's/.*# \([0-9.]*\)$/\1/p')"
-  check_pin "the uv-pre-commit hook" "$uv" "$pin" || status=1
-  check_no_side_pins || status=1
-  [ "$status" -eq 0 ] && echo "📌 pins: the uv-pre-commit hook matches uv $uv in mise.toml; CI installs from mise.toml"
-  return "$status"
-}
+# Version pins: scripts/check-pins.sh is the one implementation. It also runs
+# as the version-pins pre-commit hook, so a commit and CI apply the same rules.
+run_pins() { ./scripts/check-pins.sh; }
 
 run_lint() {
   echo "🔎 lint: ruff format --check, ruff check, mypy (parallel)"
@@ -104,6 +68,7 @@ affected_tests() {
   while IFS= read -r f; do
     case "$f" in
       tests/test_*.py | tests/*/test_*.py) tests+=("$f") ;;
+      scripts/check-pins.sh) tests+=(tests/test_pins_gate.py) ;;
       mcp_zammad/*.py)
         local mod; mod="$(basename "$f" .py)"
         tests+=(tests/test_"$mod"*.py tests/test_server.py) ;;
