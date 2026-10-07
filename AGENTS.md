@@ -566,7 +566,7 @@ Repository-specific guidance for `basher83/Zammad-MCP`. This layer supplements t
 
 ## Tooling and validation
 
-- Use `uv` for Python dependency and command execution. Use `mise run setup` for repository setup.
+- Use `uv` for Python dependency and command execution. Use `mise run setup` for repository setup. Cloud agent sessions use `mise run cloud-setup`: it installs the tools from `mise.lock`, syncs `.venv`, and installs the prek commit hooks, so the `version-pins` hook runs in those sessions too.
 - `mise run validate` runs the fast non-mutating developer gates (`./scripts/validate.sh dev`: format check, lint, types, affected tests). `mise run validate-release` runs the release gates (`./scripts/validate.sh release`: the same lint gates, the full coverage suite, and a package build). The CI `validate` job installs Python and uv from `mise.toml` with `jdx/mise-action` and runs the release gates.
 - Cheap non-mutating checks are `uv run ruff format --check mcp_zammad tests`, `uv run ruff check mcp_zammad tests`, `uv run mypy mcp_zammad`, and focused `uv run pytest <path>`.
 - `./scripts/quality-check.sh` is mutating: it formats code, applies Ruff fixes, writes security and coverage reports, and runs the full suite with an 86% coverage floor. Do not use it when a read-only validation was requested.
