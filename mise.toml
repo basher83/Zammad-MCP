@@ -19,10 +19,12 @@ git-cliff = "2.14.2"
 shellcheck = "0.11.0"
 uv = "0.12.23"
 prek = "0.5.4"
-"packslip:github.com/jdx/hk" = "latest"
+hk = "2.5.0"
 
 [env]
 _.python.venv = { path = ".venv", create = true } # create the venv if it doesn't exist
+# uv reads no version file; point it at the interpreter pinned in [tools] above.
+UV_PYTHON = { value = "{{ tools.python.path }}", tools = true }
 
 # === Setup tasks ===
 [tasks.setup]

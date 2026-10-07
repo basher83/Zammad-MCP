@@ -42,10 +42,10 @@ Key points:
   - Use `chore(deps):` as the commit message prefix.
 - Extra repo‑specific rules:
   - Renovate does not propose Python 3.14 or later (`allowedVersions: "<3.14"`). This matches `requires-python` in `pyproject.toml`.
-  - The Python pins in `mise.toml` and `.python-version` update in one PR (group `python version pins`).
-  - The uv pins in `mise.toml`, the `setup-uv` workflow steps, and the `uv-pre-commit` hook update in one PR (group `uv version pins`).
+  - The uv pins in `mise.toml` and the `uv-pre-commit` hook update in one PR (group `uv version pins`).
   - Major updates to `zammad-py` require explicit approval in the Dependency Dashboard.
-- `mise.toml` is the source of truth for the Python and uv versions. `scripts/validate.sh` fails when another file pins a different version, so a PR that updates only one pin fails CI.
+  - Major updates to `fastmcp` require explicit approval in the Dependency Dashboard. They move together with the `mcp` major (#353).
+- `mise.toml` is the source of truth for the tool versions, and CI installs Python and uv from it with `jdx/mise-action`. `mise.lock` records checksums and download URLs, and CI installs with `--locked`, so a `mise.toml` change without a matching `mise.lock` change fails CI. `scripts/validate.sh` fails when the `uv-pre-commit` hook pins a different uv version, so a PR that updates only one uv pin fails CI.
 
 ---
 
