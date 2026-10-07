@@ -58,6 +58,12 @@ check_python_version_file() {
 # Fail when a workflow installs uv or Python outside mise, or when the scan itself fails.
 check_workflows() {
   local found rc=0
+  if [ ! -d .github/workflows ]; then
+    fail "cannot scan .github/workflows: directory is missing." \
+      "A scan that did not run must not count as a pass." \
+      "Restore .github/workflows before running validation."
+    return
+  fi
   found="$(grep -rlE --include='*.yml' --include='*.yaml' "uses:[[:space:]]*[\"']?(astral-sh/setup-uv|actions/setup-python)@" .github/workflows)" || rc=$?
   if [ "$rc" -gt 1 ]; then
     fail "cannot scan .github/workflows (grep exited $rc; its error is printed above)." \
