@@ -58,7 +58,7 @@ check_python_version_file() {
 # Fail when a workflow installs uv or Python outside mise.
 check_workflows() {
   local found
-  found="$(grep -rlE --include='*.yml' --include='*.yaml' 'uses: *(astral-sh/setup-uv|actions/setup-python)@' .github/workflows 2>/dev/null || true)"
+  found="$(grep -rlE --include='*.yml' --include='*.yaml' "uses:[[:space:]]*[\"']?(astral-sh/setup-uv|actions/setup-python)@" .github/workflows 2>/dev/null || true)"
   [ -z "$found" ] && return 0
   fail "a workflow installs uv or Python with setup-uv or setup-python: ${found//$'\n'/ }" \
     "CI must install the same tools as local setup, from mise.toml. Separate install steps carry their own version pins, which drift (#387)." \
