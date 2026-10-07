@@ -1,0 +1,64 @@
+{
+  "cli_version": "0.11.4",
+  "checkpoint_id": "01M4C35VPH1VNKEHRQY9YC9YTP",
+  "session_id": "01a1182e-1527-7132-96cc-953419227fb8",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-07T21:09:13.924805Z",
+  "branch": "claude/epic-noether-xddt8n",
+  "checkpoints_count": 2,
+  "save_step_count": 2,
+  "files_touched": [
+    "mise.lock",
+    "scripts/check-pins.sh"
+  ],
+  "agent": "Codex",
+  "model": "gpt-6.1-sol",
+  "turn_id": "c83e2fc8ca4a",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 64221,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 968064,
+    "output_tokens": 2902,
+    "api_call_count": 21,
+    "subagent_tokens_complete": true
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-07T21:09:13.912343Z",
+    "agent_lines": 447,
+    "agent_removed": 0,
+    "human_added": 6,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 453,
+    "total_lines_changed": 453,
+    "agent_percentage": 98.67549668874173,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 169,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 169,
+      "agent_lines_removed": 0
+    }
+  ]
+}
