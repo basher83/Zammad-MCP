@@ -94,6 +94,44 @@ def test_transport_config_invalid_port(port) -> None:
         config.validate()
 
 
+@pytest.mark.parametrize(
+    ("certfile", "keyfile"),
+    [("cert.pem", None), (None, "key.pem")],
+)
+def test_transport_config_ssl_files_must_be_paired(tmp_path, certfile, keyfile) -> None:
+    """Setting only one of the SSL files must fail instead of silently serving plain HTTP."""
+    config = TransportConfig(
+        transport=TransportType.HTTP,
+        ssl_certfile=str(tmp_path / certfile) if certfile else None,
+        ssl_keyfile=str(tmp_path / keyfile) if keyfile else None,
+    )
+    with pytest.raises(ValueError, match="must be set together"):
+        config.validate()
+
+
+def test_transport_config_ssl_file_missing(tmp_path) -> None:
+    """A configured SSL file that does not exist fails at validation, not when uvicorn starts."""
+    cert = tmp_path / "cert.pem"
+    cert.write_text("cert")
+    config = TransportConfig(
+        transport=TransportType.HTTP,
+        ssl_certfile=str(cert),
+        ssl_keyfile=str(tmp_path / "missing.pem"),
+    )
+    with pytest.raises(ValueError, match="MCP_SSL_KEYFILE must point to a readable file"):
+        config.validate()
+
+
+def test_transport_config_ssl_files_valid(tmp_path) -> None:
+    """Readable certificate and key files pass validation and reach the uvicorn config."""
+    cert, key = tmp_path / "cert.pem", tmp_path / "key.pem"
+    cert.write_text("cert")
+    key.write_text("key")
+    config = TransportConfig(transport=TransportType.HTTP, ssl_certfile=str(cert), ssl_keyfile=str(key))
+    config.validate()
+    assert config.get_uvicorn_config() == {"ssl_certfile": str(cert), "ssl_keyfile": str(key)}
+
+
 # --- AuthConfig tests ---
 
 

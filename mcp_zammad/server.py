@@ -27,7 +27,7 @@ from starlette.responses import JSONResponse
 from .audit import AuditConfig, AuditLogger, error_details
 from .audit_middleware import AuditMiddleware
 from .client import ZammadClient
-from .config import AuthConfig
+from .config import AuthConfig, TransportType
 from .events import EventStore, ListEventsParams, ListEventsResult
 from .logging_config import configure_logging
 from .models import (
@@ -1483,8 +1483,17 @@ class ZammadMCPServer:
         self.audit = audit_logger or AuditLogger(AuditConfig.from_env(os.environ))
         self.event_store = event_store if event_store is not None else EventStore()
 
-        # Configure authentication from environment
+        # Configure authentication from environment. OAuth needs the HTTP transport;
+        # stdio has no inbound request layer, so it keeps the static Zammad credentials.
         self.auth_config = AuthConfig.from_env()
+        transport = os.getenv("MCP_TRANSPORT", TransportType.STDIO.value).lower()
+        if self.auth_config.enabled and transport != TransportType.HTTP.value:
+            logger.warning(
+                "MCP_AUTH_* variables are set but MCP_TRANSPORT is %r. OAuth requires MCP_TRANSPORT=http; "
+                "ignoring the OAuth settings and using the static Zammad credentials.",
+                transport,
+            )
+            self.auth_config = AuthConfig()
         auth_provider = self.auth_config.create_auth_provider()
 
         # Create FastMCP with lifespan and optional auth configured
@@ -1563,7 +1572,7 @@ class ZammadMCPServer:
                 "Ensure the MCP client authenticates via the configured auth provider."
             )
 
-        return ZammadClient(oauth2_token=access_token.token)
+        return ZammadClient(oauth2_token=access_token.token, audit_logger=self.audit)
 
     async def initialize(self) -> None:
         """Initialize the Zammad client on server startup."""
@@ -2805,7 +2814,13 @@ class ZammadMCPServer:
             return User(**user_data)
 
     def _get_cached_groups(self) -> list[Group]:
-        """Get cached list of groups."""
+        """Get cached list of groups.
+
+        Zammad filters groups by the caller's permissions, so with OAuth (one identity
+        per request) the list is fetched per call instead of shared across users.
+        """
+        if self.auth_config.enabled:
+            return [Group(**group) for group in self.get_client().get_groups()]
         if not hasattr(self, "_groups_cache"):
             client = self.get_client()
             groups_data = client.get_groups()

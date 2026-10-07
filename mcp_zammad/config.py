@@ -136,6 +136,19 @@ class TransportConfig:
             if self.host is None:
                 self.host = "127.0.0.1"
 
+            self._validate_ssl_files()
+
+    def _validate_ssl_files(self) -> None:
+        """Require the SSL certificate and key together, and check both are readable files."""
+        if bool(self.ssl_certfile) != bool(self.ssl_keyfile):
+            raise ValueError(
+                "MCP_SSL_CERTFILE and MCP_SSL_KEYFILE must be set together; "
+                "set both to enable HTTPS, or neither to serve plain HTTP."
+            )
+        for var, path in (("MCP_SSL_CERTFILE", self.ssl_certfile), ("MCP_SSL_KEYFILE", self.ssl_keyfile)):
+            if path and not (os.path.isfile(path) and os.access(path, os.R_OK)):
+                raise ValueError(f"{var} must point to a readable file, got: {path}")
+
     def get_uvicorn_config(self) -> dict[str, object] | None:
         """Build uvicorn extras (SSL settings) for ``mcp.run()``, or None if empty."""
         config: dict[str, object] = {}
@@ -242,10 +255,10 @@ class AuthConfig:
             return None
 
         self.validate()
-        assert self.zammad_base_url is not None  # guaranteed by validate()
-        assert self.client_id is not None
-        assert self.client_secret is not None
-        assert self.base_url is not None
+        # validate() guarantees these; the explicit check narrows the types and,
+        # unlike assert, survives python -O.
+        if not (self.zammad_base_url and self.client_id and self.client_secret and self.base_url):
+            raise ValueError("OAuth configuration is incomplete")
 
         authorize_url = f"{self.zammad_base_url}/oauth/authorize"
         token_url = f"{self.zammad_base_url}/oauth/token"

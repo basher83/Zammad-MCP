@@ -2,6 +2,7 @@
 
 import base64
 import json
+import logging
 import os
 import pathlib
 import tempfile
@@ -1826,7 +1827,7 @@ def test_get_client_auth_enabled_forwards_token(monkeypatch):
         result = server.get_client()
 
         assert result is mock_client_instance
-        mock_client_class.assert_called_once_with(oauth2_token="upstream-zammad-token-123")
+        mock_client_class.assert_called_once_with(oauth2_token="upstream-zammad-token-123", audit_logger=server.audit)
 
 
 def test_get_client_auth_enabled_no_token_raises():
@@ -1842,10 +1843,27 @@ def test_get_client_auth_enabled_no_token_raises():
         server.get_client()
 
 
+def test_auth_settings_ignored_on_stdio_transport(monkeypatch, caplog):
+    """OAuth needs HTTP; on stdio the MCP_AUTH_* settings are ignored with a warning."""
+    monkeypatch.setenv("ZAMMAD_URL", "https://your-instance.zammad.com/api/v1")
+    monkeypatch.setenv("MCP_AUTH_CLIENT_ID", "test-id")
+    monkeypatch.setenv("MCP_AUTH_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("MCP_AUTH_BASE_URL", "https://localhost:8000")
+    monkeypatch.delenv("MCP_TRANSPORT", raising=False)
+
+    with patch("mcp_zammad.config.OAuthProxy") as mock_proxy, caplog.at_level(logging.WARNING):
+        server = ZammadMCPServer()
+
+    assert not server.auth_config.enabled
+    mock_proxy.assert_not_called()
+    assert "OAuth requires MCP_TRANSPORT=http" in caplog.text
+
+
 @pytest.mark.asyncio
 async def test_initialize_auth_enabled_skips_static_client(monkeypatch):
     """Test initialize returns early when auth is enabled."""
     monkeypatch.setenv("ZAMMAD_URL", "https://your-instance.zammad.com/api/v1")
+    monkeypatch.setenv("MCP_TRANSPORT", "http")
     monkeypatch.setenv("MCP_AUTH_CLIENT_ID", "test-id")
     monkeypatch.setenv("MCP_AUTH_CLIENT_SECRET", "test-secret")
     monkeypatch.setenv("MCP_AUTH_BASE_URL", "http://localhost:8000")
@@ -2173,6 +2191,29 @@ class TestCachingMethods:
         assert result1 == result2
         # Still only called once
         server.client.get_groups.assert_called_once()
+
+    def test_groups_not_shared_across_users_with_oauth(self) -> None:
+        """With OAuth, groups are permission-scoped per user and must not be cached on the server."""
+        server = ZammadMCPServer()
+        server.auth_config = Mock()
+        server.auth_config.enabled = True
+        group = {
+            "id": 1,
+            "name": "Users",
+            "active": True,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "created_by_id": 1,
+            "updated_by_id": 1,
+        }
+        first_user, second_user = Mock(), Mock()
+        first_user.get_groups.return_value = [group]
+        second_user.get_groups.return_value = []
+
+        with patch.object(server, "get_client", side_effect=[first_user, second_user]):
+            assert len(server._get_cached_groups()) == 1
+            assert server._get_cached_groups() == []
+        assert not hasattr(server, "_groups_cache")
 
     def test_cached_states(self) -> None:
         """Test that ticket states are cached properly."""

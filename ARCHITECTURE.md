@@ -185,7 +185,7 @@ forwarded to the API — each user acts under their own identity.
 ```bash
 MCP_AUTH_CLIENT_ID=...                          # Zammad OAuth app client ID
 MCP_AUTH_CLIENT_SECRET=...                      # Zammad OAuth app client secret
-MCP_AUTH_BASE_URL=http://localhost:8000          # This MCP server's URL
+MCP_AUTH_BASE_URL=https://localhost:8000        # This MCP server's URL
 # OAuth endpoints (/oauth/authorize, /oauth/token) derived from ZAMMAD_URL
 ```
 
