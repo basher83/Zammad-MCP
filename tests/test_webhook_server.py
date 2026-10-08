@@ -154,6 +154,31 @@ async def test_list_events_cursor_pages_backlog_larger_than_limit_to_completion(
 
 
 @pytest.mark.asyncio
+async def test_list_events_with_oauth_hides_tickets_the_caller_cannot_read(
+    server_with_secret: ZammadMCPServer, zammad_client: Mock
+) -> None:
+    """The event store is shared, so OAuth users only see events for tickets they may read."""
+    store = server_with_secret.event_store
+    base = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
+    for minute, ticket_id in ((1, 1), (2, 2), (3, 1)):
+        store.append(
+            WebhookEvent(event_type="ticket.update", ticket_id=ticket_id, received_at=base.replace(minute=minute))
+        )
+    server_with_secret.auth_config = Mock(enabled=True)
+    zammad_client.can_access_ticket.side_effect = lambda ticket_id: ticket_id != 2
+
+    with patch.object(server_with_secret, "get_client", return_value=zammad_client):
+        async with Client(server_with_secret.mcp) as client:
+            data = (await client.call_tool("zammad_list_events", {"limit": 3})).structured_content
+
+    assert [e["ticket_id"] for e in data["events"]] == [1, 1]
+    assert data["count"] == 2
+    # Each distinct ticket is checked once, and the cursor still covers the whole page.
+    assert zammad_client.can_access_ticket.call_count == 2
+    assert data["next_since"].startswith("2026-09-08T12:03:00")
+
+
+@pytest.mark.asyncio
 async def test_list_events_tool_rejects_invalid_limit(server_with_secret: ZammadMCPServer) -> None:
     async with Client(server_with_secret.mcp) as client:
         result = await client.call_tool("zammad_list_events", {"limit": 0}, raise_on_error=False)

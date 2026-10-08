@@ -202,7 +202,7 @@ class AuthConfig:
             AuthConfig instance (all None means auth disabled).
         """
         zammad_url = os.getenv("ZAMMAD_URL", "")
-        zammad_base = zammad_url.removesuffix("/api/v1").rstrip("/") or None
+        zammad_base = zammad_url.rstrip("/").removesuffix("/api/v1").rstrip("/") or None
 
         return cls(
             client_id=os.getenv("MCP_AUTH_CLIENT_ID"),

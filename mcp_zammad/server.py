@@ -28,7 +28,7 @@ from .audit import AuditConfig, AuditLogger, error_details
 from .audit_middleware import AuditMiddleware
 from .client import ZammadClient
 from .config import AuthConfig, TransportType
-from .events import EventStore, ListEventsParams, ListEventsResult
+from .events import EventStore, ListEventsParams, ListEventsResult, WebhookEvent
 from .logging_config import configure_logging
 from .models import (
     Article,
@@ -1642,15 +1642,38 @@ class ZammadMCPServer:
 
             Error Handling:
                 - Returns a validation error if limit is outside 1-100 or since is not ISO 8601
+                - With OAuth enabled, events for tickets the caller cannot read are left out,
+                  so a page can hold fewer than `limit` events; keep following `next_since`
             """
             events = self.event_store.list(since=params.since, limit=params.limit)
+            # Advance the cursor over the whole page, including events filtered out below,
+            # so draining never stalls on tickets the caller cannot see.
+            next_since = events[-1].received_at if events else None
+            if self.auth_config.enabled:
+                events = self._filter_events_by_ticket_access(events)
             return ListEventsResult(
                 events=events,
                 count=len(events),
                 capacity=self.event_store.capacity,
                 retained_total=len(self.event_store),
-                next_since=events[-1].received_at if events else None,
+                next_since=next_since,
             )
+
+    def _filter_events_by_ticket_access(self, events: list[WebhookEvent]) -> list[WebhookEvent]:
+        """Keep only events whose ticket the request's user may read.
+
+        The event store is shared by every user of the process, while OAuth users
+        hold different Zammad permissions. Each distinct ticket is checked once.
+        """
+        client = self.get_client()
+        access: dict[int, bool] = {}
+        allowed = []
+        for event in events:
+            if event.ticket_id not in access:
+                access[event.ticket_id] = client.can_access_ticket(event.ticket_id)
+            if access[event.ticket_id]:
+                allowed.append(event)
+        return allowed
 
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""

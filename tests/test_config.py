@@ -176,6 +176,15 @@ def test_auth_config_strips_api_suffix_from_zammad_url(monkeypatch) -> None:
     assert config.zammad_base_url == "https://tickets.example.com"
 
 
+def test_auth_config_strips_api_suffix_with_trailing_slash(monkeypatch) -> None:
+    """A trailing slash after /api/v1 must not leak the API path into the OAuth endpoints."""
+    monkeypatch.setenv("ZAMMAD_URL", "https://tickets.example.com/api/v1/")
+    monkeypatch.setenv("MCP_AUTH_CLIENT_ID", "test-id")
+
+    config = AuthConfig.from_env()
+    assert config.zammad_base_url == "https://tickets.example.com"
+
+
 def test_auth_config_zammad_url_without_api_suffix(monkeypatch) -> None:
     """Test ZAMMAD_URL without /api/v1 suffix is used as-is."""
     monkeypatch.setenv("ZAMMAD_URL", "https://tickets.example.com")

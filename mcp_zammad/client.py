@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 _HTTP_OK = 200
 _HTTP_MULTIPLE_CHOICES = 300
 _HTTP_NO_CONTENT = 204
+_HTTP_FORBIDDEN = 403
 _HTTP_NOT_FOUND = 404
 
 
@@ -80,19 +81,28 @@ class ZammadClient:
         verification.
 
         Pass audit_logger to receive security_validation events for URL checks.
+
+        An explicit oauth2_token (the per-request token of an OAuth-authenticated
+        user) suppresses the environment-derived static credentials. zammad_py
+        prefers an HTTP token over an OAuth2 token, so a leftover ZAMMAD_HTTP_TOKEN
+        would otherwise make every user act as the static account.
         """
         self._audit = audit_logger
         self.url = url or os.getenv("ZAMMAD_URL")
-        self.username = username or os.getenv("ZAMMAD_USERNAME")
 
-        # Try to read secrets from files first (Docker secrets pattern)
-        self.password = password or self._read_secret_file("ZAMMAD_PASSWORD_FILE") or os.getenv("ZAMMAD_PASSWORD")
-        self.http_token = (
-            http_token or self._read_secret_file("ZAMMAD_HTTP_TOKEN_FILE") or os.getenv("ZAMMAD_HTTP_TOKEN")
-        )
-        self.oauth2_token = (
-            oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
-        )
+        if oauth2_token:
+            self.username = username
+            self.password = password
+            self.http_token = http_token
+            self.oauth2_token: str | None = oauth2_token
+        else:
+            self.username = username or os.getenv("ZAMMAD_USERNAME")
+            # Try to read secrets from files first (Docker secrets pattern)
+            self.password = password or self._read_secret_file("ZAMMAD_PASSWORD_FILE") or os.getenv("ZAMMAD_PASSWORD")
+            self.http_token = (
+                http_token or self._read_secret_file("ZAMMAD_HTTP_TOKEN_FILE") or os.getenv("ZAMMAD_HTTP_TOKEN")
+            )
+            self.oauth2_token = self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
         self.insecure = insecure if insecure is not None else ZammadClient._parse_bool_env("ZAMMAD_INSECURE")
         self.resilience = ResilienceConfig.from_env()
 
@@ -304,6 +314,20 @@ class ZammadClient:
         if not response.ok:
             raise requests.HTTPError(response.text)
         return dict(response.json())
+
+    def can_access_ticket(self, ticket_id: int) -> bool:
+        """Return whether the authenticated user may read the ticket.
+
+        Zammad answers 403 for tickets outside the user's permissions and 404
+        for deleted ones; both mean "no access". Other failures raise
+        :class:`ZammadAPIError` rather than silently hiding the ticket.
+        """
+        response = self.api.session.get(f"{self.api.url}tickets/{ticket_id}", timeout=REQUEST_TIMEOUT_SECONDS)
+        if response.ok:
+            return True
+        if response.status_code in (_HTTP_FORBIDDEN, _HTTP_NOT_FOUND):
+            return False
+        raise ZammadAPIError(response.status_code, response.url, response.text)
 
     def get_ticket(
         self, ticket_id: int, include_articles: bool = True, article_limit: int = 10, article_offset: int = 0

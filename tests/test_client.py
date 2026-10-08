@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp_zammad.client import ConfigException, ZammadClient
+from mcp_zammad.client import ConfigException, ZammadAPIError, ZammadClient
 
 # Non-secret placeholder for tests (avoids bandit S106 on auth kwargs)
 _TEST_AUTH_VALUE = "test-auth-value"
@@ -61,6 +61,62 @@ def test_client_accepts_http_token(mock_api: MagicMock) -> None:
         assert client.url == "https://test.zammad.com/api/v1"
         assert client.http_token == "test-token"
         mock_api.assert_called_once()
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_explicit_oauth2_token_suppresses_static_env_credentials(mock_api: MagicMock) -> None:
+    """A per-request OAuth token must not be overridden by static credentials from the environment."""
+    with patch.dict(
+        os.environ,
+        {
+            "ZAMMAD_URL": "https://test.zammad.com/api/v1",
+            "ZAMMAD_HTTP_TOKEN": "static-token",
+            "ZAMMAD_USERNAME": "static-user",
+            "ZAMMAD_PASSWORD": "static-password",
+        },
+        clear=True,
+    ):
+        client = ZammadClient(oauth2_token=_TEST_AUTH_VALUE)
+
+    assert client.http_token is None
+    assert client.username is None
+    assert client.password is None
+    mock_api.assert_called_once_with(
+        url="https://test.zammad.com/api/v1",
+        username=None,
+        password=None,
+        http_token=None,
+        oauth2_token=_TEST_AUTH_VALUE,
+    )
+
+
+@pytest.mark.parametrize(
+    ("ok", "status_code", "expected"),
+    [(True, 200, True), (False, 403, False), (False, 404, False)],
+)
+@patch("mcp_zammad.client.ZammadAPI")
+def test_can_access_ticket(mock_api: MagicMock, ok: bool, status_code: int, expected: bool) -> None:
+    """403 and 404 mean the user cannot read the ticket; 2xx means they can."""
+    mock_api.return_value.url = "https://test.zammad.com/api/v1/"
+    client = ZammadClient(url="https://test.zammad.com/api/v1", oauth2_token=_TEST_AUTH_VALUE)
+    client.api.session = MagicMock()  # replaces the ResilientSession wrapper
+    client.api.session.get.return_value = MagicMock(ok=ok, status_code=status_code)
+
+    assert client.can_access_ticket(7) is expected
+    assert client.api.session.get.call_args.args[0] == "https://test.zammad.com/api/v1/tickets/7"
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_can_access_ticket_raises_on_other_errors(mock_api: MagicMock) -> None:
+    """Server errors must surface instead of silently hiding the ticket."""
+    mock_api.return_value.url = "https://test.zammad.com/api/v1/"
+    client = ZammadClient(url="https://test.zammad.com/api/v1", oauth2_token=_TEST_AUTH_VALUE)
+    client.api.session = MagicMock()  # replaces the ResilientSession wrapper
+    client.api.session.get.return_value = MagicMock(ok=False, status_code=500, text="boom")
+
+    with pytest.raises(ZammadAPIError) as exc_info:
+        client.can_access_ticket(7)
+    assert exc_info.value.status_code == 500
 
 
 @pytest.mark.parametrize("truthy", ["1", "true", "yes", "on"])
