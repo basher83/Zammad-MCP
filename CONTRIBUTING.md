@@ -29,6 +29,8 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
 
    If mise asks you to trust the repository configuration, run `mise trust`.
 
+   A cloud agent session (for example Claude Code on the web) needs only mise from its environment setup script (`curl https://mise.run | sh`). The repository's SessionStart hook (`.claude/hooks/session-start.sh`) then runs `mise run cloud-setup` and puts the mise shims first on the session PATH. The task installs the tools from `mise.lock` with `--locked`, syncs `.venv` from `uv.lock`, and installs the prek commit hooks. It leaves out the optional Infisical and CodeRabbit steps of `setup` and `hooks-install`.
+
 4. Create a `.env` file with your Zammad credentials:
 
    ```env

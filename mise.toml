@@ -139,6 +139,14 @@ description = "Release gates: lint + full coverage suite + build"
 run = "./scripts/validate.sh release"
 
 # === Hooks tasks ===
+[tasks.cloud-setup]
+description = "Set up a cloud agent session: tools from mise.lock, the venv from uv.lock, and the prek commit hooks"
+run = """
+mise install --locked
+uv sync --frozen
+prek install
+"""
+
 [tasks.hooks-install]
 description = "Install pre-commit and infisical hooks"
 run = "prek install && infisical scan install --pre-commit-hook"
