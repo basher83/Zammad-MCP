@@ -1,5 +1,7 @@
 """Tests for Zammad client configuration and error handling."""
 
+import atexit
+import gc
 import logging
 import os
 from unittest.mock import MagicMock, patch
@@ -88,6 +90,25 @@ def test_explicit_oauth2_token_suppresses_static_env_credentials(mock_api: Magic
         http_token=None,
         oauth2_token=_TEST_AUTH_VALUE,
     )
+
+
+def test_per_request_clients_do_not_accumulate_atexit_handlers() -> None:
+    """zammad-py's per-session atexit cleanup must not pile up when the server builds a client per request."""
+    before = atexit._ncallbacks()
+    for _ in range(5):
+        ZammadClient(url="https://test.zammad.com/api/v1", oauth2_token=_TEST_AUTH_VALUE)
+    assert atexit._ncallbacks() == before
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_client_closes_its_session_when_garbage_collected(mock_api: MagicMock) -> None:
+    """The finalizer that replaces the atexit handler closes the underlying session."""
+    raw_session = mock_api.return_value.session
+    client = ZammadClient(url="https://test.zammad.com/api/v1", oauth2_token=_TEST_AUTH_VALUE)
+
+    del client
+    gc.collect()
+    raw_session.close.assert_called_once()
 
 
 @pytest.mark.parametrize(

@@ -5,12 +5,15 @@ import ipaddress
 import logging
 import os
 import re as _re
+import weakref
 from collections import deque
 from datetime import date, datetime
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import quote, urlparse
 
 import requests
+import zammad_py.api as _zammad_py_api
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
@@ -49,6 +52,13 @@ class ZammadAPIError(Exception):
         self.body = body
         super().__init__(f"HTTP {status_code} from Zammad: {body} (URL: {url})")
 
+
+# ZammadAPI.__init__ registers ``atexit.register(self.session.close)`` (its only use of
+# atexit). CPython's atexit table never shrinks, even on unregister, so with OAuth (one
+# client per request) every request would leave an entry behind for the life of the
+# process. ZammadClient closes the session through a weakref.finalize instead, so stub
+# out the registration for every ZammadAPI this process builds.
+setattr(_zammad_py_api, "atexit", SimpleNamespace(register=lambda func: func))  # noqa: B010
 
 # Direct session calls bypass zammad_py, which sets no timeout; bound them so a
 # stalled Zammad server cannot hang a tool call indefinitely.
@@ -148,9 +158,14 @@ class ZammadClient:
                 "TLS certificate verification is disabled (ZAMMAD_INSECURE=true). "
                 "urllib3 may emit InsecureRequestWarning on requests; fix or trust the server certificate when possible."
             )
+        # Replaces zammad-py's atexit cleanup (stubbed out above): close the session when
+        # this client is garbage-collected, or at exit if it is still alive.
+        raw_session = self.api.session
+        if raw_session is not None:
+            weakref.finalize(self, raw_session.close)
         # zammad-py routes every resource call through this session, so wrapping it once
         # gives rate limiting, retries, and circuit breaking to all API operations.
-        self.api.session = ResilientSession(self.api.session, self.resilience)
+        self.api.session = ResilientSession(raw_session, self.resilience)
 
     def _validate_url(self, url: str) -> None:
         """Validate URL format to prevent SSRF attacks."""
