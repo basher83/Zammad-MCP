@@ -1645,12 +1645,11 @@ class ZammadMCPServer:
                 - With OAuth enabled, events for tickets the caller cannot read are left out,
                   so a page can hold fewer than `limit` events; keep following `next_since`
             """
-            events = self.event_store.list(since=params.since, limit=params.limit)
-            # Advance the cursor over the whole page, including events filtered out below,
-            # so draining never stalls on tickets the caller cannot see.
-            next_since = events[-1].received_at if events else None
             if self.auth_config.enabled:
-                events = self._filter_events_by_ticket_access(events)
+                events, next_since = self._list_permitted_events(params.since, params.limit)
+            else:
+                events = self.event_store.list(since=params.since, limit=params.limit)
+                next_since = events[-1].received_at if events else None
             return ListEventsResult(
                 events=events,
                 count=len(events),
@@ -1659,21 +1658,29 @@ class ZammadMCPServer:
                 next_since=next_since,
             )
 
-    def _filter_events_by_ticket_access(self, events: list[WebhookEvent]) -> list[WebhookEvent]:
-        """Keep only events whose ticket the request's user may read.
+    def _list_permitted_events(self, since: datetime | None, limit: int) -> tuple[list[WebhookEvent], datetime | None]:
+        """Return the next page of events whose ticket the request's user may read.
 
         The event store is shared by every user of the process, while OAuth users
-        hold different Zammad permissions. Each distinct ticket is checked once.
+        hold different Zammad permissions. Pages whose events are all hidden are
+        skipped, so an empty result means the store holds nothing further for this
+        user and callers that stop on an empty page miss nothing. The cursor covers
+        every scanned event, hidden ones included. Each distinct ticket is checked once.
         """
         client = self.get_client()
         access: dict[int, bool] = {}
-        allowed = []
-        for event in events:
-            if event.ticket_id not in access:
-                access[event.ticket_id] = client.can_access_ticket(event.ticket_id)
-            if access[event.ticket_id]:
-                allowed.append(event)
-        return allowed
+        cursor, next_since = since, None
+        while page := self.event_store.list(since=cursor, limit=limit):
+            cursor = next_since = page[-1].received_at
+            permitted = []
+            for event in page:
+                if event.ticket_id not in access:
+                    access[event.ticket_id] = client.can_access_ticket(event.ticket_id)
+                if access[event.ticket_id]:
+                    permitted.append(event)
+            if permitted:
+                return permitted, next_since
+        return [], next_since
 
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""

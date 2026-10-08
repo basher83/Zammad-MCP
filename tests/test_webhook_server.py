@@ -179,6 +179,32 @@ async def test_list_events_with_oauth_hides_tickets_the_caller_cannot_read(
 
 
 @pytest.mark.asyncio
+async def test_list_events_with_oauth_skips_pages_that_are_entirely_hidden(
+    server_with_secret: ZammadMCPServer, zammad_client: Mock
+) -> None:
+    """An all-hidden page must not end paging early while permitted events remain further on."""
+    store = server_with_secret.event_store
+    base = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
+    for minute, ticket_id in ((1, 2), (2, 2), (3, 1)):
+        store.append(
+            WebhookEvent(event_type="ticket.update", ticket_id=ticket_id, received_at=base.replace(minute=minute))
+        )
+    server_with_secret.auth_config = Mock(enabled=True)
+    zammad_client.can_access_ticket.side_effect = lambda ticket_id: ticket_id != 2
+
+    with patch.object(server_with_secret, "get_client", return_value=zammad_client):
+        async with Client(server_with_secret.mcp) as client:
+            first = (await client.call_tool("zammad_list_events", {"limit": 2})).structured_content
+            rest = (
+                await client.call_tool("zammad_list_events", {"limit": 2, "since": first["next_since"]})
+            ).structured_content
+
+    assert [e["ticket_id"] for e in first["events"]] == [1]
+    assert first["next_since"].startswith("2026-09-08T12:03:00")
+    assert rest["events"] == []
+
+
+@pytest.mark.asyncio
 async def test_list_events_tool_rejects_invalid_limit(server_with_secret: ZammadMCPServer) -> None:
     async with Client(server_with_secret.mcp) as client:
         result = await client.call_tool("zammad_list_events", {"limit": 0}, raise_on_error=False)
