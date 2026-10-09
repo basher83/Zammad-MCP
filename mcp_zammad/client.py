@@ -5,12 +5,15 @@ import ipaddress
 import logging
 import os
 import re as _re
+import weakref
 from collections import deque
 from datetime import date, datetime
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import quote, urlparse
 
 import requests
+import zammad_py.api as _zammad_py_api
 from zammad_py import ZammadAPI
 from zammad_py.exceptions import ConfigException
 
@@ -25,6 +28,7 @@ logger = logging.getLogger(__name__)
 _HTTP_OK = 200
 _HTTP_MULTIPLE_CHOICES = 300
 _HTTP_NO_CONTENT = 204
+_HTTP_FORBIDDEN = 403
 _HTTP_NOT_FOUND = 404
 
 
@@ -48,6 +52,13 @@ class ZammadAPIError(Exception):
         self.body = body
         super().__init__(f"HTTP {status_code} from Zammad: {body} (URL: {url})")
 
+
+# ZammadAPI.__init__ registers ``atexit.register(self.session.close)`` (its only use of
+# atexit). CPython's atexit table never shrinks, even on unregister, so with OAuth (one
+# client per request) every request would leave an entry behind for the life of the
+# process. ZammadClient closes the session through a weakref.finalize instead, so stub
+# out the registration for every ZammadAPI this process builds.
+setattr(_zammad_py_api, "atexit", SimpleNamespace(register=lambda func: func))  # noqa: B010
 
 # Direct session calls bypass zammad_py, which sets no timeout; bound them so a
 # stalled Zammad server cannot hang a tool call indefinitely.
@@ -80,19 +91,28 @@ class ZammadClient:
         verification.
 
         Pass audit_logger to receive security_validation events for URL checks.
+
+        An explicit oauth2_token (the per-request token of an OAuth-authenticated
+        user) suppresses the environment-derived static credentials. zammad_py
+        prefers an HTTP token over an OAuth2 token, so a leftover ZAMMAD_HTTP_TOKEN
+        would otherwise make every user act as the static account.
         """
         self._audit = audit_logger
         self.url = url or os.getenv("ZAMMAD_URL")
-        self.username = username or os.getenv("ZAMMAD_USERNAME")
 
-        # Try to read secrets from files first (Docker secrets pattern)
-        self.password = password or self._read_secret_file("ZAMMAD_PASSWORD_FILE") or os.getenv("ZAMMAD_PASSWORD")
-        self.http_token = (
-            http_token or self._read_secret_file("ZAMMAD_HTTP_TOKEN_FILE") or os.getenv("ZAMMAD_HTTP_TOKEN")
-        )
-        self.oauth2_token = (
-            oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
-        )
+        if oauth2_token:
+            self.username = username
+            self.password = password
+            self.http_token = http_token
+            self.oauth2_token: str | None = oauth2_token
+        else:
+            self.username = username or os.getenv("ZAMMAD_USERNAME")
+            # Try to read secrets from files first (Docker secrets pattern)
+            self.password = password or self._read_secret_file("ZAMMAD_PASSWORD_FILE") or os.getenv("ZAMMAD_PASSWORD")
+            self.http_token = (
+                http_token or self._read_secret_file("ZAMMAD_HTTP_TOKEN_FILE") or os.getenv("ZAMMAD_HTTP_TOKEN")
+            )
+            self.oauth2_token = self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
         self.insecure = insecure if insecure is not None else ZammadClient._parse_bool_env("ZAMMAD_INSECURE")
         self.resilience = ResilienceConfig.from_env()
 
@@ -138,9 +158,14 @@ class ZammadClient:
                 "TLS certificate verification is disabled (ZAMMAD_INSECURE=true). "
                 "urllib3 may emit InsecureRequestWarning on requests; fix or trust the server certificate when possible."
             )
+        # Replaces zammad-py's atexit cleanup (stubbed out above): close the session when
+        # this client is garbage-collected, or at exit if it is still alive.
+        raw_session = self.api.session
+        if raw_session is not None:
+            weakref.finalize(self, raw_session.close)
         # zammad-py routes every resource call through this session, so wrapping it once
         # gives rate limiting, retries, and circuit breaking to all API operations.
-        self.api.session = ResilientSession(self.api.session, self.resilience)
+        self.api.session = ResilientSession(raw_session, self.resilience)
 
     def _validate_url(self, url: str) -> None:
         """Validate URL format to prevent SSRF attacks."""
@@ -304,6 +329,20 @@ class ZammadClient:
         if not response.ok:
             raise requests.HTTPError(response.text)
         return dict(response.json())
+
+    def can_access_ticket(self, ticket_id: int) -> bool:
+        """Return whether the authenticated user may read the ticket.
+
+        Zammad answers 403 for tickets outside the user's permissions and 404
+        for deleted ones; both mean "no access". Other failures raise
+        :class:`ZammadAPIError` rather than silently hiding the ticket.
+        """
+        response = self.api.session.get(f"{self.api.url}tickets/{ticket_id}", timeout=REQUEST_TIMEOUT_SECONDS)
+        if response.ok:
+            return True
+        if response.status_code in (_HTTP_FORBIDDEN, _HTTP_NOT_FOUND):
+            return False
+        raise ZammadAPIError(response.status_code, response.url, response.text)
 
     def get_ticket(
         self, ticket_id: int, include_articles: bool = True, article_limit: int = 10, article_offset: int = 0

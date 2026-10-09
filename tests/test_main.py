@@ -51,7 +51,7 @@ def test_main_with_http_transport(monkeypatch: pytest.MonkeyPatch) -> None:
 
     main()
 
-    mock_mcp.run.assert_called_once_with(transport="http", host="127.0.0.1", port=8000)
+    mock_mcp.run.assert_called_once_with(transport="http", host="127.0.0.1", port=8000, uvicorn_config=None)
 
 
 def test_main_with_stdio_transport_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -66,21 +66,20 @@ def test_main_with_stdio_transport_default(monkeypatch: pytest.MonkeyPatch) -> N
     mock_mcp.run.assert_called_once_with()
 
 
-def test_main_validates_http_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test main validates HTTP configuration before importing the server module."""
+def test_main_http_defaults_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test HTTP transport defaults to port 8000 when MCP_PORT is not set."""
     monkeypatch.setenv("MCP_TRANSPORT", "http")
     monkeypatch.delenv("MCP_PORT", raising=False)
+    monkeypatch.delenv("MCP_HOST", raising=False)
     mock_mcp = _install_fake_server(monkeypatch)
 
-    with pytest.raises(ValueError) as excinfo:
-        main()
+    main()
 
-    assert "HTTP transport requires MCP_PORT" in str(excinfo.value)
-    mock_mcp.run.assert_not_called()
+    mock_mcp.run.assert_called_once_with(transport="http", host="127.0.0.1", port=8000, uvicorn_config=None)
 
 
-def test_main_validates_bad_port_before_server_import(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test invalid MCP_PORT fails through config validation before server import side effects."""
+def test_main_validates_bad_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test invalid MCP_PORT fails config validation before server import."""
     monkeypatch.setenv("MCP_TRANSPORT", "http")
     monkeypatch.setenv("MCP_PORT", "not-a-port")
 
