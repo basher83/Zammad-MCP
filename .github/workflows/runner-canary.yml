@@ -1,0 +1,20 @@
+# Canary for #392. The pinned runner gives Renovate a runner update to propose, so we can observe
+# which checks gate automerge. Keep the version pinned; do not switch it to ubuntu-latest.
+name: Runner Canary
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  runner-canary:
+    runs-on: ubuntu-24.04
+    if: github.repository == 'basher83/Zammad-MCP'
+    steps:
+      - name: Report runner image
+        run: |
+          echo "ImageOS=${ImageOS:-unknown} ImageVersion=${ImageVersion:-unknown}"
+          grep PRETTY_NAME /etc/os-release
