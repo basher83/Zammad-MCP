@@ -243,8 +243,9 @@ Putting it all together:
 2. Renovate opens a PR against `main`.
 3. GitHub runs the required checks: `Tests and Coverage` as `test-and-coverage`, and `Security Scan` as `security-scan`.
 4. When Renovate opens the PR, it also enables GitHub auto-merge on it (Renovate's `platformAutomerge` default, with "Allow auto-merge" on in this repository). As soon as both required checks succeed, GitHub merges the PR into `main` and closes it, without waiting for non-required checks. This is the “no visible PR” experience when updates move quickly. #392 recorded a merge 11 seconds after `test-and-coverage` passed, while a non-required check was still running.
-5. If a required check fails or the update requires approval, such as a `zammad-py` major, MCP major, sensitive Actions update, or critical Docker image update, Renovate does not merge. The PR remains open, and rules using `dependencyDashboardApproval: true` wait for explicit approval from the Dependency Dashboard.
+5. If a required check fails, GitHub does not merge the PR, and it stays open until a new commit passes.
    A failing non-required check does not stop the merge. Watch `build-and-push` and the CodeQL and Codacy results on merged Renovate PRs, or make a check required if it must gate merges.
+6. Updates that require approval, such as a `zammad-py` major, MCP major, sensitive Actions update, or critical Docker image update, use `dependencyDashboardApproval: true`. Renovate does not create a branch or PR for them. They stay under "Pending Approval" on the Dependency Dashboard until someone approves them there. After approval, Renovate opens the PR. It automerges through steps 4 and 5 only if an automerge rule also matches, as for GitHub-hosted runner updates; otherwise it waits for a manual merge.
 
 This gives a clear separation between:
 
