@@ -1,7 +1,9 @@
 # Canary for #392. The pinned runner gives Renovate a runner update to propose, so we can observe
 # which checks gate automerge. Keep the version pinned; do not switch it to ubuntu-latest.
-# On Renovate branches the job waits five minutes, so it finishes after the required checks. If an
-# automerge PR merges while this check is still running, GitHub-native auto-merge decided the merge.
+# On Renovate branches the job waits five minutes. That is an empirical window: the required checks
+# took about two minutes in #394, but nothing guarantees they finish first. If an automerge PR merges
+# while this check is still running, GitHub-native auto-merge decided the merge, because Renovate's
+# own gate waits for every check. If this check finishes first, the run is inconclusive.
 name: Runner Canary
 
 on:
