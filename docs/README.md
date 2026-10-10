@@ -10,6 +10,7 @@ These documents describe the current server and repository.
 | Document | Use it to |
 |---|---|
 | [HTTP transport deployment](deployment/http-transport.md) | Deploy the HTTP transport behind a reverse proxy, receive webhook events, and troubleshoot access |
+| [OAuth for remote harnesses](deployment/oauth-harnesses.md) | Optionally let a harness such as Claude.ai sign each person in, and have Zammad use that person's account |
 | [Configuration reference](reference/configuration.md) | Look up every environment variable with its default and allowed values |
 | [Renovate and branch rules](dev/renovate-and-branch-rules.md) | Understand dependency updates and branch protection |
 | [Architecture](../ARCHITECTURE.md) | Understand components, boundaries, and design constraints |
