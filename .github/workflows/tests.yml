@@ -20,7 +20,7 @@ jobs:
       - name: Install Python and uv from mise.toml
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
-          version: "2026.10.3"
+          version: "2026.10.7"
           install_args: python uv
 
       - name: Restore uv cache
@@ -60,7 +60,7 @@ jobs:
       - name: Install uv from mise.toml
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
-          version: "2026.10.3"
+          version: "2026.10.7"
           install_args: uv
           # The mise environment sets UV_PYTHON to the pinned 3.13 interpreter
           # and would override the matrix value, so do not export it.
@@ -123,7 +123,7 @@ jobs:
           language: python
 
       - name: Upload coverage reports as artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: coverage-reports-python-${{ matrix.python-version }}
