@@ -29,6 +29,8 @@ Thank you for your interest in contributing to the Zammad MCP Server! This docum
 
    If mise asks you to trust the repository configuration, run `mise trust`.
 
+   A cloud agent session (for example Claude Code on the web) needs only mise from its environment setup script (`curl https://mise.run | sh`). The repository's SessionStart hook (`.claude/hooks/session-start.sh`) then runs `mise run cloud-setup` and puts the mise shims first on the session PATH. The task installs the tools from `mise.lock` with `--locked`, syncs `.venv` from `uv.lock`, and installs the prek commit hooks. It leaves out the optional Infisical and CodeRabbit steps of `setup` and `hooks-install`.
+
 4. Create a `.env` file with your Zammad credentials:
 
    ```env
@@ -126,7 +128,7 @@ def test_error_handling():
 
 ## GitHub Workflows / CI/CD Pipeline
 
-The repository includes several GitHub Actions workflows that run automatically to ensure code quality, security, and proper deployment. All workflows use `uv` for Python dependency management.
+The repository includes several GitHub Actions workflows that run automatically to ensure code quality, security, and proper deployment. The Python workflows install uv, and where needed Python, from `mise.toml` and `mise.lock` with `jdx/mise-action`. They use `uv` for Python dependency management.
 
 ### Workflow Overview
 
@@ -142,8 +144,8 @@ The repository includes several GitHub Actions workflows that run automatically 
 
 - **Purpose**: Ensures code quality and functionality
 - **Jobs**:
-  - `validate`: runs `./scripts/validate.sh release` (lint, full coverage suite, package build) on Python 3.13
-  - `tests`: runs the full pytest suite with coverage on a Python 3.10, 3.11, 3.12, and 3.13 matrix. It uploads coverage reports as artifacts and writes a coverage summary to the job summary
+  - `validate`: runs `./scripts/validate.sh release` (lint, full coverage suite, package build) on the Python version pinned in `mise.toml`
+  - `tests`: runs the full pytest suite with coverage on a Python 3.10, 3.11, 3.12, and 3.13 matrix. Each leg sets `UV_PYTHON` to its version and fails if it runs a different interpreter. It uploads coverage reports as artifacts and writes a coverage summary to the job summary
   - `test-and-coverage`: aggregate required check that fails unless `validate` and every `tests` matrix job succeed
 - **Failure conditions**: Any gate in `validate` fails, tests fail, or coverage drops below the `fail_under` floor in `pyproject.toml`
 - **Codacy upload**: The `tests` job uploads `coverage.xml` to Codacy only when three conditions are true. The job runs on the Python 3.13 matrix leg, the run is not manual, and the `CODACY_PROJECT_TOKEN` secret is present. Forks and Dependabot PRs pass without the secret

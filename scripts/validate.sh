@@ -29,58 +29,9 @@ if [ "${VALIDATE_NO_CACHE:-0}" = "1" ]; then
   CACHE_FLAG=(--no-cache)
 fi
 
-# Version pins: mise.toml is the source of truth. uv and setup-python read
-# .python-version; setup-uv steps and the uv-pre-commit hook pin uv separately.
-mise_pin() { sed -n "s/^$1 = \"\(.*\)\"$/\1/p" mise.toml; }
-
-# Print "<workflow>:<job> <version>" for every astral-sh/setup-uv step, or
-# MISSING when the step has no explicit `version` input.
-setup_uv_versions() {
-  uv run --frozen python - .github/workflows/*.yml <<'PY'
-import sys
-from pathlib import Path
-
-import yaml
-
-jobs = [(path, name, job) for path in sys.argv[1:]
-        for name, job in (yaml.safe_load(Path(path).read_text()).get("jobs") or {}).items()]
-steps = [(f"{path}:{name}", step) for path, name, job in jobs for step in job.get("steps") or []]
-for label, step in steps:
-    if not str(step.get("uses", "")).startswith("astral-sh/setup-uv@"):
-        continue
-    version = (step.get("with") or {}).get("version")
-    print(label, "MISSING" if version is None else version)
-PY
-}
-
-check_pin() {
-  local label="$1" want="$2" got="$3"
-  [ "$want" = "$got" ] && return 0
-  echo "❌ pins: $label is '$got', but mise.toml pins '$want'"
-  return 1
-}
-
-run_pins() {
-  local py uv pin steps step status=0
-  py="$(mise_pin python)"
-  uv="$(mise_pin uv)"
-  if [ -z "$py" ] || [ -z "$uv" ]; then
-    echo "❌ pins: cannot read the python and uv pins from mise.toml [tools]"
-    return 1
-  fi
-  check_pin .python-version "$py" "$(tr -d '[:space:]' < .python-version)" || status=1
-  pin="$(grep -A2 'astral-sh/uv-pre-commit' .pre-commit-config.yaml | sed -n 's/.*# \([0-9.]*\)$/\1/p')"
-  check_pin "the uv-pre-commit hook" "$uv" "$pin" || status=1
-  if ! steps="$(setup_uv_versions)"; then
-    echo "❌ pins: cannot parse the setup-uv steps in .github/workflows"
-    return 1
-  fi
-  while read -r step pin; do
-    [ -n "$step" ] && { check_pin "setup-uv in $step" "$uv" "$pin" || status=1; }
-  done <<<"$steps"
-  [ "$status" -eq 0 ] && echo "📌 pins: Python $py and uv $uv match mise.toml"
-  return "$status"
-}
+# Version pins: scripts/check-pins.sh is the one implementation. It also runs
+# as the version-pins pre-commit hook, so a commit and CI apply the same rules.
+run_pins() { ./scripts/check-pins.sh; }
 
 run_lint() {
   echo "🔎 lint: ruff format --check, ruff check, mypy (parallel)"
@@ -117,6 +68,7 @@ affected_tests() {
   while IFS= read -r f; do
     case "$f" in
       tests/test_*.py | tests/*/test_*.py) tests+=("$f") ;;
+      scripts/check-pins.sh | tests/pins_gate_support.py) tests+=(tests/test_pins_gate.py) ;;
       mcp_zammad/*.py)
         local mod; mod="$(basename "$f" .py)"
         tests+=(tests/test_"$mod"*.py tests/test_server.py) ;;
