@@ -209,6 +209,13 @@ The optional features are summarized below.
 | `MCP_HOST` | `127.0.0.1` | Host address for HTTP transport |
 | `MCP_PORT` | - | Port number for HTTP transport (required if `MCP_TRANSPORT=http`) |
 
+### Per-user OAuth (optional)
+
+Leave `ZAMMAD_MCP_OAUTH` unset to keep the static credential path above. Set it to
+`true` when a remote harness such as Claude.ai should sign each person in through
+Zammad, and Zammad should apply that person's permissions. The connector URL is
+`{MCP_PUBLIC_URL}/mcp`. See [OAuth for remote harnesses](docs/deployment/oauth-harnesses.md).
+
 ### Audit Logging (Optional)
 
 Audit logging is disabled by default. When `ZAMMAD_AUDIT_LOG_ENABLED` is set, the server writes one JSON Lines record

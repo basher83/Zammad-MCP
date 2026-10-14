@@ -1,6 +1,7 @@
 """Zammad MCP Server implementation."""
 
 import base64
+import hashlib
 import html
 import json
 import logging
@@ -74,6 +75,7 @@ from .models import (
     UserBrief,
     UserCreate,
 )
+from .oauth_settings import OAuthSettings
 from .resilience import CircuitOpenError, RetryExhaustedError
 from .tool_params import flat_params
 from .webhooks import WebhookHandler
@@ -1451,6 +1453,16 @@ def _format_queue_state(state: str, state_tickets: list[dict[str, Any]]) -> list
     return lines
 
 
+_OAUTH_CLIENT_CACHE_LIMIT = 32
+
+
+def _remember_oauth_client(clients: dict[str, ZammadClient], key: str, client: ZammadClient) -> None:
+    """Store a per-user client, dropping the oldest entry when the cache is full."""
+    if len(clients) >= _OAUTH_CLIENT_CACHE_LIMIT:
+        clients.pop(next(iter(clients)))
+    clients[key] = client
+
+
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
 
@@ -1478,10 +1490,21 @@ class ZammadMCPServer:
         self._connected_user_id: int | str | None = None
         # Load .env before reading audit settings so .env-sourced audit config takes effect.
         self._bootstrap_env()
+        self.oauth_settings = OAuthSettings.from_env()
         self.audit = audit_logger or AuditLogger(AuditConfig.from_env(os.environ))
         self.event_store = event_store if event_store is not None else EventStore()
-        # Create FastMCP with lifespan configured
-        self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
+        # Create FastMCP with lifespan configured. OAuth is attached only when
+        # ZAMMAD_MCP_OAUTH is enabled; otherwise the static credential path is unchanged.
+        auth = None
+        if self.oauth_settings.enabled:
+            self.oauth_settings.validate()
+            from .oauth import build_zammad_oauth_proxy  # noqa: PLC0415
+
+            auth = build_zammad_oauth_proxy(self.oauth_settings)
+        mcp_kwargs: dict[str, Any] = {"lifespan": self._create_lifespan()}
+        if auth is not None:
+            mcp_kwargs["auth"] = auth
+        self.mcp = FastMCP("zammad_mcp", **mcp_kwargs)
         if self.audit.enabled:
             self.mcp.add_middleware(AuditMiddleware(self.audit))
         self._setup_tools()
@@ -1534,14 +1557,83 @@ class ZammadMCPServer:
         return client
 
     def get_client(self) -> ZammadClient:
-        """Get the Zammad client, ensuring it's initialized."""
+        """Get the Zammad client for this call.
+
+        With ZAMMAD_MCP_OAUTH enabled, the client uses the Zammad access token
+        of the user who signed in through the harness. Otherwise it uses the
+        process-wide credentials.
+        """
+        if self.oauth_settings.enabled:
+            return self._oauth_user_client()
         if not self.client:
             logger.debug("Zammad client not initialized, performing lazy initialization")
             self.client = self._create_client(verify_connection=False)
         return self.client
 
+    def _oauth_user_client(self) -> ZammadClient:
+        """Build a Zammad client for the signed-in user.
+
+        The bearer token on the MCP request is the harness token. FastMCP swaps
+        it for the Zammad access token issued to that same person. Zammad then
+        applies that user's roles, groups, and permissions. The client is reused
+        for that credential so the rate limiter and circuit breaker survive
+        across tool calls.
+        """
+        return self._cached_oauth_client(self._signed_in_zammad_token())
+
+    def _signed_in_zammad_token(self) -> str:
+        """Return the Zammad access token for this request."""
+        from fastmcp.server.dependencies import get_access_token  # noqa: PLC0415
+
+        access = get_access_token()
+        token = access.token if access is not None else ""
+        if not token:
+            raise RuntimeError(
+                "Zammad MCP OAuth is enabled, but this request is not signed in. "
+                "Connect from the harness so Zammad uses that user's permissions."
+            )
+        return token
+
+    def _cached_oauth_client(self, token: str) -> ZammadClient:
+        """Return the Zammad client for this credential, creating it on first use."""
+        clients = self._oauth_client_cache()
+        key = hashlib.sha256(token.encode()).hexdigest()
+        cached = clients.get(key)
+        if cached is not None:
+            return cached
+        client = ZammadClient(
+            url=self.oauth_settings.zammad_url,
+            oauth2_token=token,
+            insecure=self.oauth_settings.insecure,
+            use_env_credentials=False,
+            audit_logger=self.audit,
+        )
+        _remember_oauth_client(clients, key, client)
+        return client
+
+    def _oauth_client_cache(self) -> dict[str, ZammadClient]:
+        """Return the per-credential client cache for this server."""
+        cache = getattr(self, "_oauth_clients", None)
+        if isinstance(cache, dict):
+            return cache
+        fresh: dict[str, ZammadClient] = {}
+        self._oauth_clients = fresh
+        return fresh
+
     async def initialize(self) -> None:
         """Initialize the Zammad client on server startup."""
+        if self.oauth_settings.enabled:
+            logger.info(
+                "MCP OAuth enabled. Zammad calls use the signed-in user's token. "
+                "Static ZAMMAD_HTTP_TOKEN, ZAMMAD_OAUTH2_TOKEN, and username/password are not used."
+            )
+            self.audit.log_event(
+                "authentication",
+                "zammad_oauth_mode",
+                success=True,
+                details={"mode": "per_user_oauth"},
+            )
+            return
         try:
             self.client = self._create_client(verify_connection=True)
         except Exception as exc:
@@ -2776,7 +2868,9 @@ class ZammadMCPServer:
             return User(**user_data)
 
     def _get_cached_groups(self) -> list[Group]:
-        """Get cached list of groups."""
+        """Get groups visible to the current Zammad user."""
+        if self.oauth_settings.enabled:
+            return [Group(**group) for group in self.get_client().get_groups()]
         if not hasattr(self, "_groups_cache"):
             client = self.get_client()
             groups_data = client.get_groups()
@@ -2784,7 +2878,9 @@ class ZammadMCPServer:
         return self._groups_cache
 
     def _get_cached_states(self) -> list[TicketState]:
-        """Get cached list of ticket states."""
+        """Get ticket states visible to the current Zammad user."""
+        if self.oauth_settings.enabled:
+            return [TicketState(**state) for state in self.get_client().get_ticket_states()]
         if not hasattr(self, "_states_cache"):
             client = self.get_client()
             states_data = client.get_ticket_states()
@@ -2792,7 +2888,9 @@ class ZammadMCPServer:
         return self._states_cache
 
     def _get_cached_priorities(self) -> list[TicketPriority]:
-        """Get cached list of ticket priorities."""
+        """Get ticket priorities visible to the current Zammad user."""
+        if self.oauth_settings.enabled:
+            return [TicketPriority(**priority) for priority in self.get_client().get_ticket_priorities()]
         if not hasattr(self, "_priorities_cache"):
             client = self.get_client()
             priorities_data = client.get_ticket_priorities()
@@ -3103,7 +3201,7 @@ class ZammadMCPServer:
         @self.mcp.tool(annotations=_read_only_annotations("List Groups"))
         @flat_params(ListParams)
         def zammad_list_groups(params: ListParams) -> str:
-            """Get complete list of all available groups (cached).
+            """Get the groups visible to the current Zammad account.
 
             List all groups instead of searching. Group names work
             in zammad_create_ticket, zammad_update_ticket, and zammad_search_tickets.
@@ -3153,7 +3251,7 @@ class ZammadMCPServer:
                   uncached call; FastMCP returns a tool error with that text
 
             Note:
-                Results are cached in memory for performance (cleared on server restart).
+                A shared credential caches the list until restart. Per-user OAuth loads the signed-in user's groups.
                 All groups are returned in a single response (no pagination needed).
                 Use group 'name' field when creating/updating tickets, not ID.
             """
@@ -3170,7 +3268,7 @@ class ZammadMCPServer:
         @self.mcp.tool(annotations=_read_only_annotations("List Ticket States"))
         @flat_params(ListParams)
         def zammad_list_ticket_states(params: ListParams) -> str:
-            """Get complete list of all available ticket states (cached).
+            """Get the ticket states visible to the current Zammad account.
 
             List all states instead of searching. State names work
             in zammad_create_ticket, zammad_update_ticket, and zammad_search_tickets.
@@ -3223,7 +3321,7 @@ class ZammadMCPServer:
                   uncached call; FastMCP returns a tool error with that text
 
             Note:
-                Results are cached in memory for performance (cleared on server restart).
+                A shared credential caches the list until restart. Per-user OAuth loads the signed-in user's states.
                 All states are returned in a single response (no pagination needed).
                 Use state 'name' field when creating/updating tickets, not ID.
                 Built-in state_type_id values are seeded and stable across
@@ -3244,7 +3342,7 @@ class ZammadMCPServer:
         @self.mcp.tool(annotations=_read_only_annotations("List Ticket Priorities"))
         @flat_params(ListParams)
         def zammad_list_ticket_priorities(params: ListParams) -> str:
-            """Get complete list of all available ticket priorities (cached).
+            """Get the ticket priorities visible to the current Zammad account.
 
             List all priorities instead of searching. Priority
             names work in zammad_create_ticket, zammad_update_ticket, and zammad_search_tickets.
@@ -3295,7 +3393,7 @@ class ZammadMCPServer:
                   uncached call; FastMCP returns a tool error with that text
 
             Note:
-                Results are cached in memory for performance (cleared on server restart).
+                A shared credential caches the list until restart. Per-user OAuth loads the signed-in user's priorities.
                 All priorities are returned in a single response (no pagination needed).
                 Use priority 'name' field when creating/updating tickets, not ID.
                 Priority names typically include numbers for sorting (e.g., "1 low", "2 normal", "3 high").

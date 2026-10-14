@@ -67,6 +67,7 @@ class ZammadClient:
         *,
         insecure: bool | None = None,
         audit_logger: AuditLogger | None = None,
+        use_env_credentials: bool = True,
     ) -> None:
         """Initialize Zammad client with environment variables or provided credentials.
 
@@ -80,19 +81,28 @@ class ZammadClient:
         verification.
 
         Pass audit_logger to receive security_validation events for URL checks.
+
+        Set use_env_credentials=False to use only the credentials passed in.
+        Per-user OAuth does this so a process-wide ZAMMAD_HTTP_TOKEN cannot
+        override the signed-in user's Zammad token.
         """
         self._audit = audit_logger
         self.url = url or os.getenv("ZAMMAD_URL")
-        self.username = username or os.getenv("ZAMMAD_USERNAME")
-
-        # Try to read secrets from files first (Docker secrets pattern)
-        self.password = password or self._read_secret_file("ZAMMAD_PASSWORD_FILE") or os.getenv("ZAMMAD_PASSWORD")
-        self.http_token = (
-            http_token or self._read_secret_file("ZAMMAD_HTTP_TOKEN_FILE") or os.getenv("ZAMMAD_HTTP_TOKEN")
-        )
-        self.oauth2_token = (
-            oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
-        )
+        if use_env_credentials:
+            self.username = username or os.getenv("ZAMMAD_USERNAME")
+            # Try to read secrets from files first (Docker secrets pattern)
+            self.password = password or self._read_secret_file("ZAMMAD_PASSWORD_FILE") or os.getenv("ZAMMAD_PASSWORD")
+            self.http_token = (
+                http_token or self._read_secret_file("ZAMMAD_HTTP_TOKEN_FILE") or os.getenv("ZAMMAD_HTTP_TOKEN")
+            )
+            self.oauth2_token = (
+                oauth2_token or self._read_secret_file("ZAMMAD_OAUTH2_TOKEN_FILE") or os.getenv("ZAMMAD_OAUTH2_TOKEN")
+            )
+        else:
+            self.username = username
+            self.password = password
+            self.http_token = http_token
+            self.oauth2_token = oauth2_token
         self.insecure = insecure if insecure is not None else ZammadClient._parse_bool_env("ZAMMAD_INSECURE")
         self.resilience = ResilienceConfig.from_env()
 
@@ -104,7 +114,7 @@ class ZammadClient:
 
         if not any([self.http_token, self.oauth2_token, (self.username and self.password)]):
             # Check if user mistakenly used ZAMMAD_TOKEN
-            if os.getenv("ZAMMAD_TOKEN"):
+            if use_env_credentials and os.getenv("ZAMMAD_TOKEN"):
                 raise ConfigException(
                     "Found ZAMMAD_TOKEN but this server expects ZAMMAD_HTTP_TOKEN. "
                     "Please rename your environment variable from ZAMMAD_TOKEN to ZAMMAD_HTTP_TOKEN."

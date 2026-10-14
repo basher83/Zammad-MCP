@@ -83,10 +83,12 @@ The `-p 8000:8000` mapping publishes the port on all host interfaces. Read the
 
 ## Production Deployment
 
-> **Security requirement:** The server does not implement inbound MCP client authentication. `ZAMMAD_*`
-> credentials authenticate only to Zammad. They do not authenticate MCP clients. Keep the listener on loopback
-> or a private trusted network until an authenticated TLS proxy or equivalent access control is in place.
-> Bind to `0.0.0.0` only behind an authenticated TLS proxy or inside a network restricted to trusted clients.
+> **Security requirement:** Unless `ZAMMAD_MCP_OAUTH` is enabled, the server does not implement inbound MCP
+> client authentication. `ZAMMAD_*` credentials authenticate only to Zammad. They do not authenticate MCP
+> clients. Keep the listener on loopback or a private trusted network until an authenticated TLS proxy or
+> equivalent access control is in place. Bind to `0.0.0.0` only behind an authenticated TLS proxy or inside
+> a network restricted to trusted clients. For per-user sign-in from a harness such as Claude.ai, see
+> [OAuth for remote harnesses](oauth-harnesses.md).
 
 Use a reverse proxy for TLS and client authentication. The nginx and Caddy examples below provide TLS only.
 Add an authentication policy appropriate for your environment before you expose the server outside a trusted network.

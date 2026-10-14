@@ -42,6 +42,20 @@ class TestMain:
         mock_mcp.run.assert_not_called()
 
 
+def test_main_loads_dotenv_before_transport(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """A .env file can select HTTP transport and is read before that choice."""
+    env_file = tmp_path / ".env"
+    env_file.write_text("MCP_TRANSPORT=http\nMCP_PORT=8000\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("MCP_TRANSPORT", raising=False)
+    monkeypatch.delenv("MCP_PORT", raising=False)
+    mock_mcp = _install_fake_server(monkeypatch)
+
+    main()
+
+    mock_mcp.run.assert_called_once_with(transport="http", host="127.0.0.1", port=8000)
+
+
 def test_main_with_http_transport(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test main entry point with HTTP transport."""
     monkeypatch.setenv("MCP_TRANSPORT", "http")
