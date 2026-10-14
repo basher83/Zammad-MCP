@@ -161,7 +161,7 @@ If mise asks you to trust the repository configuration, run `mise trust`. The [D
 
 ## Configuration
 
-The server requires Zammad API credentials. Use a `.env` file:
+The server requires a Zammad instance URL and an authentication method. Use a `.env` file:
 
 1. Copy the example configuration:
 
@@ -176,13 +176,19 @@ The server requires Zammad API credentials. Use a `.env` file:
    ZAMMAD_URL=https://your-instance.zammad.com/api/v1
 
    # Authentication (choose one method):
-   # Option 1: API Token (recommended)
+
+   # Option 1: OAuth via Zammad's Doorkeeper (recommended for multi-user)
+   # Users authenticate through Zammad's login page (which may offer
+   # Google, GitHub, etc. depending on Zammad config). No static creds needed.
+   # See "Auth Provider Configuration" section below.
+
+   # Option 2: API Token (recommended for single-user / service accounts)
    ZAMMAD_HTTP_TOKEN=your-api-token
 
-   # Option 2: OAuth2 Token
+   # Option 3: OAuth2 Token (static)
    # ZAMMAD_OAUTH2_TOKEN=your-oauth2-token
 
-   # Option 3: Username/Password
+   # Option 4: Username/Password
    # ZAMMAD_USERNAME=your-username
    # ZAMMAD_PASSWORD=your-password
 
@@ -201,13 +207,80 @@ The server requires Zammad API credentials. Use a `.env` file:
 [configuration reference](docs/reference/configuration.md) documents each variable with its default and allowed values.
 The optional features are summarized below.
 
+### Auth Provider Configuration (Optional)
+
+Enable OAuth authentication so MCP clients authenticate through Zammad on the fly instead of relying on static credentials. Users log in with the exact same credentials and sign-in flow they already use to access Zammad's web UI — no separate API tokens or passwords to manage.
+
+The MCP server proxies the OAuth flow to Zammad's built-in OAuth2 authorization server ([Doorkeeper](https://github.com/doorkeeper-gem/doorkeeper)). Zammad's login page may offer third-party sign-in options (Google, GitHub, etc.) depending on how the Zammad admin has configured the instance — that is entirely controlled by Zammad, not by this MCP server. The resulting Zammad bearer token is forwarded to the API so each user acts under their own identity.
+
+When auth is configured, static Zammad credentials (`ZAMMAD_HTTP_TOKEN`, etc.) are not required.
+
+#### Setup
+
+Before configuring the environment variables below, you need to register this MCP server as an OAuth application in your Zammad instance. An OAuth application gives Zammad a way to identify the MCP server and allows it to issue access tokens on behalf of users who authorize the connection. This requires a Zammad admin API token.
+
+1. **Create an OAuth application** in Zammad via the admin API:
+
+   ```bash
+   curl -X POST -H "Authorization: Token token=YOUR_ADMIN_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"name": "MCP Server", "redirect_uri": "https://localhost:8000/auth/callback", "scopes": "full"}' \
+     https://your-instance.zammad.com/api/v1/applications
+   ```
+
+   The `redirect_uri` must point to **this MCP server's** callback endpoint
+   (`<MCP_AUTH_BASE_URL>/auth/callback`). For local development, use
+   `https://localhost:8000/auth/callback` with a self-signed certificate
+   (see [Transport Configuration](#transport-configuration-optional) below). In production, use the public URL where
+   the MCP server is deployed (e.g. `https://mcp.yourdomain.com/auth/callback`).
+
+   > **Important**: The `"scopes": "full"` field is required. Zammad's Doorkeeper
+   > only supports the `full` scope — if the application is created without it,
+   > MCP clients will receive an `invalid_scope` error during the OAuth flow.
+   >
+   > **Note**: Zammad enforces HTTPS redirect URIs in production mode.
+
+2. **Retrieve the client ID and secret** (the standard API response hides them):
+
+   ```bash
+   curl -H "Authorization: Token token=YOUR_ADMIN_TOKEN" \
+     "https://your-instance.zammad.com/api/v1/applications?full=true"
+   ```
+
+   The `uid` field is the client ID; the `secret` field is the client secret.
+
+3. **Use HTTP transport** (`MCP_TRANSPORT=http`) — OAuth requires HTTP, not stdio.
+   See [Transport Configuration](#transport-configuration-optional) below.
+
+#### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_AUTH_CLIENT_ID` | - | OAuth client ID of this MCP server (`uid` from the Zammad OAuth application, see [Setup](#setup) above) |
+| `MCP_AUTH_CLIENT_SECRET` | - | OAuth client secret of this MCP server (`secret` from the Zammad OAuth application, see [Setup](#setup) above) |
+| `MCP_AUTH_BASE_URL` | - | Public URL of this MCP server (must use HTTPS if Zammad enforces it) |
+
+The OAuth endpoints (`/oauth/authorize`, `/oauth/token`) are derived from `ZAMMAD_URL` automatically.
+
+**Example:**
+
+```env
+MCP_AUTH_CLIENT_ID=your-zammad-oauth-app-uid
+MCP_AUTH_CLIENT_SECRET=your-zammad-oauth-app-secret
+MCP_AUTH_BASE_URL=https://localhost:8000
+```
+
+See [With Claude Desktop (HTTP + OAuth)](#with-claude-desktop-http--oauth) for Claude Desktop client configuration.
+
 ### Transport Configuration (Optional)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MCP_TRANSPORT` | `stdio` | Transport type: `stdio` or `http` |
 | `MCP_HOST` | `127.0.0.1` | Host address for HTTP transport |
-| `MCP_PORT` | - | Port number for HTTP transport (required if `MCP_TRANSPORT=http`) |
+| `MCP_PORT` | `8000` | Port number for HTTP transport |
+| `MCP_SSL_CERTFILE` | - | Path to SSL certificate file (enables HTTPS) |
+| `MCP_SSL_KEYFILE` | - | Path to SSL private key file |
 
 ### Audit Logging (Optional)
 
@@ -247,9 +320,12 @@ zammad_search_tickets(query="network", response_format="json")
 
 ## Usage
 
-### With Claude Desktop
+### With Claude Desktop (stdio)
 
-Add to your Claude Desktop configuration:
+The simplest setup uses stdio transport with a static API token. Claude Desktop
+launches the server as a subprocess — no network configuration needed.
+
+**Using uvx (no installation required):**
 
 ```json
 {
@@ -266,7 +342,7 @@ Add to your Claude Desktop configuration:
 }
 ```
 
-Or using Docker:
+**Using Docker:**
 
 ```json
 {
@@ -282,11 +358,10 @@ Or using Docker:
 }
 ```
 
-**Note**: The server supports stdio (default) and HTTP transports. Stdio mode requires the `-i` flag for Docker. See the HTTP Transport section below for remote deployments.
+> **Important**: The `-i` flag is required — without it, the MCP server cannot
+> receive stdin. Preserve this flag in wrapper scripts or shell aliases.
 
-**Important**: The `-i` flag is required—without it, the MCP server cannot receive stdin. Preserve this flag in wrapper scripts or shell aliases.
-
-Or if you have it installed locally:
+**Using a local clone:**
 
 ```json
 {
@@ -302,7 +377,95 @@ Or if you have it installed locally:
 }
 ```
 
-### Standalone Usage
+### With Claude Desktop (HTTP + OAuth)
+
+When using [OAuth authentication](#auth-provider-configuration-optional), the server
+uses HTTP transport and must be started as a separate process (see
+[HTTP Transport (Remote/Cloud Deployment)](#http-transport-remotecloud-deployment) — unlike stdio, where
+Claude Desktop launches it automatically). Claude Desktop connects to the running
+server via [mcp-remote](https://www.npmjs.com/package/mcp-remote), which bridges
+its stdio interface to the MCP server's HTTP endpoint and handles the OAuth flow.
+
+#### Local development setup
+
+For local development, the MCP server needs HTTPS because Zammad enforces HTTPS
+redirect URIs. Generate a self-signed certificate:
+
+```bash
+openssl req -x509 -newkey rsa:2048 \
+  -keyout key.pem -out cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+```
+
+Configure the SSL paths in your `.env`:
+
+```env
+MCP_SSL_CERTFILE=cert.pem
+MCP_SSL_KEYFILE=key.pem
+```
+
+Start the server:
+
+```bash
+uv run mcp-zammad
+```
+
+> **Note**: The `.env` file in the current directory is loaded automatically.
+
+Add to your Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "zammad": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote@latest", "https://localhost:8000/mcp"],
+      "env": {
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      }
+    }
+  }
+}
+```
+
+> **Note**: `NODE_TLS_REJECT_UNAUTHORIZED=0` tells Node.js to accept the self-signed
+> certificate. This is only needed for local development — do not use in production.
+
+On first connection, `mcp-remote` opens your browser to Zammad's login page.
+After authenticating, your Zammad identity is used automatically for all API calls.
+
+#### Production setup
+
+In production, the MCP server is deployed with a proper TLS certificate — typically
+behind a reverse proxy (see [HTTP Transport (Remote/Cloud Deployment)](#http-transport-remotecloud-deployment)).
+No self-signed certificates or `NODE_TLS_REJECT_UNAUTHORIZED` needed.
+
+**Claude Desktop via `mcp-remote`:**
+
+```json
+{
+  "mcpServers": {
+    "zammad": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote@latest", "https://mcp.yourdomain.com/mcp"]
+    }
+  }
+}
+```
+
+**MCP clients with native HTTP transport support (no `mcp-remote` needed):**
+
+```json
+{
+  "mcpServers": {
+    "zammad": {
+      "url": "https://mcp.yourdomain.com/mcp"
+    }
+  }
+}
+```
+
+### Standalone Usage (stdio)
 
 ```bash
 # Run the server from a repository checkout
@@ -317,9 +480,10 @@ ZAMMAD_URL=https://instance.zammad.com/api/v1 ZAMMAD_HTTP_TOKEN=token uv run mcp
 The server supports Streamable HTTP transport for remote deployments. Set `MCP_TRANSPORT=http` and `MCP_PORT`.
 `MCP_HOST` defaults to `127.0.0.1`. The MCP endpoint is `/mcp` on that host and port.
 
-⚠️ **SECURITY WARNING**: The server does not implement inbound MCP client authentication. `ZAMMAD_*` credentials
-authenticate the server to Zammad, not MCP clients. Bind to `0.0.0.0` only behind an authenticated TLS proxy or inside
-a network restricted to trusted clients.
+⚠️ **SECURITY WARNING**: Unless [OAuth authentication](#auth-provider-configuration-optional) is enabled, the server
+does not authenticate inbound MCP clients. `ZAMMAD_*` credentials authenticate the server to Zammad, not MCP clients.
+Without OAuth, bind to `0.0.0.0` only behind an authenticated TLS proxy or inside a network restricted to trusted
+clients.
 
 The [HTTP Transport Deployment Guide](docs/deployment/http-transport.md) covers running with Docker, reverse proxy,
 systemd, Docker Compose, cloud platforms, client configuration, and security.
@@ -449,6 +613,7 @@ Report via [GitHub Security Advisories](https://github.com/basher83/Zammad-MCP/s
 - ✅ **HTML Sanitization**: Sanitizes selected HTML-bearing fields ([models.py](mcp_zammad/models.py))
 - ✅ **Upstream Authentication**: Supports API tokens, OAuth2, and username/password for Zammad ([client.py](mcp_zammad/client.py))
 - ✅ **Audit Logging**: Opt-in JSON Lines records for tool calls, connection outcomes, and URL checks with secret redaction ([audit.py](mcp_zammad/audit.py))
+- ✅ **OAuth Authentication**: Per-user inbound authentication via Zammad's Doorkeeper OAuth2 provider ([config.py](mcp_zammad/config.py))
 - ✅ **Dependency Scanning**: CI runs pip-audit; Dependabot security alerts are enabled separately in GitHub
 - ✅ **Security Testing**: CI runs Bandit and pip-audit ([security-scan.yml](.github/workflows/security-scan.yml))
 

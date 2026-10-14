@@ -68,7 +68,8 @@ We commit to the following response times:
 
 #### API Token Security
 
-- **Use API tokens instead of username/password** when possible
+- **Use OAuth authentication** for multi-user deployments — users authenticate through Zammad's login page and no static tokens are stored server-side (see [Auth Provider Configuration](README.md#auth-provider-configuration-optional))
+- **Use API tokens instead of username/password** for single-user / service account setups
 - **Store tokens securely** using environment variables or secure credential storage
 - **Rotate tokens regularly** (recommended: every 90 days)
 - **Limit token scope** to minimum required permissions

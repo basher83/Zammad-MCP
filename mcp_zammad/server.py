@@ -18,6 +18,7 @@ from typing import Any, NoReturn, Protocol, TextIO, TypeVar
 import requests  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_access_token
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 from starlette.requests import Request
@@ -26,7 +27,8 @@ from starlette.responses import JSONResponse
 from .audit import AuditConfig, AuditLogger, error_details
 from .audit_middleware import AuditMiddleware
 from .client import ZammadClient
-from .events import EventStore, ListEventsParams, ListEventsResult
+from .config import AuthConfig, TransportType
+from .events import EventStore, ListEventsParams, ListEventsResult, WebhookEvent
 from .logging_config import configure_logging
 from .models import (
     Article,
@@ -1476,18 +1478,47 @@ class ZammadMCPServer:
             logger.warning("ZammadMCPServer(host=..., port=...) is deprecated; pass host/port to mcp.run(...) instead.")
         self.client: ZammadClient | None = None
         self._connected_user_id: int | str | None = None
-        # Load .env before reading audit settings so .env-sourced audit config takes effect.
+        # Load .env early so audit settings and AuthConfig.from_env() see .env-sourced variables.
         self._bootstrap_env()
         self.audit = audit_logger or AuditLogger(AuditConfig.from_env(os.environ))
         self.event_store = event_store if event_store is not None else EventStore()
-        # Create FastMCP with lifespan configured
-        self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan())
+
+        # Configure authentication from environment. OAuth needs the HTTP transport;
+        # stdio has no inbound request layer, so it keeps the static Zammad credentials.
+        self.auth_config = AuthConfig.from_env()
+        transport = os.getenv("MCP_TRANSPORT", TransportType.STDIO.value).lower()
+        if self.auth_config.enabled and transport != TransportType.HTTP.value:
+            logger.warning(
+                "MCP_AUTH_* variables are set but MCP_TRANSPORT is %r. OAuth requires MCP_TRANSPORT=http; "
+                "ignoring the OAuth settings and using the static Zammad credentials.",
+                transport,
+            )
+            self.auth_config = AuthConfig()
+        auth_provider = self.auth_config.create_auth_provider()
+
+        # Create FastMCP with lifespan and optional auth configured
+        self.mcp = FastMCP("zammad_mcp", lifespan=self._create_lifespan(), auth=auth_provider)
         if self.audit.enabled:
             self.mcp.add_middleware(AuditMiddleware(self.audit))
         self._setup_tools()
         self._setup_resources()
         self._setup_prompts()
         self._setup_webhooks()
+
+    def _bootstrap_env(self) -> None:
+        """Load local environment files before client initialization."""
+        cwd_env = Path.cwd() / ".env"
+        if cwd_env.exists():
+            load_dotenv(cwd_env)
+            logger.info("Loaded environment from %s", cwd_env)
+
+        envrc_path = Path.cwd() / ".envrc"
+        if envrc_path.exists() and not os.environ.get("ZAMMAD_URL"):
+            logger.warning(
+                "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
+            )
+
+        load_dotenv()
 
     def _create_lifespan(self) -> Any:
         """Create the lifespan context manager for the server."""
@@ -1505,21 +1536,6 @@ class ZammadMCPServer:
 
         return lifespan
 
-    def _bootstrap_env(self) -> None:
-        """Load local environment files before client initialization."""
-        cwd_env = Path.cwd() / ".env"
-        if cwd_env.exists():
-            load_dotenv(cwd_env)
-            logger.info("Loaded environment from %s", cwd_env)
-
-        envrc_path = Path.cwd() / ".envrc"
-        if envrc_path.exists() and not os.environ.get("ZAMMAD_URL"):
-            logger.warning(
-                "Found .envrc but environment variables not loaded. Consider using direnv or creating a .env file"
-            )
-
-        load_dotenv()
-
     def _create_client(self, *, verify_connection: bool) -> ZammadClient:
         """Create a Zammad client after loading environment configuration."""
         self._bootstrap_env()
@@ -1534,14 +1550,36 @@ class ZammadMCPServer:
         return client
 
     def get_client(self) -> ZammadClient:
-        """Get the Zammad client, ensuring it's initialized."""
+        """Get the Zammad client, ensuring it's initialized.
+
+        When auth is enabled, creates a per-request client using the
+        authenticated user's upstream access token.  When auth is disabled,
+        returns the shared static client with lazy initialization.
+        """
+        if self.auth_config.enabled:
+            return self._get_authenticated_client()
         if not self.client:
             logger.debug("Zammad client not initialized, performing lazy initialization")
             self.client = self._create_client(verify_connection=False)
         return self.client
 
+    def _get_authenticated_client(self) -> ZammadClient:
+        """Create a ZammadClient using the current request's upstream token."""
+        access_token = get_access_token()
+        if access_token is None:
+            raise RuntimeError(
+                "No access token in request context. "
+                "Ensure the MCP client authenticates via the configured auth provider."
+            )
+
+        return ZammadClient(oauth2_token=access_token.token, audit_logger=self.audit)
+
     async def initialize(self) -> None:
         """Initialize the Zammad client on server startup."""
+        if self.auth_config.enabled:
+            logger.info("OAuth auth enabled (%s) — clients created per-request", self.auth_config.zammad_base_url)
+            return
+
         try:
             self.client = self._create_client(verify_connection=True)
         except Exception as exc:
@@ -1604,15 +1642,45 @@ class ZammadMCPServer:
 
             Error Handling:
                 - Returns a validation error if limit is outside 1-100 or since is not ISO 8601
+                - With OAuth enabled, events for tickets the caller cannot read are left out,
+                  so a page can hold fewer than `limit` events; keep following `next_since`
             """
-            events = self.event_store.list(since=params.since, limit=params.limit)
+            if self.auth_config.enabled:
+                events, next_since = self._list_permitted_events(params.since, params.limit)
+            else:
+                events = self.event_store.list(since=params.since, limit=params.limit)
+                next_since = events[-1].received_at if events else None
             return ListEventsResult(
                 events=events,
                 count=len(events),
                 capacity=self.event_store.capacity,
                 retained_total=len(self.event_store),
-                next_since=events[-1].received_at if events else None,
+                next_since=next_since,
             )
+
+    def _list_permitted_events(self, since: datetime | None, limit: int) -> tuple[list[WebhookEvent], datetime | None]:
+        """Return the next page of events whose ticket the request's user may read.
+
+        The event store is shared by every user of the process, while OAuth users
+        hold different Zammad permissions. Pages whose events are all hidden are
+        skipped, so an empty result means the store holds nothing further for this
+        user and callers that stop on an empty page miss nothing. The cursor covers
+        every scanned event, hidden ones included. Each distinct ticket is checked once.
+        """
+        client = self.get_client()
+        access: dict[int, bool] = {}
+        cursor, next_since = since, None
+        while page := self.event_store.list(since=cursor, limit=limit):
+            cursor = next_since = page[-1].received_at
+            permitted = []
+            for event in page:
+                if event.ticket_id not in access:
+                    access[event.ticket_id] = client.can_access_ticket(event.ticket_id)
+                if access[event.ticket_id]:
+                    permitted.append(event)
+            if permitted:
+                return permitted, next_since
+        return [], next_since
 
     def _setup_ticket_tools(self) -> None:  # noqa: PLR0915
         """Register ticket-related tools."""
@@ -2776,7 +2844,13 @@ class ZammadMCPServer:
             return User(**user_data)
 
     def _get_cached_groups(self) -> list[Group]:
-        """Get cached list of groups."""
+        """Get cached list of groups.
+
+        Zammad filters groups by the caller's permissions, so with OAuth (one identity
+        per request) the list is fetched per call instead of shared across users.
+        """
+        if self.auth_config.enabled:
+            return [Group(**group) for group in self.get_client().get_groups()]
         if not hasattr(self, "_groups_cache"):
             client = self.get_client()
             groups_data = client.get_groups()
@@ -3859,11 +3933,6 @@ async def health_check(request: Request) -> JSONResponse:  # noqa: ARG001
         JSONResponse with health status.
     """
     return JSONResponse({"status": "healthy", "transport": "http"})
-
-
-def _configure_logging() -> None:
-    """Configure logging from LOG_LEVEL environment variable."""
-    configure_logging()
 
 
 def main() -> None:

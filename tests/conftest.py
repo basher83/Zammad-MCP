@@ -2,8 +2,51 @@
 
 from collections.abc import Callable
 from typing import Any
+from unittest.mock import patch
 
 import pytest
+from dotenv import load_dotenv
+
+# Auth env vars that must be cleared so the real .env file doesn't
+# interfere with tests that instantiate ZammadMCPServer.
+_DOTENV_VARS = (
+    # Zammad connection
+    "ZAMMAD_URL",
+    # Auth vars
+    "MCP_AUTH_CLIENT_ID",
+    "MCP_AUTH_CLIENT_SECRET",
+    "MCP_AUTH_BASE_URL",
+    # Transport vars
+    "MCP_TRANSPORT",
+    "MCP_HOST",
+    "MCP_PORT",
+    "MCP_SSL_CERTFILE",
+    "MCP_SSL_KEYFILE",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_from_dotenv(request, monkeypatch):
+    """Prevent the real .env file from leaking into tests.
+
+    ZammadMCPServer.__init__ calls _bootstrap_env() which would read the
+    developer's .env and pollute the test environment.  We neutralize
+    load_dotenv() and also scrub any auth vars that might already be set.
+    Tests using the ``dotenv_cwd`` fixture run in an isolated cwd and may
+    still load explicitly given .env paths from it.
+    """
+    real_load_dotenv = load_dotenv
+
+    def _explicit_only(dotenv_path=None, *args, **kwargs):
+        if dotenv_path is None:
+            return False
+        return real_load_dotenv(dotenv_path, *args, **kwargs)
+
+    side_effect = _explicit_only if "dotenv_cwd" in request.fixturenames else None
+    with patch("mcp_zammad.server.load_dotenv", side_effect=side_effect):
+        for var in _DOTENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+        yield
 
 
 @pytest.fixture

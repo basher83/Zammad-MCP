@@ -256,6 +256,12 @@ The real tool also prints the custom address and root category count for each kn
 
 Test the tool through the public FastMCP boundary (for example `await server.mcp.get_tool("zammad_list_knowledge_bases")` or a `fastmcp.Client` call) with a mocked `ZammadClient`. Do not assert against private registries.
 
+
+> **Note**: `get_client()` is auth-aware. When OAuth authentication is
+> configured, it automatically creates a per-request `ZammadClient` using
+> the authenticated user's Zammad bearer token. No special handling is needed
+> in tool implementations.
+
 ### 2. New Models
 
 Define in `models.py` using Pydantic:
