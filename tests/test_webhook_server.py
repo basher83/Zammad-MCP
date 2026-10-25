@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator, Iterator
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
-import httpx
+import httpx2
 import pytest
 import pytest_asyncio
 from fastmcp import Client
@@ -42,14 +42,14 @@ def server_with_secret(zammad_client: Mock) -> Iterator[ZammadMCPServer]:
 
 
 @pytest_asyncio.fixture
-async def http(server_with_secret: ZammadMCPServer) -> AsyncIterator[httpx.AsyncClient]:
-    transport = httpx.ASGITransport(app=server_with_secret.mcp.http_app())
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+async def http(server_with_secret: ZammadMCPServer) -> AsyncIterator[httpx2.AsyncClient]:
+    transport = httpx2.ASGITransport(app=server_with_secret.mcp.http_app())
+    async with httpx2.AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
 
 
 @pytest.mark.asyncio
-async def test_signed_delivery_is_accepted_over_http(http: httpx.AsyncClient) -> None:
+async def test_signed_delivery_is_accepted_over_http(http: httpx2.AsyncClient) -> None:
     body, headers = signed({"ticket": {"id": 7, "number": "10007"}})
 
     response = await http.post(ROUTE, content=body, headers=headers)
@@ -59,7 +59,7 @@ async def test_signed_delivery_is_accepted_over_http(http: httpx.AsyncClient) ->
 
 
 @pytest.mark.asyncio
-async def test_bad_signature_is_rejected_over_http(http: httpx.AsyncClient) -> None:
+async def test_bad_signature_is_rejected_over_http(http: httpx2.AsyncClient) -> None:
     body, headers = signed({"ticket": {"id": 7}}, secret="wrong")
 
     response = await http.post(ROUTE, content=body, headers=headers)
@@ -72,10 +72,10 @@ async def test_bad_signature_is_rejected_over_http(http: httpx.AsyncClient) -> N
 async def test_unset_secret_returns_503_over_http(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ZAMMAD_WEBHOOK_SECRET", raising=False)
     server = ZammadMCPServer(event_store=EventStore(capacity=3))
-    transport = httpx.ASGITransport(app=server.mcp.http_app())
+    transport = httpx2.ASGITransport(app=server.mcp.http_app())
     body, headers = signed({"ticket": {"id": 7}})
 
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+    async with httpx2.AsyncClient(transport=transport, base_url="http://testserver") as http:
         response = await http.post(ROUTE, content=body, headers=headers)
 
     assert response.status_code == 503
@@ -88,13 +88,13 @@ async def test_list_events_tool_is_registered_read_only(server_with_secret: Zamm
 
     tool = tools["zammad_list_events"]
     assert tool.annotations is not None
-    assert tool.annotations.readOnlyHint is True
-    assert tool.annotations.destructiveHint is False
+    assert tool.annotations.read_only_hint is True
+    assert tool.annotations.destructive_hint is False
 
 
 @pytest.mark.asyncio
 async def test_accepted_delivery_is_observable_via_tool_without_zammad_calls(
-    server_with_secret: ZammadMCPServer, http: httpx.AsyncClient, zammad_client: Mock
+    server_with_secret: ZammadMCPServer, http: httpx2.AsyncClient, zammad_client: Mock
 ) -> None:
     body, headers = signed({"ticket": {"id": 7, "number": "10007", "article_count": 2}, "article": {"id": 44}})
     await http.post(ROUTE, content=body, headers=headers)

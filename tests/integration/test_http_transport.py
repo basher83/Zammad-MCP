@@ -14,7 +14,7 @@ import time
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-import httpx
+import httpx2
 import pytest
 from fastmcp import Client
 
@@ -149,11 +149,11 @@ def http_server(mock_zammad_server: str) -> Iterator[str]:
             if result == 0:
                 # TCP connection successful, verify HTTP endpoint
                 try:
-                    response = httpx.get(f"{server_url}/health", timeout=1.0)
+                    response = httpx2.get(f"{server_url}/health", timeout=1.0)
                     if response.status_code == 200:
                         ready = True
                         break
-                except httpx.RequestError as e:
+                except httpx2.RequestError as e:
                     logger.debug("Startup poll: HTTP health check failed: %s", e)
         except OSError as e:
             logger.debug("Startup poll: TCP connect failed: %s", e)
@@ -175,7 +175,7 @@ def http_server(mock_zammad_server: str) -> Iterator[str]:
 @pytest.mark.integration
 def test_http_server_starts(http_server) -> None:
     """Test that HTTP server starts and responds."""
-    response = httpx.get(f"{http_server}/health", timeout=5.0)
+    response = httpx2.get(f"{http_server}/health", timeout=5.0)
     assert response.status_code == 200
 
 
@@ -184,7 +184,7 @@ def test_mcp_endpoint_exists(http_server) -> None:
     """Test that MCP endpoint is accessible and redirects correctly."""
     # MCP endpoint should accept POST requests
     # FastMCP HTTP transport returns 307 redirect to SSE endpoint
-    response = httpx.post(
+    response = httpx2.post(
         f"{http_server}/mcp/",
         json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
         headers={"Accept": "application/json"},
@@ -208,9 +208,9 @@ def test_webhook_delivery_is_retrievable_through_mcp(http_server) -> None:
     second, second_headers = signed_delivery({"ticket": {"id": 502, "article_count": 4}, "article": {"id": 9}})
     forged, forged_headers = signed_delivery({"ticket": {"id": 503}}, secret="not-the-secret")
 
-    assert httpx.post(f"{http_server}/webhooks/zammad", content=first, headers=first_headers).status_code == 202
-    assert httpx.post(f"{http_server}/webhooks/zammad", content=second, headers=second_headers).status_code == 202
-    assert httpx.post(f"{http_server}/webhooks/zammad", content=forged, headers=forged_headers).status_code == 401
+    assert httpx2.post(f"{http_server}/webhooks/zammad", content=first, headers=first_headers).status_code == 202
+    assert httpx2.post(f"{http_server}/webhooks/zammad", content=second, headers=second_headers).status_code == 202
+    assert httpx2.post(f"{http_server}/webhooks/zammad", content=forged, headers=forged_headers).status_code == 401
 
     async def list_events() -> dict:
         async with Client(f"{http_server}/mcp") as client:

@@ -71,6 +71,6 @@ async def test_merge_tool_is_annotated_destructive() -> None:
     merge = next(tool for tool in tools if tool.name == "zammad_merge_tickets")
 
     assert merge.annotations.title == "Merge Tickets"
-    assert merge.annotations.destructiveHint is True
-    assert merge.annotations.readOnlyHint is False
-    assert merge.annotations.idempotentHint is False
+    assert merge.annotations.destructive_hint is True
+    assert merge.annotations.read_only_hint is False
+    assert merge.annotations.idempotent_hint is False
