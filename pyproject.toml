@@ -7,7 +7,7 @@ name = "mcp-zammad"
 version = "1.2.0"
 description = "Model Context Protocol server for Zammad ticket system integration (unofficial)"
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "basher83", email = "crashoverride6545@gmail.com" }]
 keywords = ["mcp", "zammad", "tickets", "support", "api"]
@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 dependencies = [

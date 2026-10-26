@@ -41,7 +41,7 @@ Key points:
   - Are assigned to `@basher83`.
   - Use `chore(deps):` as the commit message prefix.
 - Extra repo‑specific rules:
-  - Renovate does not propose Python 3.14 or later (`allowedVersions: "<3.14"`). This matches `requires-python` in `pyproject.toml`.
+  - Renovate does not propose Python 3.15 or later for the runtime pins in `mise.toml` and the `Dockerfile` (`allowedVersions: "<3.15"`). This keeps them within the CI tests matrix (3.10 to 3.14) and overrides the shared `python-mcp.json` preset's `<=3.13`. `requires-python` in `pyproject.toml` has no upper bound.
   - The uv pins in `mise.toml` and the `uv-pre-commit` hook update in one PR (group `uv version pins`).
   - Major updates to `zammad-py` require explicit approval in the Dependency Dashboard.
   - Major updates to `fastmcp` require explicit approval in the Dependency Dashboard. They move together with the `mcp` major (#353).
