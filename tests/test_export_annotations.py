@@ -13,5 +13,5 @@ async def test_export_tool_is_annotated_as_a_write():
     tools = {tool.name: tool for tool in await server.mcp.list_tools()}
     annotations = tools["zammad_export_tickets"].annotations
 
-    assert annotations.readOnlyHint is False
-    assert annotations.destructiveHint is False
+    assert annotations.read_only_hint is False
+    assert annotations.destructive_hint is False

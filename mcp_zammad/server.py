@@ -122,10 +122,10 @@ MAX_EXPORT_ERRORS_LOGGED = 100  # Maximum number of per-ticket errors to log dur
 def _read_only_annotations(title: str) -> ToolAnnotations:
     """Create read-only tool annotations with title."""
     return ToolAnnotations(
-        readOnlyHint=True,
-        destructiveHint=False,
-        idempotentHint=True,
-        openWorldHint=True,
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=True,
         title=title,
     )
 
@@ -133,10 +133,10 @@ def _read_only_annotations(title: str) -> ToolAnnotations:
 def _write_annotations(title: str) -> ToolAnnotations:
     """Create write tool annotations with title."""
     return ToolAnnotations(
-        readOnlyHint=False,
-        destructiveHint=False,
-        idempotentHint=False,
-        openWorldHint=True,
+        read_only_hint=False,
+        destructive_hint=False,
+        idempotent_hint=False,
+        open_world_hint=True,
         title=title,
     )
 
@@ -144,10 +144,10 @@ def _write_annotations(title: str) -> ToolAnnotations:
 def _destructive_write_annotations(title: str) -> ToolAnnotations:
     """Create destructive write tool annotations with title."""
     return ToolAnnotations(
-        readOnlyHint=False,
-        destructiveHint=True,
-        idempotentHint=False,
-        openWorldHint=True,
+        read_only_hint=False,
+        destructive_hint=True,
+        idempotent_hint=False,
+        open_world_hint=True,
         title=title,
     )
 
@@ -155,10 +155,10 @@ def _destructive_write_annotations(title: str) -> ToolAnnotations:
 def _idempotent_write_annotations(title: str) -> ToolAnnotations:
     """Create idempotent write tool annotations with title."""
     return ToolAnnotations(
-        readOnlyHint=False,
-        destructiveHint=False,
-        idempotentHint=True,
-        openWorldHint=True,
+        read_only_hint=False,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=True,
         title=title,
     )
 
@@ -3631,8 +3631,7 @@ class ZammadMCPServer:
             Errors (auth, network, HTTP 5xx, ...) are raised as
             ZammadAPIError so the MCP client sees a real tool error.
 
-            Note:
-                Requires knowledge_base.reader or knowledge_base.editor permission.
+            Requires knowledge_base.reader or knowledge_base.editor permission.
             """
             client = self.get_client()
             kbs = client.list_knowledge_bases()
@@ -3656,9 +3655,8 @@ class ZammadMCPServer:
         def zammad_get_knowledge_base(params: GetKnowledgeBaseParams) -> str:
             """Get details of a specific knowledge base by ID.
 
-            Note:
-                Requires knowledge_base.reader or knowledge_base.editor permission.
-                Use ``zammad_list_knowledge_bases`` to discover available KB IDs.
+            Requires knowledge_base.reader or knowledge_base.editor permission.
+            Use ``zammad_list_knowledge_bases`` to discover available KB IDs.
             """
             client = self.get_client()
             kb = client.get_knowledge_base(params.kb_id)
@@ -3676,8 +3674,7 @@ class ZammadMCPServer:
         def zammad_get_kb_category(params: GetKBCategoryParams) -> str:
             """Get a knowledge base category by ID.
 
-            Note:
-                Requires knowledge_base.reader or knowledge_base.editor permission.
+            Requires knowledge_base.reader or knowledge_base.editor permission.
             """
             client = self.get_client()
             category = client.get_kb_category(params.kb_id, params.category_id)

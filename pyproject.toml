@@ -7,7 +7,7 @@ name = "mcp-zammad"
 version = "1.2.0"
 description = "Model Context Protocol server for Zammad ticket system integration (unofficial)"
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "basher83", email = "crashoverride6545@gmail.com" }]
 keywords = ["mcp", "zammad", "tickets", "support", "api"]
@@ -20,15 +20,15 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 dependencies = [
-    "fastmcp>=3.0.0,<4",
-    "mcp>=1.28.1,<2",
+    "fastmcp>=4.0.8,<5",
+    "mcp>=2.0.0,<3",
     "zammad-py>=3.2.0",
     "pydantic>=2.11.7",
     "python-dotenv>=1.2.2",
-    "httpx>=0.28.1",
     "requests>=2.32.0",
 ]
 
@@ -102,6 +102,7 @@ check_untyped_defs = true
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=0.21.0",
+    "httpx2>=2.10.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.10",
     "mypy>=1.20.1",
@@ -144,8 +145,8 @@ directory = "htmlcov"
 [tool.uv]
 # Enforce security floors without replacing upstream dependency constraints.
 constraint-dependencies = [
-    "mcp>=1.28.1,<2",
-    "fastmcp>=3.0.0,<4",
+    "mcp>=2.0.0,<3",
+    "fastmcp>=4.0.8,<5",
     "anyio>=4.14.2",
     "click>=8.3.3",
     "setuptools>=83.0.0",

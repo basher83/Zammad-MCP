@@ -16,11 +16,11 @@
     "commitMessagePrefix": "chore(deps):",
     "packageRules": [
         {
-            "description": "Keep Python pinned below 3.14 until MCP SDK v1.x officially supports it",
+            "description": "Keep the Python runtime pins (mise.toml, Dockerfile) within the tests matrix, 3.10 to 3.14; raise both together. Overrides the shared preset's <=3.13",
             "matchDepNames": [
                 "python"
             ],
-            "allowedVersions": "<3.14"
+            "allowedVersions": "<3.15"
         },
         {
             "description": "Update the uv pins in mise.toml and the uv-pre-commit hook in one PR (scripts/validate.sh fails when they differ)",

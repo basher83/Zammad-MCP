@@ -26,8 +26,8 @@ async def test_tool_is_registered_as_destructive(bulk_server):
     """The bulk tool is exposed and flagged as destructive."""
     tool = await bulk_server.mcp.get_tool("zammad_bulk_update_tickets")
     assert tool.annotations is not None
-    assert tool.annotations.destructiveHint is True
-    assert tool.annotations.readOnlyHint is False
+    assert tool.annotations.destructive_hint is True
+    assert tool.annotations.read_only_hint is False
 
 
 @pytest.mark.asyncio
