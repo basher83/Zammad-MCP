@@ -83,6 +83,17 @@ def test_escapes_html_in_title_and_note():
     assert params.note == "&lt;script&gt;y&lt;/script&gt;"
 
 
+def test_quotes_preserved_in_bulk_title_and_note():
+    """Apostrophes and quotes must survive bulk updates verbatim (see #307)."""
+    params = BulkTicketUpdateParams(
+        ticket_ids=[1],
+        title="Bloom's Mechanist",
+        note='She said "call back" re AT&T',
+    )
+    assert params.title == "Bloom's Mechanist"
+    assert params.note == 'She said "call back" re AT&amp;T'
+
+
 @pytest.mark.parametrize("time_unit", [0, -1])
 def test_rejects_non_positive_time_unit(time_unit):
     """Time accounting must be a positive amount."""

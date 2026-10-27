@@ -501,8 +501,8 @@ class BulkTicketUpdateParams(StrictBaseModel):
     @field_validator("title", "note")
     @classmethod
     def sanitize_text(cls, v: str | None) -> str | None:
-        """Escape HTML to prevent XSS attacks."""
-        return html.escape(v) if v else v
+        """Escape <, >, & while leaving quotes and apostrophes verbatim."""
+        return html.escape(v, quote=False) if v else v
 
     @model_validator(mode="after")
     def require_operation(self) -> "BulkTicketUpdateParams":
@@ -735,7 +735,8 @@ class UserCreate(StrictBaseModel):
     @field_validator("firstname", "lastname")
     @classmethod
     def sanitize_names(cls, v: str) -> str:
-        return html.escape(v)
+        """Escape <, >, & while leaving quotes and apostrophes verbatim."""
+        return html.escape(v, quote=False)
 
 
 class Organization(BaseModel):
