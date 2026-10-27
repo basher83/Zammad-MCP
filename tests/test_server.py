@@ -3066,14 +3066,14 @@ def test_user_create_email_normalization():
 
 
 def test_user_create_html_sanitization():
-    """Test UserCreate sanitizes HTML in names."""
+    """Test UserCreate escapes HTML in names but keeps apostrophes/quotes literal."""
     user = UserCreate(
         email="test@example.com",
         firstname="<script>alert('xss')</script>",
         lastname="O'Connor",
     )
     assert "&lt;script&gt;" in user.firstname
-    assert "&#x27;" in user.lastname or "O&#39;Connor" in user.lastname
+    assert user.lastname == "O'Connor"
 
 
 def test_server_name_follows_mcp_convention():
