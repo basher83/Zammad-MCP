@@ -1,5 +1,7 @@
 """Fixture repository and runner for the version-pins gate in scripts/check-pins.sh."""
 
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -82,13 +84,42 @@ def make_repo(root: Path) -> Path:
     return root
 
 
-def run_gate(repo: Path) -> subprocess.CompletedProcess[str]:
+def run_gate(repo: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     """Run the pins gate the way the pre-commit hook does.
 
     Args:
         repo: Root of the fixture repository.
+        env: Optional. Environment for the gate; defaults to the current environment.
 
     Returns:
         The completed process, with stdout and stderr captured as text.
     """
-    return subprocess.run(["bash", str(SCRIPT)], cwd=repo, capture_output=True, text=True, check=False)
+    return subprocess.run(["bash", str(SCRIPT)], cwd=repo, capture_output=True, text=True, check=False, env=env)
+
+
+BUSYBOX_GREP = """#!/usr/bin/env bash
+# Behave like BusyBox grep, which has no GNU long options such as --include.
+for arg in "$@"; do
+  case "$arg" in
+    --*) echo "grep: unrecognized option: ${arg#--}" >&2; exit 2 ;;
+  esac
+done
+exec "$REAL_GREP" "$@"
+"""
+
+
+def busybox_grep_env(bin_dir: Path) -> dict[str, str]:
+    """Build an environment whose grep rejects GNU long options, like BusyBox grep.
+
+    Args:
+        bin_dir: Empty directory to hold the grep shim; it is put first on PATH.
+
+    Returns:
+        A copy of the current environment with the shim first on PATH.
+    """
+    real_grep = shutil.which("grep")
+    assert real_grep is not None, "the BusyBox grep shim needs a real grep to delegate to"
+    shim = bin_dir / "grep"
+    shim.write_text(BUSYBOX_GREP)
+    shim.chmod(0o755)
+    return {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "REAL_GREP": real_grep}

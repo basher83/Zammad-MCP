@@ -55,6 +55,19 @@ check_python_version_file() {
     "Change python in mise.toml [tools]. mise points uv at that Python through UV_PYTHON. Remove the file with 'git rm --cached .python-version'."
 }
 
+# Print the workflow files that use setup-uv or setup-python; return 2 when the scan fails.
+# find + plain grep -lE instead of grep -r --include: BusyBox grep (Alpine-based CI
+# runners) has no --include and would exit 2 on every run.
+find_setup_steps() {
+  local list file rc=0
+  local files=()
+  list="$(find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \))" || return 2
+  [ -z "$list" ] && return 0
+  while IFS= read -r file; do files+=("$file"); done <<<"$list"
+  grep -lE "uses:[[:space:]]*[\"']?(astral-sh/setup-uv|actions/setup-python)@" "${files[@]}" || rc=$?
+  [ "$rc" -le 1 ] || return 2
+}
+
 # Fail when a workflow installs uv or Python outside mise, or when the scan itself fails.
 check_workflows() {
   local found rc=0
@@ -64,11 +77,11 @@ check_workflows() {
       "Restore .github/workflows before running validation."
     return
   fi
-  found="$(grep -rlE --include='*.yml' --include='*.yaml' "uses:[[:space:]]*[\"']?(astral-sh/setup-uv|actions/setup-python)@" .github/workflows)" || rc=$?
-  if [ "$rc" -gt 1 ]; then
-    fail "cannot scan .github/workflows (grep exited $rc; its error is printed above)." \
+  found="$(find_setup_steps)" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    fail "cannot scan .github/workflows (find or grep failed; the error is printed above)." \
       "A scan that did not run must not count as a pass." \
-      "Fix the error grep reports, for example a missing or unreadable .github/workflows directory."
+      "Fix the reported error, for example an unreadable .github/workflows directory."
     return
   fi
   [ -z "$found" ] && return 0

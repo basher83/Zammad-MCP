@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.pins_gate_support import git, make_repo, replace, run_gate
+from tests.pins_gate_support import busybox_grep_env, git, make_repo, replace, run_gate
 
 pytestmark = pytest.mark.skipif(
     shutil.which("bash") is None or shutil.which("git") is None,
@@ -137,3 +137,23 @@ def test_untracked_python_version_is_not_blocked(repo: Path) -> None:
     result = run_gate(repo)
 
     assert result.returncode == 0, result.stdout
+
+
+def test_gate_runs_with_busybox_grep(repo: Path, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """A clean repository passes when grep lacks GNU options, as on Alpine-based CI runners."""
+    env = busybox_grep_env(tmp_path_factory.mktemp("bin"))
+
+    result = run_gate(repo, env)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_gate_flags_setup_uv_with_busybox_grep(repo: Path, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """The workflow scan still finds a setup-uv step when grep lacks GNU options."""
+    replace(repo, WORKFLOW_FILE, "jdx/mise-action", "astral-sh/setup-uv")
+    env = busybox_grep_env(tmp_path_factory.mktemp("bin"))
+
+    result = run_gate(repo, env)
+
+    assert result.returncode == 1
+    assert "setup-uv" in result.stdout
