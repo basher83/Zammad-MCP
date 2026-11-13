@@ -350,13 +350,36 @@ class ZammadClient:
         """Create a new ticket.
 
         Args:
-            custom_fields: Optional. Custom object attributes sent as top-level ticket keys, e.g. an
-                attribute that Zammad Admin marks mandatory on create.
+            title: Ticket title.
+            group: Group name or ID.
+            customer: Customer email or ID. The customer must already exist.
+            article_body: Body of the first article.
+            state: Optional. State name. Defaults to "new".
+            priority: Optional. Priority name. Defaults to "2 normal".
+            article_type: Optional. Article type (note, email, phone). Defaults to "note".
+            article_internal: Optional. Whether the first article is internal. Defaults to False.
+            custom_fields: Optional. Custom object attributes sent as top-level ticket keys, for an
+                attribute Zammad Admin marks mandatory on create.
+
+        Returns:
+            The created ticket as returned by Zammad.
 
         Raises:
-            ValueError: If a custom field shadows a built-in key.
+            ValueError: If a custom field shadows a built-in key or an association id alias
+                (customer_id, group_id, state_id, priority_id).
         """
-        built_in_keys = {"title", "group", "customer", "state", "priority", "article"}
+        built_in_keys = {
+            "title",
+            "group",
+            "customer",
+            "state",
+            "priority",
+            "article",
+            "customer_id",
+            "group_id",
+            "state_id",
+            "priority_id",
+        }
         for name in custom_fields or {}:
             if name in built_in_keys:
                 raise ValueError(f"custom_fields key '{name}' is a built-in field; pass it as a named argument")

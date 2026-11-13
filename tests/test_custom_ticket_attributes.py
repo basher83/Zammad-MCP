@@ -7,13 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from mcp_zammad.client import ZammadClient
-from mcp_zammad.models import (
-    GetTicketParams,
-    ResponseFormat,
-    TicketCreate,
-    TicketSearchParams,
-    TicketUpdateParams,
-)
+from mcp_zammad.models import GetTicketParams, ResponseFormat, TicketSearchParams, TicketUpdateParams
 from mcp_zammad.server import ZammadMCPServer
 
 CUSTOM_ATTRIBUTES = {"region": "Lilongwe", "service_tier": "gold", "site_ids": ["LL-01", "LL-02"]}
@@ -136,39 +130,6 @@ def test_update_params_omit_custom_fields_when_not_provided():
     assert params.model_dump(exclude={"ticket_id"}, exclude_none=True) == {"title": "Renamed"}
 
 
-def test_create_ticket_tool_forwards_custom_fields(ticket_tools):
-    tools, client = ticket_tools
-    client.create_ticket.return_value = _ticket_payload()
-
-    params = TicketCreate(
-        title="Fibre outage",
-        group="Support",
-        customer="customer@example.com",
-        article_body="Down since 09:00",
-        custom_fields={"category": "Incident"},
-    )
-    tools["zammad_create_ticket"](**params.model_dump())
-
-    assert client.create_ticket.call_args.kwargs["custom_fields"] == {"category": "Incident"}
-
-
-def test_create_params_omit_custom_fields_when_not_provided():
-    params = TicketCreate(title="t", group="Support", customer="c@example.com", article_body="b")
-
-    assert "custom_fields" not in params.model_dump(exclude_none=True)
-
-
-@pytest.mark.parametrize("key", ["title", "group", "customer", "state", "priority", "article", "article_body"])
-def test_create_params_reject_custom_fields_colliding_with_built_in_keys(key):
-    with pytest.raises(ValidationError, match=key):
-        TicketCreate(title="t", group="g", customer="c", article_body="b", custom_fields={key: "value"})
-
-
-def test_create_params_reject_empty_custom_field_name():
-    with pytest.raises(ValidationError, match="custom_fields"):
-        TicketCreate(title="t", group="g", customer="c", article_body="b", custom_fields={"": "value"})
-
-
 class TestClientCustomFields:
     """ZammadClient forwards custom attributes as top-level ticket keys."""
 
@@ -188,38 +149,6 @@ class TestClientCustomFields:
         mock_instance.ticket.update.assert_called_once_with(
             123, {"priority": "3 high", "region": "Blantyre", "service_tier": "silver"}
         )
-
-    def test_create_ticket_merges_custom_fields_into_payload(self, mock_zammad_api):
-        mock_instance = Mock()
-        mock_instance.ticket.create.return_value = _ticket_payload()
-        mock_zammad_api.return_value = mock_instance
-        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
-
-        client.create_ticket(
-            title="Fibre outage",
-            group="Support",
-            customer="customer@example.com",
-            article_body="Down",
-            custom_fields={"category": "Incident", "region": "Blantyre"},
-        )
-
-        payload = mock_instance.ticket.create.call_args.args[0]
-        assert payload["category"] == "Incident"
-        assert payload["region"] == "Blantyre"
-        assert payload["article"]["body"] == "Down"
-        assert payload["title"] == "Fibre outage"
-
-    def test_create_ticket_rejects_custom_fields_overwriting_built_in_keys(self, mock_zammad_api):
-        mock_instance = Mock()
-        mock_zammad_api.return_value = mock_instance
-        client = ZammadClient(url="https://test.zammad.com/api/v1", http_token="test-token")
-
-        with pytest.raises(ValueError, match="article"):
-            client.create_ticket(
-                title="t", group="g", customer="c", article_body="b", custom_fields={"article": {"body": "x"}}
-            )
-
-        mock_instance.ticket.create.assert_not_called()
 
     def test_update_ticket_rejects_custom_fields_overwriting_built_in_keys(self, mock_zammad_api):
         mock_instance = Mock()

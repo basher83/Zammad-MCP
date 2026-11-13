@@ -325,11 +325,25 @@ class TicketCreate(StrictBaseModel):
     @field_validator("custom_fields")
     @classmethod
     def reject_reserved_custom_field_names(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
-        """Reject custom field names that are empty or shadow built-in create fields."""
+        """Reject custom field names that are empty or shadow built-in create fields.
+
+        Args:
+            v: Custom attribute names to values, or None when custom_fields was omitted.
+
+        Returns:
+            The same mapping when every key is allowed, or None when v is None.
+
+        Raises:
+            ValueError: If a key is empty, matches a built-in create field, matches the nested
+                article payload key, or is an association id alias (customer_id, group_id,
+                state_id, priority_id).
+        """
         if v is None:
             return v
         # "article" is the nested payload key the client builds from the article_* fields.
-        reserved = (set(cls.model_fields) - {"custom_fields"}) | {"article"}
+        # *_id aliases would override the named association (customer, group, state, priority).
+        id_aliases = {"customer_id", "group_id", "state_id", "priority_id"}
+        reserved = (set(cls.model_fields) - {"custom_fields"}) | {"article"} | id_aliases
         for name in v:
             if not name:
                 raise ValueError("custom_fields keys must be non-empty attribute names")
