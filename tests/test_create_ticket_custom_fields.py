@@ -1,8 +1,13 @@
 """Create-ticket custom attribute tests (issue #278 follow-up)."""
 
+import os
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
+from fastmcp import Client
 from pydantic import ValidationError
 
 from mcp_zammad.client import ZammadClient
@@ -11,41 +16,60 @@ from mcp_zammad.server import ZammadMCPServer
 from tests.test_custom_ticket_attributes import _ticket_payload
 
 
+@pytest.fixture(autouse=True)
+def isolated_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Run each test with no Zammad configuration, no dotenv files, and a throwaway cwd.
+
+    Args:
+        tmp_path: Empty directory used as the working directory.
+        monkeypatch: Fixture that changes the working directory and environment.
+
+    Yields:
+        Control to the test; os.environ is restored afterwards.
+    """
+    for name in [name for name in os.environ if name.startswith("ZAMMAD_")]:
+        monkeypatch.delenv(name)
+    monkeypatch.chdir(tmp_path)
+    with patch.dict(os.environ), patch("mcp_zammad.server.load_dotenv"):
+        yield
+
+
 @pytest.fixture
-def ticket_tools(decorator_capturer):
-    """Provide captured ticket tools bound to a controlled client double.
+def server_with_client_double() -> Iterator[tuple[ZammadMCPServer, Mock]]:
+    """Provide an MCP server wired to a controlled Zammad client double.
+
+    Yields:
+        The server and the client double its tools call.
+    """
+    zammad = Mock()
+    zammad.get_current_user.return_value = {"id": 1, "email": "agent@example.com"}
+    zammad.create_ticket.return_value = _ticket_payload()
+    with patch("mcp_zammad.server.ZammadClient", return_value=zammad):
+        yield ZammadMCPServer(), zammad
+
+
+@pytest.mark.asyncio
+async def test_create_ticket_tool_forwards_custom_fields(
+    server_with_client_double: tuple[ZammadMCPServer, Mock],
+) -> None:
+    """Forward custom_fields from the zammad_create_ticket tool call to the client.
 
     Args:
-        decorator_capturer: Fixture that records tools registered on the server.
+        server_with_client_double: Server and the client double its tools call.
     """
-    server_inst = ZammadMCPServer()
-    server_inst.client = Mock()
-    tools, capture_tool = decorator_capturer(server_inst.mcp.tool)
-    server_inst.mcp.tool = capture_tool  # type: ignore[method-assign, assignment]
-    server_inst.get_client = lambda: server_inst.client  # type: ignore[method-assign, assignment, return-value]
-    server_inst._setup_tools()
-    return tools, server_inst.client
+    server, zammad = server_with_client_double
+    arguments: dict[str, Any] = {
+        "title": "Fibre outage",
+        "group": "Support",
+        "customer": "customer@example.com",
+        "article_body": "Down since 09:00",
+        "custom_fields": {"category": "Incident"},
+    }
 
+    async with Client(server.mcp) as client:
+        await client.call_tool("zammad_create_ticket", arguments)
 
-def test_create_ticket_tool_forwards_custom_fields(ticket_tools):
-    """Forward custom_fields from zammad_create_ticket to the client.
-
-    Args:
-        ticket_tools: Captured tools and the client double they call.
-    """
-    tools, client = ticket_tools
-    client.create_ticket.return_value = _ticket_payload()
-
-    params = TicketCreate(
-        title="Fibre outage",
-        group="Support",
-        customer="customer@example.com",
-        article_body="Down since 09:00",
-        custom_fields={"category": "Incident"},
-    )
-    tools["zammad_create_ticket"](**params.model_dump())
-
-    assert client.create_ticket.call_args.kwargs["custom_fields"] == {"category": "Incident"}
+    assert zammad.create_ticket.call_args.kwargs["custom_fields"] == {"category": "Incident"}
 
 
 def test_create_params_omit_custom_fields_when_not_provided():
