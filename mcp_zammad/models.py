@@ -304,6 +304,13 @@ class TicketCreate(StrictBaseModel):
     priority: str = Field(default="2 normal", description="Priority name (1 low, 2 normal, 3 high)", max_length=100)
     article_type: str = Field(default="note", description="Article type (note, email, phone)", max_length=50)
     article_internal: bool = Field(default=False, description="Whether the article is internal")
+    custom_fields: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Custom Zammad object attributes to set at creation, keyed by attribute name "
+            "(e.g. {'category': 'Incident'}). Required for any attribute Zammad Admin marks mandatory on create."
+        ),
+    )
 
     @field_validator("title", "article_body")
     @classmethod
@@ -314,6 +321,21 @@ class TicketCreate(StrictBaseModel):
         sent/stored verbatim, so quotes and apostrophes must not become &#x27;/&quot; entities.
         """
         return html.escape(v, quote=False)
+
+    @field_validator("custom_fields")
+    @classmethod
+    def reject_reserved_custom_field_names(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Reject custom field names that are empty or shadow built-in create fields."""
+        if v is None:
+            return v
+        # "article" is the nested payload key the client builds from the article_* fields.
+        reserved = (set(cls.model_fields) - {"custom_fields"}) | {"article"}
+        for name in v:
+            if not name:
+                raise ValueError("custom_fields keys must be non-empty attribute names")
+            if name in reserved:
+                raise ValueError(f"custom_fields key '{name}' is a built-in field; pass it as a top-level parameter")
+        return v
 
 
 class TicketUpdate(StrictBaseModel):

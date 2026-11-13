@@ -345,8 +345,21 @@ class ZammadClient:
         priority: str = "2 normal",
         article_type: str = "note",
         article_internal: bool = False,
+        custom_fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Create a new ticket."""
+        """Create a new ticket.
+
+        Args:
+            custom_fields: Optional. Custom object attributes sent as top-level ticket keys, e.g. an
+                attribute that Zammad Admin marks mandatory on create.
+
+        Raises:
+            ValueError: If a custom field shadows a built-in key.
+        """
+        built_in_keys = {"title", "group", "customer", "state", "priority", "article"}
+        for name in custom_fields or {}:
+            if name in built_in_keys:
+                raise ValueError(f"custom_fields key '{name}' is a built-in field; pass it as a named argument")
         ticket_data = {
             "title": title,
             "group": group,
@@ -359,6 +372,7 @@ class ZammadClient:
                 "internal": article_internal,
             },
         }
+        ticket_data.update(custom_fields or {})
 
         return dict(self.api.ticket.create(ticket_data))
 
