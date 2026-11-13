@@ -1839,6 +1839,10 @@ class ZammadMCPServer:
                     - priority (str): Priority name (default: "2 normal")
                     - article_type (str): Article type - "note", "email", "phone" (default: "note")
                     - article_internal (bool): Whether article is internal-only (default: False)
+                    - custom_fields (dict[str, Any] | None): Custom object attributes defined in
+                      Zammad Admin, keyed by attribute name (e.g. {"category": "Incident"}).
+                      Required when Zammad marks an attribute mandatory on create; Zammad
+                      rejects the ticket with "Missing required value for field '<name>'!"
 
             Returns:
                 Ticket: The created ticket object with schema:
@@ -1859,6 +1863,7 @@ class ZammadMCPServer:
             Examples:
                 - Use when: "Create ticket for server outage" -> title, group, customer, article_body
                 - Use when: "New high priority ticket" -> add priority="3 high"
+                - Use when: "Create ticket with category Incident" -> add custom_fields={"category": "Incident"}
                 - Don't use when: Ticket already exists (use zammad_update_ticket)
                 - Don't use when: Only adding comment (use zammad_add_article)
 
