@@ -7,7 +7,18 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    WrapValidator,
+    field_validator,
+    model_validator,
+)
+
+from .attachment_selection import AttachmentReferenceParams, validate_reference_ticket, validate_selection
 
 
 class CaseInsensitiveStrEnum(str, Enum):
@@ -358,12 +369,13 @@ class TicketSearchParams(StrictBaseModel):
         return self
 
 
-class ArticleCreate(StrictBaseModel):
-    """Create article request with optional attachments."""
+class _ArticleCreateFields(AttachmentReferenceParams, StrictBaseModel):
+    """Declare existing article creation fields without changing their validation."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
-
-    ticket_id: int = Field(description="Ticket ID to add article to", gt=0)
+    ticket_id: Annotated[int, WrapValidator(validate_reference_ticket)] = Field(
+        description="Ticket ID to add article to", gt=0
+    )
     body: str = Field(description="Article body content", max_length=100000)
     article_type: ArticleType = Field(default=ArticleType.NOTE, alias="type", description="Article type")
     internal: bool = Field(default=False, description="Whether the article is internal")
@@ -378,6 +390,16 @@ class ArticleCreate(StrictBaseModel):
     attachments: list[AttachmentUpload] | None = Field(
         default=None, description="Optional attachments to include", max_length=10
     )
+
+
+class ArticleCreate(_ArticleCreateFields):
+    """Create article request with optional inline attachments or references."""
+
+    @model_validator(mode="after")
+    def validate_references(self) -> "ArticleCreate":
+        """Reject incomplete or ambiguous attachment references."""
+        validate_selection(self.source_article_id, self.attachment_ids, self.attachments, self.ticket_id)
+        return self
 
     @model_validator(mode="after")
     def sanitize_body(self) -> "ArticleCreate":

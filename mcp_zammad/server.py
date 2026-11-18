@@ -23,6 +23,7 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from .attachment_references import reference_call
 from .audit import AuditConfig, AuditLogger, error_details
 from .audit_middleware import AuditMiddleware
 from .client import ZammadClient
@@ -1964,11 +1965,16 @@ class ZammadMCPServer:
         @self.mcp.tool(annotations=_write_annotations("Add Ticket Article"))
         @flat_params(ArticleCreate)
         def zammad_add_article(params: ArticleCreate) -> Article:
-            """Add an article (comment/note/email) to an existing ticket with optional attachments.
+            """Add a comment, note, or email to an existing ticket.
 
             Use the internal ticket_id, not the ticket number. Set internal=true for a note that
             only agents see. text/plain bodies are HTML-escaped before sending. To open a ticket
             use zammad_create_ticket; to change ticket fields use zammad_update_ticket.
+
+            Reuse files without model-context base64: supply source_article_id and attachment_ids
+            together, not inline attachments. Same ticket only; select 1-10 unique positive integer
+            IDs (10 MiB/file, 25 MiB total). Reads and lengths are verified. Non-idempotent write:
+            do not retry automatically.
 
             Args:
                 params (ArticleCreate): Validated article creation parameters containing:
@@ -1984,7 +1990,9 @@ class ZammadMCPServer:
                     - to (str | None): Email recipient (for email type)
                     - cc (str | None): Email CC recipients
                     - time_unit (float | None): Time spent for time accounting (> 0)
-                    - attachments (list[AttachmentUpload] | None): Optional attachments (max 10)
+                    - attachments (list[AttachmentUpload] | None): Optional inline attachments (max 10)
+                    - source_article_id (int | None): Source article in the target ticket
+                    - attachment_ids (list[int] | None): Existing attachment IDs in requested order
 
             Returns:
                 Article: The created article object with schema:
@@ -2012,8 +2020,10 @@ class ZammadMCPServer:
             Error Handling:
                 - A missing body or an unknown article_type fails Pydantic validation before
                   any API call
-                - Zammad errors (HTTP error text for 401/403/404, e.g. unknown ticket_id)
-                  propagate unchanged; FastMCP returns a tool error with that text
+                - Without attachment references, Zammad errors (HTTP error text for 401/403/404,
+                  e.g. unknown ticket_id) propagate unchanged through FastMCP
+                - Reference-mode external errors omit upstream response bodies and file content;
+                  after creation or response validation fails, check the ticket before retrying
                 - Sanitizes HTML content if content_type is text/html
                 - Validates base64 encoding before upload
                 - Sanitizes filenames to prevent path traversal
@@ -2031,19 +2041,15 @@ class ZammadMCPServer:
             attachments_data = None
             if params.attachments:
                 attachments_data = [
-                    {
-                        "filename": att.filename,
-                        "data": att.data,
-                        "mime-type": att.mime_type,
-                    }
+                    {"filename": att.filename, "data": att.data, "mime-type": att.mime_type}
                     for att in params.attachments
                 ]
 
             # Extract ticket_id and article_type separately to avoid duplicate kwargs
             # Use mode="json" to convert enums to strings, by_alias=True for API compatibility
-            article_params = params.model_dump(
-                mode="json", by_alias=True, exclude={"ticket_id", "article_type", "attachments"}
-            )
+            excluded = {"ticket_id", "article_type", "attachments"}
+            excluded.update(name for name in ("source_article_id", "attachment_ids") if getattr(params, name) is None)
+            article_params = params.model_dump(mode="json", by_alias=True, exclude=excluded)
             article_data = client.add_article(
                 ticket_id=params.ticket_id,
                 article_type=params.article_type.value,
@@ -2051,6 +2057,12 @@ class ZammadMCPServer:
                 **article_params,
             )
 
+            if params.source_article_id is not None:
+                return reference_call(
+                    Article.model_validate,
+                    "Article response is invalid; outcome unknown. Do not retry automatically.",
+                    article_data,
+                )
             return Article(**article_data)
 
         @self.mcp.tool(annotations=_read_only_annotations("Get Article Attachments"))

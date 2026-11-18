@@ -5,6 +5,8 @@ from typing import Any
 
 import pytest
 
+pytest_plugins = ["tests.attachment_reference_support"]
+
 
 @pytest.fixture
 def decorator_capturer():
