@@ -127,3 +127,14 @@ async def test_descriptions_only_reference_registered_tools(server: ZammadMCPSer
         name: sorted(set(TOOL_NAME.findall(tool.description or "")) - set(tools)) for name, tool in tools.items()
     }
     assert {name: refs for name, refs in unknown.items() if refs} == {}
+
+
+@pytest.mark.asyncio
+async def test_save_reply_in_progress_advertises_article_option_and_default(server: ZammadMCPServer) -> None:
+    tool = (await _tools(server))["zammad_save_reply_in_progress"]
+    prop = (tool.inputSchema.get("properties") or {}).get("reply_to_article_id")
+    assert prop is not None
+    assert "integer" in json.dumps(prop)
+    first_paragraph = (tool.description or "").split("\n\n")[0]
+    assert "latest customer email" in first_paragraph
+    assert "reply_to_article_id" in first_paragraph

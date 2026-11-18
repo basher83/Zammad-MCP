@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_zammad import server as srv
-from mcp_zammad.client import ZammadAPIError, ZammadClient
+from mcp_zammad.client import REQUEST_TIMEOUT_SECONDS, ZammadAPIError, ZammadClient
 from mcp_zammad.server import (
     _format_kb_answer_markdown,
     _format_kb_category_markdown,
@@ -69,9 +69,9 @@ def kb_client() -> ZammadClient:
 
 class TestZammadAPIErrorAndRaise:
     def test_raise_on_4xx_with_json_body(self, kb_client: ZammadClient) -> None:
-        resp = _make_response(403, {"error": "Forbidden"})
+        kb_client.api.session.get.return_value = _make_response(403, {"error": "Forbidden"})
         with pytest.raises(ZammadAPIError) as exc:
-            kb_client._kb_raise_or_return(resp)
+            kb_client.get_knowledge_base(1)
         assert exc.value.status_code == 403
         assert exc.value.body == {"error": "Forbidden"}
 
@@ -79,16 +79,22 @@ class TestZammadAPIErrorAndRaise:
         resp = _make_response(500, content=b"server boom")
         resp.json.side_effect = ValueError("no json")
         resp.text = "server boom"
+        kb_client.api.session.get.return_value = resp
         with pytest.raises(ZammadAPIError) as exc:
-            kb_client._kb_raise_or_return(resp)
+            kb_client.get_knowledge_base(1)
         assert exc.value.status_code == 500
         assert exc.value.body == "server boom"
 
     def test_204_or_empty_body_raises(self, kb_client: ZammadClient) -> None:
-        resp = _make_response(204)
+        kb_client.api.session.get.return_value = _make_response(204)
         with pytest.raises(ZammadAPIError) as exc:
-            kb_client._kb_raise_or_return(resp)
+            kb_client.get_knowledge_base(1)
         assert exc.value.status_code == 204
+
+    def test_kb_requests_are_bounded_by_the_request_timeout(self, kb_client: ZammadClient) -> None:
+        kb_client.api.session.post.return_value = _make_response(200, {"assets": {"KnowledgeBase": {}}})
+        kb_client.list_knowledge_bases()
+        assert kb_client.api.session.post.call_args.kwargs["timeout"] == REQUEST_TIMEOUT_SECONDS
 
 
 class TestListKnowledgeBases:
@@ -109,7 +115,9 @@ class TestListKnowledgeBases:
             {"id": 1, "active": True},
             {"id": 3, "active": True},
         ]
-        kb_client.api.session.post.assert_called_once_with(kb_client.api.url + "knowledge_bases/init")
+        kb_client.api.session.post.assert_called_once_with(
+            kb_client.api.url + "knowledge_bases/init", timeout=REQUEST_TIMEOUT_SECONDS
+        )
         kb_client.api.session.get.assert_not_called()
 
     def test_empty_init_payload_returns_empty_list(self, kb_client: ZammadClient) -> None:

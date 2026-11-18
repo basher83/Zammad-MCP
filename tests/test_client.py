@@ -2,6 +2,7 @@
 
 import logging
 import os
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -315,3 +316,27 @@ def test_add_article_without_time_unit_excludes_field(mock_api: MagicMock) -> No
     assert result["id"] == 789
     call_args = mock_instance.ticket_article.create.call_args[0][0]
     assert "time_unit" not in call_args
+
+
+class _PagedGroupResource:
+    """Fake of the zammad_py group resource: it slices pages like Zammad, and per_page defaults to 10."""
+
+    def __init__(self, groups: list[dict[str, Any]]) -> None:
+        self._groups = groups
+
+    def all(self, page: int = 1, filters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        params = filters or {}
+        page = params.get("page", page)
+        per_page = params.get("per_page", 10)
+        start = (page - 1) * per_page
+        return self._groups[start : start + per_page]
+
+
+@patch("mcp_zammad.client.ZammadAPI")
+def test_get_groups_returns_groups_from_every_page(mock_api: MagicMock) -> None:
+    """get_groups returns all 25 groups, not only the first zammad_py page of 10."""
+    groups = [{"id": i, "name": f"Group {i}"} for i in range(1, 26)]
+    mock_api.return_value.group = _PagedGroupResource(groups)
+    client = ZammadClient(url="https://test.zammad.com/api/v1", http_token=_TEST_AUTH_VALUE)
+
+    assert [group["id"] for group in client.get_groups()] == list(range(1, 26))
