@@ -17,6 +17,8 @@ from zammad_py.exceptions import ConfigException
 from mcp_zammad.resilience import ResilientSession
 from mcp_zammad.resilience_config import ResilienceConfig
 
+from .attachment_references import reference_call, resolve_attachments
+from .attachment_selection import validate_selection
 from .audit import AuditLogger
 
 logger = logging.getLogger(__name__)
@@ -433,6 +435,8 @@ class ZammadClient:
         cc: str | None = None,
         content_type: str | None = None,
         attachments: list[dict[str, str]] | None = None,
+        source_article_id: int | None = None,
+        attachment_ids: list[int] | None = None,
     ) -> dict[str, Any]:
         """Add an article (comment/note) to a ticket with optional attachments.
 
@@ -458,29 +462,80 @@ class ZammadClient:
         if time_unit is not None and time_unit <= 0:
             raise ValueError("time_unit must be greater than 0")
 
-        article_data = {
-            "ticket_id": ticket_id,
-            "body": body,
-            "type": article_type,
-            "internal": internal,
-            "sender": sender,
-        }
+        attachments = self._resolve_article_attachments(ticket_id, source_article_id, attachment_ids, attachments)
+        optional = {"time_unit": time_unit, "subject": subject, "to": to, "cc": cc, "content_type": content_type}
+        article_data = self._article_payload(ticket_id, body, article_type, internal, sender, attachments, **optional)
+        return self._write_article(article_data, referenced=source_article_id is not None)
 
-        if time_unit is not None:
-            article_data["time_unit"] = time_unit
-        if subject is not None:
-            article_data["subject"] = subject
-        if to is not None:
-            article_data["to"] = to
-        if cc is not None:
-            article_data["cc"] = cc
-        if content_type is not None:
-            article_data["content_type"] = content_type
+    def _resolve_article_attachments(
+        self,
+        ticket_id: int,
+        source: int | None,
+        identifiers: list[int] | None,
+        inline: list[dict[str, str]] | None,
+    ) -> list[dict[str, str]] | None:
+        """Validate selection and resolve references using the client's API capabilities."""
+        validate_selection(source, identifiers, inline, ticket_id)
+        if source is None or identifiers is None:
+            return inline
+        return resolve_attachments(
+            ticket_id, source, identifiers, self.api.ticket_article.find, self._download_reference_attachment
+        )
 
+    def _download_reference_attachment(self, ticket_id: int, article_id: int, attachment_id: int) -> bytes:
+        """Read reference content as raw bytes through the authenticated transport.
+
+        This buffers the response before length validation; it is not a hard
+        download memory bound. Do not use the SDK's JSON-decoding downloader.
+
+        Args:
+            ticket_id: Validated target ticket ID.
+            article_id: Validated source article ID.
+            attachment_id: Validated attachment ID.
+
+        Returns:
+            Unmodified HTTP response bytes.
+
+        Raises:
+            requests.HTTPError: If the download fails.
+        """
+        response: requests.Response = self.api.session.get(
+            f"{self.api.url}ticket_attachment/{ticket_id}/{article_id}/{attachment_id}",
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        return response.content
+
+    @staticmethod
+    def _article_payload(
+        ticket_id: int,
+        body: str,
+        article_type: str,
+        internal: bool,
+        sender: str,
+        attachments: list[dict[str, str]] | None,
+        **optional: Any,
+    ) -> dict[str, Any]:
+        """Build the original Zammad article payload without reference-only fields."""
+        data = {"ticket_id": ticket_id, "body": body, "type": article_type, "internal": internal, "sender": sender}
+        data.update({key: value for key, value in optional.items() if value is not None})
         if attachments:
-            article_data["attachments"] = attachments
+            data["attachments"] = attachments
+        return data
 
-        return dict(self.api.ticket_article.create(article_data))
+    def _write_article(self, data: dict[str, Any], *, referenced: bool) -> dict[str, Any]:
+        """Create once, hiding reference payloads from external error messages."""
+        if referenced:
+            return reference_call(
+                self._create_article,
+                "Article creation failed; outcome unknown. Do not retry automatically.",
+                data,
+            )
+        return self._create_article(data)
+
+    def _create_article(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Create once and convert the upstream response inside the error boundary."""
+        return dict(self.api.ticket_article.create(data))
 
     def get_user(self, user_id: int) -> dict[str, Any]:
         """Get user information by ID."""
