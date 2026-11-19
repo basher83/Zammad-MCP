@@ -49,9 +49,35 @@ class ZammadAPIError(Exception):
         super().__init__(f"HTTP {status_code} from Zammad: {body} (URL: {url})")
 
 
+def _api_body(response: Any, url: str) -> Any:
+    """
+    Return the parsed body of a 2xx Zammad response, or None when the body is empty.
+
+    Shared by the KB and draft calls. Raises ZammadAPIError on a non-2xx status,
+    an unparsable body, or a JSON body that is neither an object nor a list.
+    """
+    if not _is_2xx(response.status_code):
+        try:
+            body = response.json()
+        except ValueError:
+            body = response.text
+        raise ZammadAPIError(response.status_code, url, body)
+    if response.status_code == _HTTP_NO_CONTENT or not response.content:
+        return None
+    try:
+        data = response.json()
+    except (TypeError, ValueError) as exc:
+        raise ZammadAPIError(response.status_code, url, response.text) from exc
+    if not isinstance(data, (dict, list)):
+        raise ZammadAPIError(response.status_code, url, f"Unexpected response shape: {type(data).__name__}")
+    return data
+
+
 # Direct session calls bypass zammad_py, which sets no timeout; bound them so a
 # stalled Zammad server cannot hang a tool call indefinitely.
 REQUEST_TIMEOUT_SECONDS = 30.0
+
+GROUPS_PAGE_SIZE = 100
 
 
 class ZammadClient:
@@ -538,9 +564,19 @@ class ZammadClient:
         return list(result)
 
     def get_groups(self) -> list[dict[str, Any]]:
-        """Get all groups."""
-        result = self.api.group.all()
-        return list(result)
+        """
+        Get every group, walking all pages.
+
+        zammad_py defaults to 10 items per page, so one request would miss the rest.
+        """
+        groups: list[dict[str, Any]] = []
+        page = 1
+        while True:
+            batch = list(self.api.group.all(filters={"page": page, "per_page": GROUPS_PAGE_SIZE}))
+            groups.extend(batch)
+            if len(batch) < GROUPS_PAGE_SIZE:
+                return groups
+            page += 1
 
     def get_ticket_states(self) -> list[dict[str, Any]]:
         """Get all ticket states."""
@@ -625,40 +661,11 @@ class ZammadClient:
         path = "/".join(str(p) for p in parts)
         return f"{self.api.url}knowledge_bases/{path}"
 
-    def _kb_raise_or_return(self, response: Any) -> dict[str, Any] | list[Any]:
-        """Raise ZammadAPIError on HTTP error, otherwise return the parsed JSON body.
-
-        Empty, malformed, or unexpected bodies on KB endpoints are also raised
-        as ZammadAPIError so API failures never leak untyped exceptions.
-        """
-        if not _is_2xx(response.status_code):
-            try:
-                body = response.json()
-            except ValueError:
-                body = response.text
-            raise ZammadAPIError(response.status_code, response.url, body)
-        if response.status_code == _HTTP_NO_CONTENT or not response.content:
-            raise ZammadAPIError(
-                response.status_code,
-                response.url,
-                "Empty response body from KB endpoint",
-            )
-        try:
-            data = response.json()
-        except (TypeError, ValueError) as exc:
-            raise ZammadAPIError(response.status_code, response.url, response.text) from exc
-        if isinstance(data, (dict, list)):
-            return data
-        raise ZammadAPIError(
-            response.status_code,
-            response.url,
-            f"Unexpected KB response shape: {type(data).__name__}",
-        )
-
     def list_knowledge_bases(self) -> list[dict[str, Any]]:
         """List all knowledge bases from Zammad's permission-filtered bootstrap payload."""
-        response = self.api.session.post(self.api.url + "knowledge_bases/init")
-        payload = self._kb_raise_or_return(response)
+        url = self.api.url + "knowledge_bases/init"
+        response = self.api.session.post(url, timeout=REQUEST_TIMEOUT_SECONDS)
+        payload = _api_body(response, url)
         if not isinstance(payload, dict):
             raise ZammadAPIError(
                 response.status_code,
@@ -692,8 +699,9 @@ class ZammadClient:
 
     def get_knowledge_base(self, kb_id: int) -> dict[str, Any]:
         """Get a single knowledge base by ID."""
-        response = self.api.session.get(self._kb_url(kb_id))
-        result = self._kb_raise_or_return(response)
+        url = self._kb_url(kb_id)
+        response = self.api.session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+        result = _api_body(response, url)
         if not isinstance(result, dict):
             raise ZammadAPIError(
                 response.status_code,
@@ -704,8 +712,9 @@ class ZammadClient:
 
     def get_kb_category(self, kb_id: int, category_id: int) -> dict[str, Any]:
         """Get a single KB category."""
-        response = self.api.session.get(self._kb_url(kb_id, "categories", category_id))
-        result = self._kb_raise_or_return(response)
+        url = self._kb_url(kb_id, "categories", category_id)
+        response = self.api.session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+        result = _api_body(response, url)
         if not isinstance(result, dict):
             raise ZammadAPIError(
                 response.status_code,
@@ -722,8 +731,8 @@ class ZammadClient:
         so KnowledgeBaseAnswerTranslationContent (body) is included.
         """
         url = self._kb_url(kb_id, "answers", answer_id)
-        response = self.api.session.get(url)
-        payload = self._kb_raise_or_return(response)
+        response = self.api.session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+        payload = _api_body(response, url)
         if not isinstance(payload, dict):
             raise ZammadAPIError(
                 response.status_code,
@@ -735,10 +744,17 @@ class ZammadClient:
         translation_ids: list[int] = answer_entry.get("translation_ids") or []
         if translation_ids:
             translation_id = translation_ids[0]
-            response2 = self.api.session.get(url, params={"include_contents": translation_id})
-            data = self._kb_raise_or_return(response2)
-            if isinstance(data, dict):
-                return data
+            response2 = self.api.session.get(
+                url, params={"include_contents": translation_id}, timeout=REQUEST_TIMEOUT_SECONDS
+            )
+            data = _api_body(response2, url)
+            if not isinstance(data, dict):
+                raise ZammadAPIError(
+                    response2.status_code,
+                    response2.url,
+                    f"Unexpected kb_answer response shape: {type(data).__name__}",
+                )
+            return data
         return payload
 
     # --- KB extraction helpers (operate on compound payloads) ---
@@ -968,3 +984,164 @@ class ZammadClient:
             msg = f"Zammad refused to merge ticket {source_ticket_id} into #{target_ticket_number}: {payload.get('message', payload)}"
             raise ValueError(msg)
         return payload
+
+    # ------------------------------------------------------------------
+    # Drafts. Draft-only: nothing here creates an article or sends mail.
+    # Routes and payloads follow Zammad develop (ticket_shared_draft_zoom,
+    # tickets_shared_draft_starts, upload_caches and taskbar controllers).
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _draft_asset(payload: dict[str, Any], model: str, draft_id: Any) -> dict[str, Any]:
+        """Return one record from a Zammad ``assets`` block, or an empty dict."""
+        assets = payload.get("assets") or {}
+        return dict((assets.get(model) or {}).get(str(draft_id)) or {})
+
+    # (a) Shared draft on an existing ticket
+
+    def get_ticket_shared_draft(self, ticket_id: int) -> dict[str, Any] | None:
+        """
+        Return the shared draft of a ticket, or None when the ticket has no draft.
+
+        The result holds ``shared_draft_id``, ``new_article`` and ``ticket_attributes``.
+        """
+        url = f"{self.url}/tickets/{int(ticket_id)}/shared_draft"
+        response = self.api.session.request("GET", url, timeout=REQUEST_TIMEOUT_SECONDS)
+        payload = _api_body(response, url) or {}
+        draft_id = payload.get("shared_draft_id")
+        if draft_id is None:
+            return None
+        record = self._draft_asset(payload, "TicketSharedDraftZoom", draft_id)
+        return {
+            "shared_draft_id": draft_id,
+            "new_article": record.get("new_article") or {},
+            "ticket_attributes": record.get("ticket_attributes") or {},
+        }
+
+    def save_ticket_shared_draft(
+        self,
+        ticket_id: int,
+        new_article: dict[str, Any],
+        ticket_attributes: dict[str, Any],
+        form_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create or replace the shared draft of a ticket. Zammad creates it when none exists."""
+        body: dict[str, Any] = {"new_article": new_article, "ticket_attributes": ticket_attributes}
+        if form_id:
+            body["form_id"] = form_id
+        url = f"{self.url}/tickets/{int(ticket_id)}/shared_draft"
+        response = self.api.session.request("PUT", url, timeout=REQUEST_TIMEOUT_SECONDS, json=body)
+        payload = _api_body(response, url) or {}
+        return {"shared_draft_id": payload.get("shared_draft_id")}
+
+    def delete_ticket_shared_draft(self, ticket_id: int) -> dict[str, Any]:
+        """Delete the shared draft of a ticket."""
+        url = f"{self.url}/tickets/{int(ticket_id)}/shared_draft"
+        response = self.api.session.request("DELETE", url, timeout=REQUEST_TIMEOUT_SECONDS)
+        payload = _api_body(response, url) or {}
+        return {"shared_draft_id": payload.get("shared_draft_id")}
+
+    # (b) Shared drafts on the new-ticket screen
+
+    def list_new_ticket_drafts(self) -> list[dict[str, Any]]:
+        """List the new-ticket shared drafts the token may see (without content)."""
+        url = f"{self.url}/tickets/shared_drafts"
+        response = self.api.session.request("GET", url, timeout=REQUEST_TIMEOUT_SECONDS)
+        payload = _api_body(response, url) or {}
+        drafts = []
+        for draft_id in payload.get("shared_draft_ids") or []:
+            record = self._draft_asset(payload, "TicketSharedDraftStart", draft_id)
+            drafts.append({"id": draft_id, "name": record.get("name"), "group_id": record.get("group_id")})
+        return drafts
+
+    def get_new_ticket_draft(self, draft_id: int) -> dict[str, Any]:
+        """Return one new-ticket shared draft with its content."""
+        url = f"{self.url}/tickets/shared_drafts/{int(draft_id)}"
+        response = self.api.session.request("GET", url, timeout=REQUEST_TIMEOUT_SECONDS)
+        payload = _api_body(response, url) or {}
+        record = self._draft_asset(payload, "TicketSharedDraftStart", draft_id)
+        return {
+            "id": payload.get("shared_draft_id"),
+            "name": record.get("name"),
+            "group_id": record.get("group_id"),
+            "content": payload.get("shared_draft_content") or {},
+        }
+
+    def create_new_ticket_draft(
+        self, name: str, group_id: int, content: dict[str, Any], form_id: str | None = None
+    ) -> dict[str, Any]:
+        """Create a new-ticket shared draft. Attachments come from the upload cache of ``form_id``."""
+        body: dict[str, Any] = {"name": name, "group_id": group_id, "content": content}
+        if form_id:
+            body["form_id"] = form_id
+        url = f"{self.url}/tickets/shared_drafts"
+        response = self.api.session.request("POST", url, timeout=REQUEST_TIMEOUT_SECONDS, json=body)
+        payload = _api_body(response, url) or {}
+        return {"shared_draft_id": payload.get("shared_draft_id")}
+
+    def update_new_ticket_draft(
+        self,
+        draft_id: int,
+        name: str,
+        group_id: int,
+        content: dict[str, Any],
+        form_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Replace name, group and content of a new-ticket shared draft (PUT, as the Zammad UI does)."""
+        body: dict[str, Any] = {"name": name, "group_id": group_id, "content": content}
+        if form_id:
+            body["form_id"] = form_id
+        url = f"{self.url}/tickets/shared_drafts/{int(draft_id)}"
+        response = self.api.session.request("PUT", url, timeout=REQUEST_TIMEOUT_SECONDS, json=body)
+        payload = _api_body(response, url) or {}
+        return {"shared_draft_id": payload.get("shared_draft_id")}
+
+    def delete_new_ticket_draft(self, draft_id: int) -> dict[str, Any]:
+        """Delete a new-ticket shared draft."""
+        url = f"{self.url}/tickets/shared_drafts/{int(draft_id)}"
+        response = self.api.session.request("DELETE", url, timeout=REQUEST_TIMEOUT_SECONDS)
+        payload = _api_body(response, url) or {}
+        return {"shared_draft_id": payload.get("shared_draft_id")}
+
+    # (c) Upload cache for draft attachments
+
+    def upload_cache_add(self, form_id: str, path: str) -> dict[str, Any]:
+        """Upload a local file into the upload cache of ``form_id`` (multipart field ``File``)."""
+        url = f"{self.url}/upload_caches/{quote(form_id, safe='')}"
+        with open(path, "rb") as handle:
+            response = self.api.session.request(
+                "POST", url, timeout=REQUEST_TIMEOUT_SECONDS, files={"File": (os.path.basename(path), handle)}
+            )
+        payload = _api_body(response, url) or {}
+        return dict(payload.get("data") or {})
+
+    def upload_cache_delete(self, form_id: str, item_id: int | None = None) -> dict[str, Any]:
+        """Empty the upload cache of ``form_id``, or remove only the cached file ``item_id``."""
+        path = f"upload_caches/{quote(form_id, safe='')}"
+        if item_id is not None:
+            path = f"{path}/items/{int(item_id)}"
+        url = f"{self.url}/{path}"
+        response = self.api.session.request("DELETE", url, timeout=REQUEST_TIMEOUT_SECONDS)
+        payload = _api_body(response, url) or {}
+        return {"success": bool(payload.get("success"))}
+
+    # (d) Taskbar (the per-user reply-in-progress draft)
+
+    def list_taskbar(self) -> list[dict[str, Any]]:
+        """List the taskbar entries of the token's user."""
+        url = f"{self.url}/taskbar"
+        response = self.api.session.request("GET", url, timeout=REQUEST_TIMEOUT_SECONDS)
+        payload = _api_body(response, url) or {}
+        return list(payload) if isinstance(payload, list) else []
+
+    def create_taskbar(self, entry: dict[str, Any]) -> dict[str, Any]:
+        """Create a taskbar entry (key, callback, state, params, prio, notify, active, app)."""
+        url = f"{self.url}/taskbar"
+        response = self.api.session.request("POST", url, timeout=REQUEST_TIMEOUT_SECONDS, json=entry)
+        return dict(_api_body(response, url) or {})
+
+    def update_taskbar(self, taskbar_id: int, entry: dict[str, Any]) -> dict[str, Any]:
+        """Update a taskbar entry."""
+        url = f"{self.url}/taskbar/{int(taskbar_id)}"
+        response = self.api.session.request("PUT", url, timeout=REQUEST_TIMEOUT_SECONDS, json=entry)
+        return dict(_api_body(response, url) or {})

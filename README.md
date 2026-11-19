@@ -24,6 +24,16 @@ An MCP server that connects AI assistants to Zammad, providing tools for managin
   - `zammad_get_ticket_tags` - Get tags assigned to a specific ticket
   - `zammad_list_tags` - List all tags defined in the system (requires admin.tag permission)
   - `zammad_export_tickets` - Export tickets with their conversation articles to a JSONL file on the server host (requires `ZAMMAD_EXPORT_DIR`; see [Ticket Export](#ticket-export-optional))
+  - **Which draft tool:** to draft or prepare a reply on an existing ticket, use `zammad_save_reply_in_progress` (it fills your own reply box, with attachments). Use `zammad_save_ticket_shared_draft` only when you explicitly ask for a shared draft on an existing ticket. Use `zammad_save_new_ticket_draft` for a new outgoing email (a new ticket).
+  - `zammad_get_ticket_shared_draft` - Read the shared draft of a ticket (draft only, never sends)
+  - `zammad_save_ticket_shared_draft` - Save a shared reply draft on a ticket, with local file attachments; replaces the old draft
+  - `zammad_delete_ticket_shared_draft` - Delete the shared draft of a ticket
+  - `zammad_list_new_ticket_drafts` - List shared drafts of the new-ticket screen, optionally by group
+  - `zammad_get_new_ticket_draft` - Read one new-ticket shared draft with its content
+  - `zammad_save_new_ticket_draft` - Create or update a new-ticket shared draft, with attachments (never creates the ticket)
+  - `zammad_delete_new_ticket_draft` - Delete one new-ticket shared draft
+  - `zammad_get_reply_in_progress` - Read your unsent reply box text for a ticket (the desktop taskbar draft)
+  - `zammad_save_reply_in_progress` - Write your unsent reply box text for a ticket, with local file attachments; the default for "draft a reply"; the draft tools never send. Without `reply_to_article_id` it answers the ticket's latest customer email (to, cc, subject and threading filled as the desktop Reply button does); pass `reply_to_article_id` to answer another email article of the ticket. Explicit `to`, `cc` and `subject` win over the filled values.
 
 - **Attachment Support**
   - `zammad_get_article_attachments` - List attachments for a ticket article
@@ -220,6 +230,16 @@ See [Audit logging](docs/reference/configuration.md#audit-logging) for the varia
 `zammad_export_tickets` writes a JSON Lines file on the host that runs the MCP server. It is disabled until
 `ZAMMAD_EXPORT_DIR` names an existing directory, and every output path must resolve inside that directory.
 See [Ticket export](docs/reference/configuration.md#ticket-export) for the variables, filters, and confinement rules.
+
+### Draft Attachments (Optional)
+
+The draft tools (`zammad_save_ticket_shared_draft`, `zammad_save_new_ticket_draft`,
+`zammad_save_reply_in_progress`) upload attachments from the host that runs the MCP server. Attachments are
+disabled until `ZAMMAD_ATTACHMENT_DIR` names an existing directory. Every attachment path is resolved, symlinks
+included, and must lie inside that directory. `ZAMMAD_ATTACHMENT_MAX_BYTES` caps the size of one file (default
+10485760, 10 MiB); the size is checked before the file is read. A rejected path or file raises an error and
+nothing is uploaded. If a later upload or the draft write fails, the files uploaded in that call are removed from
+the upload cache again.
 
 **Important**: Keep your `.env` file out of version control (already in `.gitignore`).
 

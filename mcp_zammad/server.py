@@ -7,8 +7,9 @@ import logging
 import os
 import re
 import time
-from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager
+import uuid
+from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -59,6 +60,7 @@ from .models import (
     StateBrief,
     TagOperationParams,
     TagOperationResult,
+    TaskbarEntry,
     Ticket,
     TicketCreate,
     TicketExportParams,
@@ -75,7 +77,17 @@ from .models import (
     UserCreate,
 )
 from .resilience import CircuitOpenError, RetryExhaustedError
-from .tool_params import flat_params
+from .tool_params import (
+    NewTicketDraftIdParams,
+    NewTicketDraftListParams,
+    NewTicketDraftWriteParams,
+    ReplyInProgressGetParams,
+    ReplyInProgressSaveParams,
+    TicketSharedDraftDeleteParams,
+    TicketSharedDraftGetParams,
+    TicketSharedDraftWriteParams,
+    flat_params,
+)
 from .webhooks import WebhookHandler
 
 
@@ -1451,6 +1463,207 @@ def _format_queue_state(state: str, state_tickets: list[dict[str, Any]]) -> list
     return lines
 
 
+def _draft_body_html(body: str, content_type: str) -> str:
+    """Return the body as the HTML the Zammad editor stores; text/plain is escaped first."""
+    if content_type == "text/html":
+        return body
+    return html.escape(body).replace("\r\n", "\n").replace("\n", "<br>")
+
+
+DEFAULT_ATTACHMENT_MAX_BYTES = 10485760
+
+
+def _attachment_max_bytes() -> int:
+    """Return the per-file size cap from ZAMMAD_ATTACHMENT_MAX_BYTES (default 10 MiB)."""
+    raw = os.environ.get("ZAMMAD_ATTACHMENT_MAX_BYTES")
+    if not raw:
+        return DEFAULT_ATTACHMENT_MAX_BYTES
+    if not raw.isdigit() or int(raw) <= 0:
+        raise ValueError(f"ZAMMAD_ATTACHMENT_MAX_BYTES must be a positive integer, got {raw!r}")
+    return int(raw)
+
+
+def _attachment_dir() -> Path:
+    """Return the resolved ZAMMAD_ATTACHMENT_DIR; draft attachments are off while it is unset."""
+    raw = os.environ.get("ZAMMAD_ATTACHMENT_DIR")
+    if not raw:
+        raise ValueError(
+            "Draft attachments are disabled: ZAMMAD_ATTACHMENT_DIR is not set. "
+            "Set it to the directory the server may upload files from."
+        )
+    base = Path(raw).expanduser().resolve()
+    if not base.is_dir():
+        raise ValueError(f"ZAMMAD_ATTACHMENT_DIR does not exist or is not a directory: {base}")
+    return base
+
+
+def _check_attachment(path: str, base: Path, max_bytes: int) -> str:
+    """Return the resolved path of one attachment after the containment and size checks.
+
+    Symlinks are resolved first, so a link inside the directory cannot reach a file outside it.
+    The size is read from the file system before the file is opened.
+    """
+    resolved = Path(path).expanduser().resolve()
+    if base not in resolved.parents:
+        raise ValueError(f"attachment {resolved} is outside ZAMMAD_ATTACHMENT_DIR {base}")
+    if not resolved.is_file():
+        raise ValueError(f"attachment not found: {path}")
+    size = resolved.stat().st_size
+    if size > max_bytes:
+        raise ValueError(f"attachment {resolved} is {size} bytes and exceeds ZAMMAD_ATTACHMENT_MAX_BYTES ({max_bytes})")
+    return str(resolved)
+
+
+def _discard_uploads(client: ZammadClient, form_id: str, uploaded: list[dict[str, Any]]) -> None:
+    """Remove the cached files uploaded in this call; a failed cleanup is logged, not raised."""
+    for item in uploaded:
+        try:
+            client.upload_cache_delete(form_id, item_id=item.get("id"))
+        except Exception:
+            logger.exception("Could not remove upload %s from cache %s", item.get("id"), form_id)
+
+
+@contextmanager
+def _draft_uploads(client: ZammadClient, form_id: str, paths: list[str]) -> Iterator[list[dict[str, Any]]]:
+    """Check every path, upload the files to ``form_id`` and yield the cache items.
+
+    All paths are checked before the first upload. When a later upload or the body of the
+    ``with`` block fails, the items uploaded in this call are deleted and the error is re-raised.
+    Items that the cache already held are not touched.
+    """
+    checked: list[str] = []
+    if paths:
+        base, cap = _attachment_dir(), _attachment_max_bytes()
+        checked = [_check_attachment(path, base, cap) for path in paths]
+    uploaded: list[dict[str, Any]] = []
+    try:
+        uploaded.extend(client.upload_cache_add(form_id, path) for path in checked)
+        yield uploaded
+    except BaseException:
+        _discard_uploads(client, form_id, uploaded)
+        raise
+
+
+_CUSTOMER_LOOKUP_PER_PAGE = 50
+
+
+def _resolve_group_id(group: str, load_groups: Callable[[], list[Group]]) -> int:
+    """Turn a group name or numeric ID into a group ID.
+
+    The group list is loaded only for a name, so a numeric ID makes no API call.
+    """
+    if group.isdigit():
+        return int(group)
+    for entry in load_groups():
+        if entry.name.lower() == group.lower():
+            return entry.id
+    msg = f"Group '{group}' not found. Use zammad_list_groups to see the names."
+    raise ValueError(msg)
+
+
+def _quote_search_phrase(value: str) -> str:
+    """Quote a value as one literal Zammad search phrase, so ``+``, ``.`` and ``@`` are not operators."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _resolve_customer(client: ZammadClient, customer: str) -> tuple[int, str]:
+    """Turn a customer email or numeric ID into ``(user id, email)``.
+
+    Raises:
+        ValueError: No user has that email (the message names it).
+    """
+    if customer.isdigit():
+        user = client.get_user(int(customer))
+        return int(customer), str(user.get("email") or "")
+    wanted = customer.lower()
+    query = f"email:{_quote_search_phrase(customer)}"
+    for user in client.search_users(query, per_page=_CUSTOMER_LOOKUP_PER_PAGE):
+        if str(user.get("email", "")).lower() == wanted:
+            return int(user["id"]), str(user["email"])
+    msg = f"Customer '{customer}' not found. Use zammad_search_users to check."
+    raise ValueError(msg)
+
+
+def _reply_taskbar_key(ticket_id: int) -> str:
+    """Taskbar key the desktop uses for an open ticket."""
+    return f"Ticket-{ticket_id}"
+
+
+def _find_reply_taskbar(client: ZammadClient, ticket_id: int) -> dict[str, Any] | None:
+    """Return the current user's desktop taskbar entry for the ticket, or None when it is not open."""
+    key = _reply_taskbar_key(ticket_id)
+    return next(
+        (entry for entry in client.list_taskbar() if entry.get("key") == key and entry.get("app") == "desktop"),
+        None,
+    )
+
+
+_GIVEN_REPLY_FIELDS = ("type", "internal", "to", "cc", "subject")
+
+
+def _latest_customer_email(articles: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the newest article a customer sent by email, or None when the ticket has none."""
+    emails = [a for a in articles if a.get("sender") == "Customer" and a.get("type") == "email"]
+    return max(emails, key=lambda a: int(a.get("id") or 0), default=None)
+
+
+def _email_article_by_id(articles: list[dict[str, Any]], article_id: int, ticket_id: int) -> dict[str, Any]:
+    """Return the email article with ``article_id`` on the ticket.
+
+    Raises:
+        ValueError: The ticket has no email article with that ID.
+    """
+    found = next((a for a in articles if a.get("id") == article_id and a.get("type") == "email"), None)
+    if found is None:
+        msg = f"Article {article_id} is not an email article of ticket {ticket_id}."
+        raise ValueError(msg)
+    return found
+
+
+def _reply_recipient(article: dict[str, Any]) -> str:
+    """Return whom a reply to ``article`` goes to, as the desktop Reply button chooses.
+
+    A customer email is answered to its Reply-To or From; an email an agent sent goes to its
+    recipients again, not back to the system address it came from.
+    """
+    if article.get("sender") == "Customer":
+        return str(article.get("reply_to") or article.get("from") or "")
+    return str(article.get("to") or "")
+
+
+def _reply_fields(article: dict[str, Any], ticket: dict[str, Any]) -> dict[str, Any]:
+    """Fill the reply box from an article the way the desktop Reply button does."""
+    return {
+        "to": _reply_recipient(article),
+        "cc": article.get("cc") or "",
+        "subject": article.get("subject") or ticket.get("title") or "",
+        "in_reply_to": article.get("message_id") or "",
+        "subtype": "reply",
+        "type": "email",
+        "internal": False,
+    }
+
+
+def _reply_defaults(client: ZammadClient, ticket_id: int, article_id: int | None) -> dict[str, Any]:
+    """Return the reply-box fields that answer an article, or an empty dict when there is none to answer.
+
+    Raises:
+        ValueError: ``article_id`` is not an email article of the ticket.
+    """
+    ticket = client.get_ticket(ticket_id, article_limit=-1)
+    articles = ticket.get("articles") or []
+    if article_id is not None:
+        return _reply_fields(_email_article_by_id(articles, article_id, ticket_id), ticket)
+    latest = _latest_customer_email(articles)
+    return {} if latest is None else _reply_fields(latest, ticket)
+
+
+def _given_reply_fields(params: ReplyInProgressSaveParams) -> dict[str, Any]:
+    """Return the reply-box fields the caller set; omitted ones (None) are left alone."""
+    return {name: getattr(params, name) for name in _GIVEN_REPLY_FIELDS if getattr(params, name) is not None}
+
+
 class ZammadMCPServer:
     """Zammad MCP Server with proper client lifecycle management."""
 
@@ -1559,6 +1772,245 @@ class ZammadMCPServer:
         self._setup_system_tools()
         self._setup_kb_tools()
         self._setup_event_tools()
+        self._setup_draft_tools()
+
+    def _setup_draft_tools(self) -> None:  # noqa: PLR0915
+        """Register the draft-only tools. No tool here creates an article, sends mail or submits a draft."""
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get Ticket Shared Draft"))
+        @flat_params(TicketSharedDraftGetParams)
+        def zammad_get_ticket_shared_draft(params: TicketSharedDraftGetParams) -> dict[str, Any]:
+            """Read the shared draft of an existing ticket. Never sends anything.
+
+            Shared drafts are for explicit requests only; a reply draft lives in the reply in
+            progress (zammad_get_reply_in_progress).
+
+            Args:
+                params (TicketSharedDraftGetParams): ticket_id (int): internal ticket ID.
+
+            Returns:
+                dict: {"exists": false} or {"exists": true, "shared_draft_id", "new_article", "ticket_attributes"}.
+            """
+            draft = self.get_client().get_ticket_shared_draft(params.ticket_id)
+            return {"exists": False} if draft is None else {"exists": True, **draft}
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Save Ticket Shared Draft"))
+        @flat_params(TicketSharedDraftWriteParams)
+        def zammad_save_ticket_shared_draft(params: TicketSharedDraftWriteParams) -> dict[str, Any]:
+            """Save the shared draft of an existing ticket. It replaces the whole draft already there.
+
+            Use this only when the user explicitly asks for a shared draft on an existing ticket.
+            Otherwise use zammad_save_reply_in_progress, the default for drafting a reply.
+
+            Draft only: this tool never sends the reply, never creates an article and never submits
+            the draft. A person opens the draft in Zammad and sends it. Fields left out are cleared.
+            Attachments are local file paths; they are uploaded first, then the draft is written.
+
+            Args:
+                params (TicketSharedDraftWriteParams): ticket_id, body, content_type (text/html or
+                    text/plain; plain text is escaped), type (email or note), internal, to, cc,
+                    subject, attachments (absolute local paths, max 10).
+
+            Returns:
+                dict: {"shared_draft_id": int, "attachments": number uploaded}.
+            """
+            client = self.get_client()
+            form_id = str(uuid.uuid4())
+            with _draft_uploads(client, form_id, params.attachments) as uploaded:
+                new_article: dict[str, Any] = {
+                    "body": _draft_body_html(params.body, params.content_type),
+                    "type": params.type,
+                    "internal": params.internal,
+                    "in_reply_to": "",
+                    "subtype": "",
+                    "content_type": "text/html",
+                    "form_id": form_id,
+                }
+                for name in ("to", "cc", "subject"):
+                    value = getattr(params, name)
+                    if value is not None:
+                        new_article[name] = value
+                result = client.save_ticket_shared_draft(
+                    params.ticket_id, new_article, {}, form_id=form_id if uploaded else None
+                )
+                return {"shared_draft_id": result.get("shared_draft_id"), "attachments": len(uploaded)}
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Delete Ticket Shared Draft"))
+        @flat_params(TicketSharedDraftDeleteParams)
+        def zammad_delete_ticket_shared_draft(params: TicketSharedDraftDeleteParams) -> dict[str, Any]:
+            """Delete the shared draft of an existing ticket. The ticket and its articles stay untouched.
+
+            Args:
+                params (TicketSharedDraftDeleteParams): ticket_id (int): internal ticket ID.
+
+            Returns:
+                dict: {"shared_draft_id": int | None}.
+            """
+            return self.get_client().delete_ticket_shared_draft(params.ticket_id)
+
+        @self.mcp.tool(annotations=_read_only_annotations("List New Ticket Drafts"))
+        @flat_params(NewTicketDraftListParams)
+        def zammad_list_new_ticket_drafts(params: NewTicketDraftListParams) -> list[dict[str, Any]]:
+            """List the shared drafts of the new-ticket screen (id, name, group_id; no content).
+
+            Use zammad_get_new_ticket_draft to read the content of one draft.
+
+            Args:
+                params (NewTicketDraftListParams): group (str | None): group name or ID filter.
+
+            Returns:
+                list[dict]: One entry per draft.
+            """
+            client = self.get_client()
+            drafts = client.list_new_ticket_drafts()
+            if params.group:
+                group_id = _resolve_group_id(params.group, self._get_cached_groups)
+                drafts = [d for d in drafts if d.get("group_id") == group_id]
+            return drafts
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get New Ticket Draft"))
+        @flat_params(NewTicketDraftIdParams)
+        def zammad_get_new_ticket_draft(params: NewTicketDraftIdParams) -> dict[str, Any]:
+            """Read one new-ticket shared draft with its content.
+
+            Use zammad_list_new_ticket_drafts to find the draft_id.
+
+            Args:
+                params (NewTicketDraftIdParams): draft_id (int): shared draft ID.
+
+            Returns:
+                dict: id, name, group_id and content (the form fields).
+            """
+            return self.get_client().get_new_ticket_draft(params.draft_id)
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Save New Ticket Draft"))
+        @flat_params(NewTicketDraftWriteParams)
+        def zammad_save_new_ticket_draft(params: NewTicketDraftWriteParams) -> dict[str, Any]:
+            """Save a draft for a new outgoing email (a new ticket) on the new-ticket screen, or update one with draft_id.
+
+            Draft only: this tool never creates a ticket, never sends mail and never submits the
+            draft. Attachments are local file paths; they are uploaded first, then the draft is
+            written. With draft_id it replaces the draft's name, group and content; without it a new draft is created.
+
+            Args:
+                params (NewTicketDraftWriteParams): name, group (name or ID), title, customer (email
+                    or ID), to, cc, subject, body, content_type (plain text is escaped),
+                    article_type (email-out, phone-in or note), attachments (absolute paths, max 10),
+                    draft_id (update instead of create).
+
+            Returns:
+                dict: {"shared_draft_id": int, "attachments": number uploaded}.
+            """
+            client = self.get_client()
+            group_id = _resolve_group_id(params.group, self._get_cached_groups)
+            content: dict[str, Any] = {"formSenderType": params.article_type}
+            if params.customer:
+                customer_id, email = _resolve_customer(client, params.customer)
+                content["customer_id"] = customer_id
+                content["customer_id_completion"] = email
+            for name in ("title", "to", "cc", "subject"):
+                value = getattr(params, name)
+                if value is not None:
+                    content[name] = value
+            if params.body is not None:
+                content["body"] = _draft_body_html(params.body, params.content_type)
+            form_id = str(uuid.uuid4())
+            with _draft_uploads(client, form_id, params.attachments) as uploaded:
+                use_form = form_id if uploaded else None
+                if params.draft_id is None:
+                    result = client.create_new_ticket_draft(params.name, group_id, content, form_id=use_form)
+                else:
+                    result = client.update_new_ticket_draft(
+                        params.draft_id, params.name, group_id, content, form_id=use_form
+                    )
+                return {"shared_draft_id": result.get("shared_draft_id"), "attachments": len(uploaded)}
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Delete New Ticket Draft"))
+        @flat_params(NewTicketDraftIdParams)
+        def zammad_delete_new_ticket_draft(params: NewTicketDraftIdParams) -> dict[str, Any]:
+            """Delete one new-ticket shared draft. No ticket is touched.
+
+            Args:
+                params (NewTicketDraftIdParams): draft_id (int): shared draft ID.
+
+            Returns:
+                dict: {"shared_draft_id": int | None}.
+            """
+            return self.get_client().delete_new_ticket_draft(params.draft_id)
+
+        @self.mcp.tool(annotations=_read_only_annotations("Get Reply In Progress"))
+        @flat_params(ReplyInProgressGetParams)
+        def zammad_get_reply_in_progress(params: ReplyInProgressGetParams) -> dict[str, Any]:
+            """Read the current user's reply in progress for a ticket (the desktop taskbar draft).
+
+            This is where a reply draft on an existing ticket lives; shared drafts are for new emails
+            or explicit requests.
+
+            Args:
+                params (ReplyInProgressGetParams): ticket_id (int): internal ticket ID.
+
+            Returns:
+                dict: {"exists": false} or {"exists": true, "taskbar_id", "article"} where article
+                holds body, type, to, cc, subject and internal.
+            """
+            entry = _find_reply_taskbar(self.get_client(), params.ticket_id)
+            if entry is None:
+                return {"exists": False}
+            article = (entry.get("state") or {}).get("article") or {}
+            return {"exists": True, "taskbar_id": entry.get("id"), "article": article}
+
+        @self.mcp.tool(annotations=_destructive_write_annotations("Save Reply In Progress"))
+        @flat_params(ReplyInProgressSaveParams)
+        def zammad_save_reply_in_progress(params: ReplyInProgressSaveParams) -> dict[str, Any]:
+            """Default tool for any request to draft or prepare a reply on an existing ticket. Without
+            reply_to_article_id it answers the latest customer email: to, cc, subject and threading come from it.
+
+            Use zammad_save_ticket_shared_draft only when the user explicitly asks for a shared draft.
+
+            Draft only: never sends and never creates an article. It replaces the body and fills the
+            reply fields from the answered article; explicit to, cc, subject, type and internal win over
+            those. Attachments are added to those the box holds. It creates the taskbar entry when the
+            ticket is not open.
+
+            Args:
+                params (ReplyInProgressSaveParams): ticket_id, body, content_type (plain text is
+                    escaped), reply_to_article_id (email article to answer), to, cc, subject,
+                    type (email or note), internal, attachments (absolute paths).
+
+            Returns:
+                dict: {"taskbar_id": int | None, "created": bool}.
+            """
+            client = self.get_client()
+            defaults = _reply_defaults(client, params.ticket_id, params.reply_to_article_id)
+            entry = _find_reply_taskbar(client, params.ticket_id)
+            old_article = ((entry or {}).get("state") or {}).get("article") or {}
+            form_id = str(old_article.get("form_id") or uuid.uuid4())
+            with _draft_uploads(client, form_id, params.attachments) as uploaded:
+                fields: dict[str, Any] = {**defaults, "body": _draft_body_html(params.body, params.content_type)}
+                fields.update(_given_reply_fields(params))
+                if uploaded:
+                    fields["form_id"] = form_id
+                    fields["attachments"] = [*(old_article.get("attachments") or []), *uploaded]
+                return self._write_reply_taskbar(client, params.ticket_id, entry, fields)
+
+    @staticmethod
+    def _write_reply_taskbar(
+        client: ZammadClient, ticket_id: int, entry: dict[str, Any] | None, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Create the reply taskbar entry, or merge ``fields`` into the article of the existing one."""
+        if entry is None:
+            new_entry = TaskbarEntry(
+                key=_reply_taskbar_key(ticket_id),
+                callback="TicketZoom",
+                params={"ticket_id": ticket_id, "shown": True},
+                state={"article": {"in_reply_to": "", "subtype": "", "type": "email", "internal": False, **fields}},
+            )
+            saved = client.create_taskbar(new_entry.model_dump())
+            return {"taskbar_id": saved.get("id"), "created": True}
+        state = dict(entry.get("state") or {})
+        state["article"] = {**(state.get("article") or {}), **fields}
+        saved = client.update_taskbar(int(entry["id"]), {"state": state})
+        return {"taskbar_id": saved.get("id", entry.get("id")), "created": False}
 
     def _setup_webhooks(self) -> None:
         """Expose the Zammad webhook ingress route (HTTP transport only)."""

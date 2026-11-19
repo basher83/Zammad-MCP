@@ -923,3 +923,16 @@ class SearchKBAnswersParams(StrictBaseModel):
         description="Limit search to this category and its descendants (optional)",
     )
     response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN, description="Output format")
+
+
+class TaskbarEntry(StrictBaseModel):
+    """A taskbar entry; for a reply in progress key is ``Ticket-<ticket id>``."""
+
+    key: str = Field(min_length=1)
+    callback: str = Field(min_length=1)
+    state: dict[str, Any] = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
+    prio: int = 0
+    notify: bool = False
+    active: bool = False
+    app: Literal["desktop", "mobile"] = "desktop"
